@@ -10,6 +10,7 @@ yarn.lock
 
 /ignore/
 /IGNORE.md
+/WIP.md
 
 node_modules
 **/dist/**

@@ -37,6 +37,7 @@ When writing reports, documents, technical explanations, analyses, or any long-f
 - Names: camelCase for variables/functions, PascalCase for types/components
 - Errors: proper error handling with typed errors
 - Formatting: 2-space indent, trailing commas, semicolons
+- Use `readonly` and `ReadonlyArray<…>` unless the data is designed to be mutable
 - Prefix unused variables with underscore (_varName)
 - Prefer nullish coalescing (??) and optional chaining (?.)
 - Prefer using the EcmaScript standard `#` to denote private members rather than the TypeScript specific `private` keyword (except for constructors since standard EcmaScript doesn't allow the `#constructor` construct).
