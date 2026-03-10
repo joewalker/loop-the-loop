@@ -25,7 +25,7 @@ const MAX_CONSECUTIVE_GLITCHES = 5;
  * Processes files sequentially, saving state and report after each file.
  * Resumes from saved state if a previous run was interrupted.
  */
-export async function main(
+export async function agenticLoop(
   agent: Agent,
   promptGenerator: PromptGenerator,
   options?: MainOptions,

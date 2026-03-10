@@ -9,9 +9,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    include: [
-      '**/__test__/**/*.test.ts',
-    ],
+    include: ['**/__test__/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     coverage: {
       provider: 'v8',

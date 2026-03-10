@@ -1,11 +1,7 @@
 import { TestAgent } from 'agentic-loop/agents/test';
 import { Git } from 'agentic-loop/git';
-import { main } from 'agentic-loop/main';
-import type {
-  Prompt,
-  PromptGenerator,
-} from 'agentic-loop/prompt-generators/prompt-generators';
-import type { InvokeResult } from 'agentic-loop/types';
+import { agenticLoop } from 'agentic-loop';
+import type { Prompt, PromptGenerator, InvokeResult } from 'agentic-loop';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -46,7 +42,7 @@ async function runMainWithFakeTimers(
   generator: PromptGenerator,
   options?: { maxTurns?: number },
 ): Promise<string> {
-  const promise = main(agent, generator, options);
+  const promise = agenticLoop(agent, generator, options);
 
   // Keep advancing fake timers until main() resolves
   while (true) {
