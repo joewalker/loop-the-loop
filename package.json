@@ -12,6 +12,7 @@
     "tsc": "node ./node_modules/typescript/bin/tsc --build tsconfig.json",
     "test": "NODE_ENV=test vitest run",
     "eslint": "node --max-old-space-size=8192 ./node_modules/eslint/bin/eslint.js --cache --cache-location cache/eslint/",
+    "oxlint": "oxlint",
     "oxfmt": "oxfmt"
   },
   "exports": {
@@ -47,6 +48,7 @@
     "globals": "17.4.0",
     "nyc": "18.0.0",
     "oxfmt": "0.36.0",
+    "oxlint": "1.55.0",
     "typescript-eslint": "8.56.0",
     "v8-to-istanbul": "9.3.0",
     "vitest": "4.0.18"

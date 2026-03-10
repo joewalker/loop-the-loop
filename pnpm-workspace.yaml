@@ -1,2 +1,5 @@
 onlyBuiltDependencies:
   - esbuild
+
+autoInstallPeers: true
+ignoreWorkspaceRootCheck: true
