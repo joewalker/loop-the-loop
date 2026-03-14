@@ -1,3 +1,7 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
   buildPrompt,
   type PerFileAgenticTask,
@@ -5,15 +9,13 @@ import {
   resolveFiles,
 } from 'agentic-loop/prompt-generators/per-file';
 import type { Prompt } from 'agentic-loop/prompt-generators/prompt-generators';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { LoopState } from '../loop-state.js';
 
 describe('buildPrompt', () => {
   it('should substitute {{file}} in the template', () => {
     const task: PerFileAgenticTask = {
-      name: 'test',
       filePattern: '**/*.ts',
       promptTemplate: 'Review the file {{file}} for issues.',
     };
@@ -23,7 +25,6 @@ describe('buildPrompt', () => {
 
   it('should substitute multiple occurrences of {{file}}', () => {
     const task: PerFileAgenticTask = {
-      name: 'test',
       filePattern: '**/*.ts',
       promptTemplate: 'Check {{file}}. The file {{file}} needs review.',
     };
@@ -33,7 +34,6 @@ describe('buildPrompt', () => {
 
   it('should append context files when present', () => {
     const task: PerFileAgenticTask = {
-      name: 'test',
       filePattern: '**/*.ts',
       promptTemplate: 'Review {{file}}.',
       contextFiles: ['GUIDELINES.md', 'RULES.md'],
@@ -47,7 +47,6 @@ describe('buildPrompt', () => {
 
   it('should not append context section when contextFiles is empty', () => {
     const task: PerFileAgenticTask = {
-      name: 'test',
       filePattern: '**/*.ts',
       promptTemplate: 'Review {{file}}.',
       contextFiles: [],
@@ -117,31 +116,18 @@ describe('PerFilePromptGenerator', () => {
     stateFiles.length = 0;
   });
 
-  it('should have the correct name', () => {
-    const task: PerFileAgenticTask = {
-      name: 'my-task',
-      filePattern: '**/*.ts',
-      promptTemplate: 'Review {{file}}',
-    };
-    const generator = new PerFilePromptGenerator(task);
-    expect(generator.name).toBe('per-file-my-task');
-  });
-
   it('should yield prompts for each matching file', async () => {
-    const name = 'iter-test';
-    stateFiles.push(join('cache/agentic-loops', `${name}.state.json`));
+    stateFiles.push(join('cache/agentic-loops', `state.json`));
     const task: PerFileAgenticTask = {
-      name,
       filePattern: join(tempDir, '*.ts'),
       promptTemplate: 'Review {{file}}',
     };
     const generator = new PerFilePromptGenerator(task);
     const prompts: Array<Prompt> = [];
+    const loopState = new LoopState('loop-state-ignore.json');
 
-    for await (const prompt of generator) {
+    for await (const prompt of generator.generate(loopState)) {
       prompts.push(prompt);
-      // Record success so the loop progresses
-      await prompt.recordResult({ status: 'success', output: 'ok' });
     }
 
     expect(prompts).toHaveLength(2);
@@ -149,43 +135,17 @@ describe('PerFilePromptGenerator', () => {
     expect(prompts[1].id).toContain('file2.ts');
   });
 
-  it('should skip files that errored on recordResult', async () => {
-    const name = 'error-test';
-    stateFiles.push(join('cache/agentic-loops', `${name}.state.json`));
-    const task: PerFileAgenticTask = {
-      name,
-      filePattern: join(tempDir, '*.ts'),
-      promptTemplate: 'Review {{file}}',
-    };
-    const generator = new PerFilePromptGenerator(task);
-    const prompts: Array<Prompt> = [];
-
-    for await (const prompt of generator) {
-      prompts.push(prompt);
-      // Mark first as error, second as success
-      if (prompts.length === 1) {
-        await prompt.recordResult({ status: 'error', reason: 'bad file' });
-      } else {
-        await prompt.recordResult({ status: 'success', output: 'ok' });
-      }
-    }
-
-    // Both files should be yielded (errors are recorded but don't prevent iteration)
-    expect(prompts).toHaveLength(2);
-  });
-
   it('should yield no prompts when no files match', async () => {
-    const name = 'empty-test';
-    stateFiles.push(join('cache/agentic-loops', `${name}.state.json`));
+    const loopState = new LoopState('loop-state-ignore.json');
+    stateFiles.push(join('cache/agentic-loops', `state.json`));
     const task: PerFileAgenticTask = {
-      name,
       filePattern: join(tempDir, '*.xyz'),
       promptTemplate: 'Review {{file}}',
     };
     const generator = new PerFilePromptGenerator(task);
     const prompts: Array<Prompt> = [];
 
-    for await (const prompt of generator) {
+    for await (const prompt of generator.generate(loopState)) {
       prompts.push(prompt);
     }
 

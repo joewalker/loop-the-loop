@@ -1,3 +1,9 @@
+import type { Agent, AgentType } from './agents/agents.js';
+import type {
+  PromptGenerator,
+  PromptGeneratorSpec,
+} from './prompt-generators/prompt-generators.js';
+
 /**
  * We ran a prompt through an Agent and it worked out okay
  */
@@ -35,3 +41,39 @@ export type InvokeResult =
   | SuccessfulInvocationResult
   | GlitchedInvocationResult
   | ErrorInvocationResult;
+
+/**
+ * Type definition for the main start point for the agentic loop
+ */
+export interface AgenticLoopCliConfig {
+  /**
+   * The task name is used in reports and as part of a filename when managing
+   * state.
+   */
+  readonly name: string;
+
+  /**
+   * Directory into which we can write a report and a state tracking file
+   */
+  readonly outputDir?: string;
+
+  /**
+   * The agent to which we send prompts
+   */
+  readonly agent: Agent | AgentType;
+
+  /**
+   * The source of prompts to sent to the selected agent
+   */
+  readonly promptGenerator: PromptGenerator | PromptGeneratorSpec;
+
+  /**
+   * Maximum number of prompts to process. Unlimited when null/undefined.
+   */
+  readonly maxTurns?: number;
+
+  /**
+   * Pause between each prompt. Can help with rate limiting.
+   */
+  readonly interPromptPause?: number;
+}

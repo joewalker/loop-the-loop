@@ -1,4 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
+
 import type { InvokeResult } from '../types.js';
 import type { Agent } from './agents.js';
 
@@ -14,7 +15,7 @@ const permissionMode = 'acceptEdits'; // 'bypassPermissions'
  * SDK.
  */
 export class ClaudeSDKAgent implements Agent {
-  static readonly name = 'claude-sdk';
+  static readonly agentName = 'claude-sdk';
 
   async invoke(prompt: string): Promise<InvokeResult> {
     try {

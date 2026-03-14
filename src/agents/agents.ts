@@ -17,9 +17,9 @@ export const DEFAULT_AGENT = 'default';
  */
 const agentConstructors = {
   [DEFAULT_AGENT]: CodexCLIAgent,
-  [ClaudeSDKAgent.name]: ClaudeSDKAgent,
-  [CodexCLIAgent.name]: CodexCLIAgent,
-  [TestAgent.name]: TestAgent,
+  [ClaudeSDKAgent.agentName]: ClaudeSDKAgent,
+  [CodexCLIAgent.agentName]: CodexCLIAgent,
+  [TestAgent.agentName]: TestAgent,
 } satisfies Record<string, new () => Agent>;
 
 /**

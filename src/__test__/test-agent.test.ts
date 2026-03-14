@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('TestAgent', () => {
   it('should have the static name "test"', () => {
-    expect(TestAgent.name).toBe('test');
+    expect(TestAgent.agentName).toBe('test');
   });
 
   it('should return an error when no results have been set', async () => {
@@ -16,16 +16,16 @@ describe('TestAgent', () => {
     });
   });
 
-  it('should return preset results in LIFO order', async () => {
+  it('should return preset results in FIFO order', async () => {
     const agent = new TestAgent();
     const first: InvokeResult = { status: 'success', output: 'first' };
     const second: InvokeResult = { status: 'success', output: 'second' };
 
     agent.setNextInvokeResult(first, second);
 
-    // LIFO: second is returned first (pop from end)
-    expect(await agent.invoke('prompt1')).toStrictEqual(second);
+    // FIFO: second is returned first (pop from end)
     expect(await agent.invoke('prompt2')).toStrictEqual(first);
+    expect(await agent.invoke('prompt1')).toStrictEqual(second);
   });
 
   it('should return error once all preset results are consumed', async () => {

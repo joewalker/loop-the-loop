@@ -6,7 +6,7 @@ import type { Agent } from './agents.js';
  * responses to prompts
  */
 export class TestAgent implements Agent {
-  static readonly name = 'test';
+  static readonly agentName = 'test';
   #results: Array<InvokeResult> = [];
 
   setNextInvokeResult(...results: Array<InvokeResult>): void {
@@ -14,7 +14,7 @@ export class TestAgent implements Agent {
   }
 
   async invoke(_prompt: string): Promise<InvokeResult> {
-    const result = this.#results.pop();
+    const result = this.#results.shift();
     if (result != null) {
       return result;
     } else {

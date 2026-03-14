@@ -1,11 +1,15 @@
-import { TestAgent } from 'agentic-loop/agents/test';
-import { Git } from 'agentic-loop/git';
-import { agenticLoop } from 'agentic-loop';
-import type { Prompt, PromptGenerator, InvokeResult } from 'agentic-loop';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { agenticLoop } from 'agentic-loop';
+import type { Prompt, PromptGenerator } from 'agentic-loop';
+import { TestAgent } from 'agentic-loop/agents/test';
+import { Git } from 'agentic-loop/git';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { LoopState } from '../loop-state.js';
+import type { AgenticLoopCliConfig } from '../types.js';
 
 /**
  * A simple PromptGenerator that yields a fixed list of prompts
@@ -13,21 +17,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 class FixedPromptGenerator implements PromptGenerator {
   readonly name = 'test-generator';
   readonly #prompts: Array<{ id: string; prompt: string }>;
-  readonly results: Array<{ id: string; result: InvokeResult }> = [];
+  readonly results: Array<{ id: string }> = [];
 
   constructor(prompts: Array<{ id: string; prompt: string }>) {
     this.#prompts = prompts;
   }
 
-  async *[Symbol.asyncIterator](): AsyncIterator<Prompt> {
-    const results = this.results;
+  async *generate(_loopState: LoopState): AsyncIterable<Prompt> {
     for (const p of this.#prompts) {
+      this.results.push({ id: p.id });
       yield {
         id: p.id,
         prompt: p.prompt,
-        async recordResult(result: InvokeResult) {
-          results.push({ id: p.id, result });
-        },
       };
     }
   }
@@ -38,11 +39,9 @@ class FixedPromptGenerator implements PromptGenerator {
  * main() so the 5-second pauses resolve instantly.
  */
 async function runMainWithFakeTimers(
-  agent: TestAgent,
-  generator: PromptGenerator,
-  options?: { maxTurns?: number },
+  config: AgenticLoopCliConfig,
 ): Promise<string> {
-  const promise = agenticLoop(agent, generator, options);
+  const promise = agenticLoop(config);
 
   // Keep advancing fake timers until main() resolves
   while (true) {
@@ -91,16 +90,19 @@ describe('main', () => {
   it('should return "Done" when all prompts succeed', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult(
-      { status: 'success', output: 'review of b' },
       { status: 'success', output: 'review of a' },
+      { status: 'success', output: 'review of b' },
     );
 
-    const generator = new FixedPromptGenerator([
+    const promptGenerator = new FixedPromptGenerator([
       { id: 'a.ts', prompt: 'Review a' },
       { id: 'b.ts', prompt: 'Review b' },
     ]);
 
-    const result = await runMainWithFakeTimers(agent, generator, {
+    const result = await runMainWithFakeTimers({
+      name: 'check-done',
+      agent,
+      promptGenerator,
       maxTurns: 2,
     });
     expect(result).toContain('Done');
@@ -110,11 +112,15 @@ describe('main', () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult({ status: 'error', reason: 'parsing failed' });
 
-    const generator = new FixedPromptGenerator([
+    const promptGenerator = new FixedPromptGenerator([
       { id: 'bad.ts', prompt: 'Review bad' },
     ]);
 
-    const result = await runMainWithFakeTimers(agent, generator);
+    const result = await runMainWithFakeTimers({
+      name: 'stop-on-error',
+      agent,
+      promptGenerator,
+    });
     expect(result).toContain('Error on bad.ts');
     expect(result).toContain('parsing failed');
   });
@@ -129,7 +135,7 @@ describe('main', () => {
       { status: 'glitch', reason: 'rate limit' },
     );
 
-    const generator = new FixedPromptGenerator([
+    const promptGenerator = new FixedPromptGenerator([
       { id: 'a.ts', prompt: 'a' },
       { id: 'b.ts', prompt: 'b' },
       { id: 'c.ts', prompt: 'c' },
@@ -137,7 +143,11 @@ describe('main', () => {
       { id: 'e.ts', prompt: 'e' },
     ]);
 
-    const result = await runMainWithFakeTimers(agent, generator);
+    const result = await runMainWithFakeTimers({
+      name: 'abort-post-glitches',
+      agent,
+      promptGenerator,
+    });
     expect(result).toContain('Aborting after 5 consecutive glitches');
   });
 
@@ -152,7 +162,7 @@ describe('main', () => {
       { status: 'glitch', reason: 'rate limit' },
     );
 
-    const generator = new FixedPromptGenerator([
+    const promptGenerator = new FixedPromptGenerator([
       { id: 'a.ts', prompt: 'a' },
       { id: 'b.ts', prompt: 'b' },
       { id: 'c.ts', prompt: 'c' },
@@ -160,7 +170,10 @@ describe('main', () => {
       { id: 'e.ts', prompt: 'e' },
     ]);
 
-    const result = await runMainWithFakeTimers(agent, generator, {
+    const result = await runMainWithFakeTimers({
+      name: 'reset-glitch-count',
+      agent,
+      promptGenerator,
       maxTurns: 5,
     });
     expect(result).toContain('Done');
@@ -169,18 +182,21 @@ describe('main', () => {
   it('should respect maxTurns limit', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult(
-      { status: 'success', output: 'third' },
-      { status: 'success', output: 'second' },
       { status: 'success', output: 'first' },
+      { status: 'success', output: 'second' },
+      { status: 'success', output: 'third' },
     );
 
-    const generator = new FixedPromptGenerator([
+    const promptGenerator = new FixedPromptGenerator([
       { id: 'a.ts', prompt: 'a' },
       { id: 'b.ts', prompt: 'b' },
       { id: 'c.ts', prompt: 'c' },
     ]);
 
-    const result = await runMainWithFakeTimers(agent, generator, {
+    const result = await runMainWithFakeTimers({
+      name: 'respect-max-turns',
+      agent,
+      promptGenerator,
       maxTurns: 1,
     });
     expect(result).toContain('reached limit of 1 turns');
@@ -190,33 +206,26 @@ describe('main', () => {
     await writeFile(join(repoPath, 'dirty.txt'), 'dirty');
 
     const agent = new TestAgent();
-    const generator = new FixedPromptGenerator([]);
+    const promptGenerator = new FixedPromptGenerator([]);
 
-    await expect(runMainWithFakeTimers(agent, generator)).rejects.toThrow(
-      'Working directory is not clean',
-    );
+    await expect(
+      runMainWithFakeTimers({
+        name: 'throw-if-unclean',
+        agent,
+        promptGenerator,
+      }),
+    ).rejects.toThrow('Working directory is not clean');
   });
 
   it('should return "Done" with an empty prompt generator', async () => {
     const agent = new TestAgent();
-    const generator = new FixedPromptGenerator([]);
+    const promptGenerator = new FixedPromptGenerator([]);
 
-    const result = await runMainWithFakeTimers(agent, generator);
+    const result = await runMainWithFakeTimers({
+      name: 'done-if-no-prompts',
+      agent,
+      promptGenerator,
+    });
     expect(result).toBe('Done');
-  });
-
-  it('should record results on the prompt', async () => {
-    const agent = new TestAgent();
-    agent.setNextInvokeResult({ status: 'success', output: 'good' });
-
-    const generator = new FixedPromptGenerator([
-      { id: 'file.ts', prompt: 'review' },
-    ]);
-
-    await runMainWithFakeTimers(agent, generator);
-
-    expect(generator.results).toHaveLength(1);
-    expect(generator.results[0].id).toBe('file.ts');
-    expect(generator.results[0].result.status).toBe('success');
   });
 });
