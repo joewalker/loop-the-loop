@@ -4,7 +4,7 @@ import childProcess from 'node:child_process';
  * Options to commit()
  */
 export interface CommitOptions {
-  readonly committer: {
+  readonly committer?: {
     readonly name: string;
     readonly email: string;
   };
@@ -60,7 +60,7 @@ export class Git {
    */
   async maybeCommitAll(
     message: string,
-    options: CommitOptions,
+    options?: CommitOptions,
   ): Promise<string> {
     if (await this.isClean()) {
       return '';
@@ -73,30 +73,31 @@ export class Git {
   /**
    * 'git commit'
    */
-  async commit(message: string, options: CommitOptions): Promise<string> {
+  async commit(message: string, options: CommitOptions = {}): Promise<string> {
+    const { committer, date } = options;
+    const env = { ...process.env };
+
     if (message == null || message === '') {
       throw new Error('Missing message');
     }
 
+    // prettier-ignore
     const args = [
-      '-C',
-      this.#repoPath,
-      'commit',
-      `--author=${options.committer.name} <${options.committer.email}>`,
-      `--message=${message}`,
+      '-C', this.#repoPath,
+      'commit', `--message=${message}`
     ];
 
-    if (options.date != null) {
-      args.push(`--date=${new Date(options.date).toISOString()}`);
+    if (committer != null) {
+      args.push(`--author=${committer.name} <${committer.email}>`);
+      env['GIT_COMMITTER_NAME'] = committer.name;
+      env['GIT_COMMITTER_EMAIL'] = committer.email;
     }
 
-    return exec('git', args, {
-      env: {
-        ...process.env,
-        GIT_COMMITTER_NAME: options.committer.name,
-        GIT_COMMITTER_EMAIL: options.committer.email,
-      },
-    });
+    if (date != null) {
+      args.push(`--date=${new Date(date).toISOString()}`);
+    }
+
+    return exec('git', args, { env });
   }
 }
 

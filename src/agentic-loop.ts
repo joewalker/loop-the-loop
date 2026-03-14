@@ -1,12 +1,14 @@
 /* eslint-disable no-console */
-import type { Agent } from './agents/agents.js';
-import { Git } from './git.js';
-import type { PromptGenerator } from './prompt-generators/prompt-generators.js';
+import { join } from 'node:path';
 
-export interface MainOptions {
-  /** Maximum number of prompts to process. Unlimited when null/undefined. */
-  readonly maxTurns?: number | null | undefined;
-}
+import { createAgent, type Agent } from './agents/agents.js';
+import { Git } from './git.js';
+import { LoopState } from './loop-state.js';
+import {
+  createPromptGenerator,
+  type PromptGenerator,
+} from './prompt-generators/prompt-generators.js';
+import type { AgenticLoopCliConfig } from './types.js';
 
 /**
  * We pause in between processing files
@@ -21,17 +23,61 @@ const PAUSE_SECS = 5;
 const MAX_CONSECUTIVE_GLITCHES = 5;
 
 /**
- * Run an agentic loop for the given task.
+ * Run the agentic loop.
  * Processes files sequentially, saving state and report after each file.
  * Resumes from saved state if a previous run was interrupted.
  */
 export async function agenticLoop(
-  agent: Agent,
-  promptGenerator: PromptGenerator,
-  options?: MainOptions,
+  config: AgenticLoopCliConfig,
 ): Promise<string> {
+  const {
+    name,
+    outputDir = process.cwd(),
+    agent,
+    promptGenerator,
+    maxTurns = Infinity,
+    interPromptPause = PAUSE_SECS,
+  } = config;
+
+  return agenticLoopImpl({
+    name,
+    outputDir,
+    agent: typeof agent === 'string' ? createAgent(agent) : agent,
+    promptGenerator: Array.isArray(promptGenerator)
+      ? createPromptGenerator(...promptGenerator)
+      : promptGenerator,
+    maxTurns,
+    interPromptPause,
+  });
+}
+
+/**
+ * As AgenticLoopCliConfig with the names resolved to concrete implementations
+ * and defaults applied.
+ */
+interface AgenticLoopConfig {
+  readonly name: string;
+  readonly outputDir: string;
+  readonly agent: Agent;
+  readonly promptGenerator: PromptGenerator;
+  readonly maxTurns: number;
+  readonly interPromptPause: number;
+}
+
+/**
+ * The actual implementation for `agenticLoop(…)`
+ */
+async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
+  const {
+    name,
+    outputDir,
+    agent,
+    promptGenerator,
+    maxTurns,
+    interPromptPause,
+  } = config;
+
   const git = new Git(process.cwd());
-  const maxTurns = options?.maxTurns ?? Infinity;
 
   if (!(await git.isClean())) {
     throw new Error(
@@ -39,18 +85,21 @@ export async function agenticLoop(
     );
   }
 
+  const path = join(outputDir, `${name}-loop-state.json`);
+  const loopState = await LoopState.create(path);
+
   let completed = 0;
   let glitchCount = 0;
-  for await (const prompt of promptGenerator) {
+  for await (const prompt of promptGenerator.generate(loopState)) {
     console.log(`Processing: ${prompt.id}`);
+    await loopState.begin(prompt.id);
+
     const result = await agent.invoke(prompt.prompt);
-    await prompt.recordResult(result);
+    await loopState.end(prompt.id, result);
 
     if (result.status === 'success') {
-      const message = `Agentic: ${promptGenerator.name} / ${prompt.id}\n\n${result.output}`;
-      await git.maybeCommitAll(message, {
-        committer: { name: 'Agentic Loop', email: 'noreply@eireneh.com' },
-      });
+      const message = `Agentic: ${config.name} / ${prompt.id}\n\n${result.output}`;
+      await git.maybeCommitAll(message);
       console.log(message);
       glitchCount = 0;
     } else if (result.status === 'glitch') {
@@ -70,8 +119,12 @@ export async function agenticLoop(
       return `Done (reached limit of ${maxTurns} turns)`;
     }
 
-    console.log(`Pause (${PAUSE_SECS}s) before starting next file`);
-    await new Promise(resolve => setTimeout(resolve, PAUSE_SECS * 1_000));
+    if (interPromptPause !== 0) {
+      console.log(`Pause (${interPromptPause}s) before starting next prompt`);
+      await new Promise(resolve => {
+        setTimeout(resolve, interPromptPause * 1_000);
+      });
+    }
   }
 
   return 'Done';

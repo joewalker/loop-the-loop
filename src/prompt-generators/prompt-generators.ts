@@ -1,6 +1,4 @@
-import { reactReviewTask } from '../tasks/react-review.js';
-import { securityReviewTask } from '../tasks/security-review.js';
-import type { InvokeResult } from '../types.js';
+import type { LoopState } from '../loop-state.js';
 import { PerFilePromptGenerator } from './per-file.js';
 
 /**
@@ -24,39 +22,41 @@ export interface Prompt {
    * The initial text to send to the agent
    */
   readonly prompt: string;
-
-  /**
-   * Many PromptGenerators will mark the thing they are iterating over to say
-   * that it is being worked on. This allows us to report that the work is
-   * complete, maybe the bug should be closed, maybe the failure was a glitch
-   * and so the prompt should be retried, etc.
-   */
-  recordResult(result: InvokeResult): Promise<void>;
 }
 
 /**
  * A PromptGenerator is (obviously) a source of Prompts
- *
  */
-export interface PromptGenerator extends AsyncIterable<Prompt> {
-  readonly name: string;
+export interface PromptGenerator {
+  /**
+   * Return the prompt stream for this generator instance.
+   */
+  generate(loopState: LoopState): AsyncIterable<Prompt>;
 }
 
-export const DEFAULT_PROMPT_GENERATOR = 'default';
+type PromptGeneratorCtor<T extends PromptGenerator = PromptGenerator> = new (
+  ...args: Array<any>
+) => T;
 
 /**
- * To add a new PromptGenerator, add its creator function here
+ * To add a new built-in PromptGenerator, add it in here
  */
 const creatorFunctions = {
-  ['per-file-react']: () => new PerFilePromptGenerator(reactReviewTask),
-  ['per-file-security']: () => new PerFilePromptGenerator(securityReviewTask),
-  [DEFAULT_PROMPT_GENERATOR]: () => new PerFilePromptGenerator(reactReviewTask),
-} satisfies Record<string, () => PromptGenerator>;
+  ['per-file']: PerFilePromptGenerator,
+} satisfies Record<string, PromptGeneratorCtor>;
+
+type PromptGeneratorConstructors = typeof creatorFunctions;
+type PromptGeneratorType = keyof PromptGeneratorConstructors;
 
 /**
- * Enable TypeScript to know what prompt generators are available
+ * The type when someone specifies a PromptGenerator in a call to agenticLoop
  */
-export type PromptGeneratorType = keyof typeof creatorFunctions;
+export type PromptGeneratorSpec = {
+  [T in PromptGeneratorType]: [
+    T,
+    ...ConstructorParameters<PromptGeneratorConstructors[T]>,
+  ];
+}[PromptGeneratorType];
 
 /**
  * Enable the command line to know what prompt generators are available
@@ -67,7 +67,18 @@ export const promptGeneratorTypes = Object.keys(creatorFunctions);
  * Allow easy switching between different PromptGenerator types
  */
 export function createPromptGenerator(
-  type: PromptGeneratorType = DEFAULT_PROMPT_GENERATOR,
+  ...spec: PromptGeneratorSpec
+): PromptGenerator;
+export function createPromptGenerator<T extends PromptGeneratorType>(
+  type: T,
+  ...args: ConstructorParameters<PromptGeneratorConstructors[T]>
+): PromptGenerator;
+export function createPromptGenerator(
+  type: PromptGeneratorType,
+  ...args: Array<unknown>
 ): PromptGenerator {
-  return creatorFunctions[type]();
+  const PromptGeneratorClass = creatorFunctions[type] as new (
+    ...ctorArgs: Array<unknown>
+  ) => PromptGenerator;
+  return new PromptGeneratorClass(...args);
 }

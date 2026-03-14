@@ -1,7 +1,8 @@
-import { Git } from 'agentic-loop/git';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { Git } from 'agentic-loop/git';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('Git', () => {

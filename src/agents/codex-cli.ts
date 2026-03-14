@@ -3,6 +3,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+
 import type { InvokeResult } from '../types.js';
 import type { Agent } from './agents.js';
 
@@ -18,7 +19,7 @@ const sandboxMode = 'read-only'; //'workspace-write'
  * line
  */
 export class CodexCLIAgent implements Agent {
-  static readonly name = 'codex-cli';
+  static readonly agentName = 'codex-cli';
 
   /**
    * Invoke the Codex CLI for a single file and return the final agent output.
