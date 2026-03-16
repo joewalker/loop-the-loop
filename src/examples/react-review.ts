@@ -14,18 +14,16 @@ The severity ratings are:
 
 If you find no issues, say so briefly.`;
 
-async function _main(): Promise<void> {
-  await agenticLoop({
-    name: 'react-review',
-    agent: 'codex-cli', // or 'claude-sdk'
-    promptGenerator: [
-      'per-file',
-      {
-        filePattern: 'web/backdrop/src/**/*.tsx',
-        excludePatterns: ['**/__test__/**'],
-        promptTemplate,
-      },
-    ],
-    maxTurns: 5,
-  });
-}
+agenticLoop({
+  name: 'react-review',
+  agent: 'codex-cli', // or 'claude-sdk'
+  promptGenerator: [
+    'per-file',
+    {
+      filePattern: '**/src/**/*.tsx',
+      excludePatterns: ['**/__test__/**'],
+      promptTemplate,
+    },
+  ],
+  maxTurns: 5,
+}).catch(console.error);

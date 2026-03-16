@@ -1,4 +1,5 @@
 import type { LoopState } from '../loop-state.js';
+import { BugzillaPromptGenerator } from './bugzilla.js';
 import { PerFilePromptGenerator } from './per-file.js';
 
 /**
@@ -42,6 +43,7 @@ type PromptGeneratorCtor<T extends PromptGenerator = PromptGenerator> = new (
  * To add a new built-in PromptGenerator, add it in here
  */
 const creatorFunctions = {
+  ['bugzilla']: BugzillaPromptGenerator,
   ['per-file']: PerFilePromptGenerator,
 } satisfies Record<string, PromptGeneratorCtor>;
 
