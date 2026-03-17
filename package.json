@@ -13,7 +13,8 @@
     "test": "NODE_ENV=test vitest run",
     "eslint": "node --max-old-space-size=8192 ./node_modules/eslint/bin/eslint.js --cache --cache-location cache/eslint/",
     "oxlint": "oxlint src",
-    "oxfmt": "oxfmt"
+    "oxfmt": "oxfmt",
+    "compile": "deno compile --allow-read --allow-write --allow-run --allow-env --allow-net --output=dist/agentic-loop src/cli.ts"
   },
   "exports": {
     ".": {

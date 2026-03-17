@@ -1,0 +1,17 @@
+{
+  "imports": {
+    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk@0.2.71",
+    "glob": "npm:glob@13.0.6"
+  },
+  "tasks": {
+    "compile": "deno compile --allow-read --allow-write --allow-run --allow-env --allow-net --output=dist/agentic-loop src/cli.ts",
+    "run": "deno run --allow-read --allow-write --allow-run --allow-env --allow-net src/cli.ts"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true
+  }
+}
