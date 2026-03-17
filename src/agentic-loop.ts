@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createAgent, type Agent } from './agents/agents.js';
 import { Git } from './git.js';
 import { LoopState } from './loop-state.js';
+import { expandIncludes } from './prompt-generators/expand-includes.js';
 import {
   createPromptGenerator,
   type PromptGenerator,
@@ -43,7 +44,13 @@ export async function agenticLoop(
     reporter = DEFAULT_REPORTER,
     maxTurns = Infinity,
     interPromptPause = PAUSE_SECS,
+    systemPrompt,
   } = config;
+
+  const resolvedSystemPrompt =
+    systemPrompt !== undefined
+      ? await expandIncludes(systemPrompt, process.cwd())
+      : undefined;
 
   return agenticLoopImpl({
     name,
@@ -58,6 +65,9 @@ export async function agenticLoop(
         : reporter,
     maxTurns,
     interPromptPause,
+    ...(resolvedSystemPrompt !== undefined
+      ? { systemPrompt: resolvedSystemPrompt }
+      : {}),
   });
 }
 
@@ -73,6 +83,7 @@ interface AgenticLoopConfig {
   readonly reporter: Reporter;
   readonly maxTurns: number;
   readonly interPromptPause: number;
+  readonly systemPrompt?: string;
 }
 
 /**
@@ -87,6 +98,7 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
     reporter,
     maxTurns,
     interPromptPause,
+    systemPrompt,
   } = config;
 
   const git = new Git(process.cwd());
@@ -106,7 +118,7 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
     console.log(`Processing: ${prompt.id}`);
     await loopState.begin(prompt.id);
 
-    const result = await agent.invoke(prompt.prompt);
+    const result = await agent.invoke(prompt.prompt, systemPrompt);
     await reporter.append(prompt, result);
     await loopState.end(prompt.id, result);
 

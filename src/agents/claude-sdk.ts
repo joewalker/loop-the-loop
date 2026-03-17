@@ -17,7 +17,7 @@ const permissionMode = 'acceptEdits'; // 'bypassPermissions'
 export class ClaudeSDKAgent implements Agent {
   static readonly agentName = 'claude-sdk';
 
-  async invoke(prompt: string): Promise<InvokeResult> {
+  async invoke(prompt: string, systemPrompt?: string): Promise<InvokeResult> {
     try {
       const textParts: Array<string> = [];
 
@@ -27,6 +27,7 @@ export class ClaudeSDKAgent implements Agent {
           allowedTools: DEFAULT_TOOLS,
           permissionMode,
           maxTurns: DEFAULT_MAX_TURNS,
+          ...(systemPrompt !== undefined ? { systemPrompt } : {}),
         },
       });
 

@@ -53,14 +53,19 @@ describe('JsonlReporter', () => {
   });
 
   it('should create parent directories if needed', async () => {
-    const report = await JsonlReporter.create(join(tempDir, 'deep', 'nested', 'task-report'));
+    const report = await JsonlReporter.create(
+      join(tempDir, 'deep', 'nested', 'task-report'),
+    );
 
     await report.append(
       { id: 'nested.ts', prompt: 'Test' },
       { status: 'success', output: 'Works' },
     );
 
-    const content = await readFile(join(tempDir, 'deep', 'nested', 'task-report.jsonl'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'deep', 'nested', 'task-report.jsonl'),
+      'utf-8',
+    );
     expect(JSON.parse(content.trim()).id).toBe('nested.ts');
   });
 
@@ -71,7 +76,9 @@ describe('JsonlReporter', () => {
       { status: 'success', output: 'Done' },
     );
 
-    const entry = JSON.parse((await readFile(join(tempDir, 'success-report.jsonl'), 'utf-8')).trim());
+    const entry = JSON.parse(
+      (await readFile(join(tempDir, 'success-report.jsonl'), 'utf-8')).trim(),
+    );
     expect(entry.output).toBe('Done');
     expect(entry.reason).toBeUndefined();
   });
@@ -83,7 +90,9 @@ describe('JsonlReporter', () => {
       { status: 'error', reason: 'parse failure' },
     );
 
-    const entry = JSON.parse((await readFile(join(tempDir, 'error-report.jsonl'), 'utf-8')).trim());
+    const entry = JSON.parse(
+      (await readFile(join(tempDir, 'error-report.jsonl'), 'utf-8')).trim(),
+    );
     expect(entry.reason).toBe('parse failure');
     expect(entry.output).toBeUndefined();
   });
@@ -95,19 +104,25 @@ describe('JsonlReporter', () => {
       { status: 'glitch', reason: 'rate limit' },
     );
 
-    const entry = JSON.parse((await readFile(join(tempDir, 'glitch-report.jsonl'), 'utf-8')).trim());
+    const entry = JSON.parse(
+      (await readFile(join(tempDir, 'glitch-report.jsonl'), 'utf-8')).trim(),
+    );
     expect(entry.status).toBe('glitch');
     expect(entry.reason).toBe('rate limit');
   });
 
   it('should preserve multi-line strings in JSON', async () => {
-    const report = await JsonlReporter.create(join(tempDir, 'multiline-report'));
+    const report = await JsonlReporter.create(
+      join(tempDir, 'multiline-report'),
+    );
     await report.append(
       { id: 'multi.ts', prompt: 'Line one\nLine two' },
       { status: 'success', output: 'Result A\nResult B' },
     );
 
-    const entry = JSON.parse((await readFile(join(tempDir, 'multiline-report.jsonl'), 'utf-8')).trim());
+    const entry = JSON.parse(
+      (await readFile(join(tempDir, 'multiline-report.jsonl'), 'utf-8')).trim(),
+    );
     expect(entry.prompt).toBe('Line one\nLine two');
     expect(entry.output).toBe('Result A\nResult B');
   });
@@ -122,7 +137,9 @@ describe('JsonlReporter', () => {
       );
     }
 
-    const lines = (await readFile(join(tempDir, 'valid-report.jsonl'), 'utf-8')).trim().split('\n');
+    const lines = (await readFile(join(tempDir, 'valid-report.jsonl'), 'utf-8'))
+      .trim()
+      .split('\n');
     expect(lines).toHaveLength(3);
     for (const line of lines) {
       expect(() => JSON.parse(line) as Record<string, unknown>).not.toThrow();

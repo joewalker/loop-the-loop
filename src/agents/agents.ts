@@ -7,7 +7,7 @@ import { TestAgent } from './test.js';
  * The interface to the various ways we have of running agents
  */
 export interface Agent {
-  invoke: (prompt: string) => Promise<InvokeResult>;
+  invoke: (prompt: string, systemPrompt?: string) => Promise<InvokeResult>;
 }
 
 export const DEFAULT_AGENT = 'default';

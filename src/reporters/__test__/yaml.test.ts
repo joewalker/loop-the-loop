@@ -49,14 +49,19 @@ describe('Report', () => {
   });
 
   it('should create parent directories if needed', async () => {
-    const report = await YamlReporter.create(join(tempDir, 'deep', 'nested', 'task-report'));
+    const report = await YamlReporter.create(
+      join(tempDir, 'deep', 'nested', 'task-report'),
+    );
 
     await report.append(
       { id: 'nested.ts', prompt: 'Test' },
       { status: 'success', output: 'Works' },
     );
 
-    const content = await readFile(join(tempDir, 'deep', 'nested', 'task-report.yaml'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'deep', 'nested', 'task-report.yaml'),
+      'utf-8',
+    );
     expect(content).toContain('id: "nested.ts"');
   });
 
@@ -67,7 +72,10 @@ describe('Report', () => {
       { status: 'success', output: 'Done' },
     );
 
-    const content = await readFile(join(tempDir, 'success-report.yaml'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'success-report.yaml'),
+      'utf-8',
+    );
     expect(content).toContain('output: |');
     expect(content).toContain('  Done');
     expect(content).not.toContain('reason:');
@@ -93,7 +101,10 @@ describe('Report', () => {
       { status: 'glitch', reason: 'rate limit' },
     );
 
-    const content = await readFile(join(tempDir, 'glitch-report.yaml'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'glitch-report.yaml'),
+      'utf-8',
+    );
     expect(content).toContain('status: glitch');
     expect(content).toContain('reason: |');
     expect(content).toContain('  rate limit');
@@ -106,7 +117,10 @@ describe('Report', () => {
       { status: 'success', output: 'Result A\nResult B' },
     );
 
-    const content = await readFile(join(tempDir, 'multiline-report.yaml'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'multiline-report.yaml'),
+      'utf-8',
+    );
     expect(content).toContain('prompt: |');
     expect(content).toContain('  Line one\n  Line two\n  Line three');
     expect(content).toContain('output: |');
@@ -125,26 +139,36 @@ describe('Report', () => {
   });
 
   it('should not produce trailing whitespace on blank lines in block scalars', async () => {
-    const report = await YamlReporter.create(join(tempDir, 'blank-lines-report'));
+    const report = await YamlReporter.create(
+      join(tempDir, 'blank-lines-report'),
+    );
     await report.append(
       { id: 'blank.ts', prompt: 'para one\n\npara two' },
       { status: 'success', output: 'result one\n\nresult two' },
     );
 
-    const content = await readFile(join(tempDir, 'blank-lines-report.yaml'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'blank-lines-report.yaml'),
+      'utf-8',
+    );
     expect(content).not.toMatch(/ +\n/);
     expect(content).toContain('  para one\n\n  para two');
     expect(content).toContain('  result one\n\n  result two');
   });
 
   it('should quote the id field for YAML safety', async () => {
-    const report = await YamlReporter.create(join(tempDir, 'special-id-report'));
+    const report = await YamlReporter.create(
+      join(tempDir, 'special-id-report'),
+    );
     await report.append(
       { id: 'file: with #special chars', prompt: 'Test' },
       { status: 'success', output: 'ok' },
     );
 
-    const content = await readFile(join(tempDir, 'special-id-report.yaml'), 'utf-8');
+    const content = await readFile(
+      join(tempDir, 'special-id-report.yaml'),
+      'utf-8',
+    );
     expect(content).toContain('id: "file: with #special chars"');
   });
 });

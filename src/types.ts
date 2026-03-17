@@ -82,4 +82,11 @@ export interface AgenticLoopCliConfig {
    * Pause between each prompt. Can help with rate limiting.
    */
   readonly interPromptPause?: number;
+
+  /**
+   * An optional system prompt to pass to the agent. Supports
+   * `{{include:path}}` macros which are resolved relative to the current
+   * working directory.
+   */
+  readonly systemPrompt?: string;
 }

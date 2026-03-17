@@ -13,7 +13,7 @@ export class TestAgent implements Agent {
     this.#results = results;
   }
 
-  async invoke(_prompt: string): Promise<InvokeResult> {
+  async invoke(_prompt: string, _systemPrompt?: string): Promise<InvokeResult> {
     const result = this.#results.shift();
     if (result != null) {
       return result;

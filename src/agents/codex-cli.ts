@@ -24,9 +24,11 @@ export class CodexCLIAgent implements Agent {
   /**
    * Invoke the Codex CLI for a single file and return the final agent output.
    */
-  async invoke(prompt: string): Promise<InvokeResult> {
+  async invoke(prompt: string, systemPrompt?: string): Promise<InvokeResult> {
     const outputPath = createOutputPath();
-    const args = buildCommandArgs(outputPath, prompt);
+    const fullPrompt =
+      systemPrompt !== undefined ? `${systemPrompt}\n\n${prompt}` : prompt;
+    const args = buildCommandArgs(outputPath, fullPrompt);
 
     try {
       await execFile('codex', args, {
