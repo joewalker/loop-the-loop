@@ -6,11 +6,10 @@ import { agenticLoop } from 'agentic-loop';
 import type { Prompt, PromptGenerator } from 'agentic-loop';
 import { TestAgent } from 'agentic-loop/agents/test';
 import { Git } from 'agentic-loop/git';
-import { Report } from 'agentic-loop/report';
+import type { LoopState } from 'agentic-loop/loop-state';
+import { YamlReporter } from 'agentic-loop/reporters/yaml';
+import type { AgenticLoopCliConfig } from 'agentic-loop/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import type { LoopState } from '../loop-state.js';
-import type { AgenticLoopCliConfig } from '../types.js';
 
 /**
  * A simple PromptGenerator that yields a fixed list of prompts
@@ -238,7 +237,7 @@ describe('main', () => {
       { id: 'a.ts', prompt: 'Review a' },
     ]);
 
-    vi.spyOn(Report.prototype, 'append').mockRejectedValue(
+    vi.spyOn(YamlReporter.prototype, 'append').mockRejectedValue(
       new Error('disk full'),
     );
 

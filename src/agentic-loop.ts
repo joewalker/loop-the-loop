@@ -8,7 +8,11 @@ import {
   createPromptGenerator,
   type PromptGenerator,
 } from './prompt-generators/prompt-generators.js';
-import { Report } from './report.js';
+import {
+  createReporter,
+  DEFAULT_REPORTER,
+  type Reporter,
+} from './reporters/report.js';
 import type { AgenticLoopCliConfig } from './types.js';
 
 /**
@@ -36,6 +40,7 @@ export async function agenticLoop(
     outputDir = process.cwd(),
     agent,
     promptGenerator,
+    reporter = DEFAULT_REPORTER,
     maxTurns = Infinity,
     interPromptPause = PAUSE_SECS,
   } = config;
@@ -47,6 +52,10 @@ export async function agenticLoop(
     promptGenerator: Array.isArray(promptGenerator)
       ? createPromptGenerator(...promptGenerator)
       : promptGenerator,
+    reporter:
+      typeof reporter === 'string'
+        ? await createReporter(outputDir, name, reporter)
+        : reporter,
     maxTurns,
     interPromptPause,
   });
@@ -61,6 +70,7 @@ interface AgenticLoopConfig {
   readonly outputDir: string;
   readonly agent: Agent;
   readonly promptGenerator: PromptGenerator;
+  readonly reporter: Reporter;
   readonly maxTurns: number;
   readonly interPromptPause: number;
 }
@@ -74,6 +84,7 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
     outputDir,
     agent,
     promptGenerator,
+    reporter,
     maxTurns,
     interPromptPause,
   } = config;
@@ -89,9 +100,6 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
   const path = join(outputDir, `${name}-loop-state.json`);
   const loopState = await LoopState.create(path);
 
-  const reportPath = join(outputDir, `${name}-report.yaml`);
-  const report = new Report(reportPath);
-
   let completed = 0;
   let glitchCount = 0;
   for await (const prompt of promptGenerator.generate(loopState)) {
@@ -99,7 +107,7 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
     await loopState.begin(prompt.id);
 
     const result = await agent.invoke(prompt.prompt);
-    await report.append(prompt, result);
+    await reporter.append(prompt, result);
     await loopState.end(prompt.id, result);
 
     if (result.status === 'success') {

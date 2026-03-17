@@ -3,6 +3,7 @@ import type {
   PromptGenerator,
   PromptGeneratorSpec,
 } from './prompt-generators/prompt-generators.js';
+import type { Reporter, ReporterType } from './reporters/report.js';
 
 /**
  * We ran a prompt through an Agent and it worked out okay
@@ -66,6 +67,11 @@ export interface AgenticLoopCliConfig {
    * The source of prompts to sent to the selected agent
    */
   readonly promptGenerator: PromptGenerator | PromptGeneratorSpec;
+
+  /**
+   * How we report on the responses from the agent to the various prompts
+   */
+  readonly reporter?: Reporter | ReporterType;
 
   /**
    * Maximum number of prompts to process. Unlimited when null/undefined.
