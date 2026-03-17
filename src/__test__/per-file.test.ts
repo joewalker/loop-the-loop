@@ -14,45 +14,61 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LoopState } from '../loop-state.js';
 
 describe('buildPrompt', () => {
-  it('should substitute {{file}} in the template', () => {
+  it('should substitute {{file}} in the template', async () => {
     const task: PerFileAgenticTask = {
       filePattern: '**/*.ts',
       promptTemplate: 'Review the file {{file}} for issues.',
     };
-    const result = buildPrompt(task, 'src/foo.ts');
+    const result = await buildPrompt(task, 'src/foo.ts');
     expect(result).toBe('Review the file src/foo.ts for issues.');
   });
 
-  it('should substitute multiple occurrences of {{file}}', () => {
+  it('should substitute multiple occurrences of {{file}}', async () => {
     const task: PerFileAgenticTask = {
       filePattern: '**/*.ts',
       promptTemplate: 'Check {{file}}. The file {{file}} needs review.',
     };
-    const result = buildPrompt(task, 'bar.ts');
+    const result = await buildPrompt(task, 'bar.ts');
     expect(result).toBe('Check bar.ts. The file bar.ts needs review.');
   });
 
-  it('should append context files when present', () => {
+  it('should append context files when present', async () => {
     const task: PerFileAgenticTask = {
       filePattern: '**/*.ts',
       promptTemplate: 'Review {{file}}.',
       contextFiles: ['GUIDELINES.md', 'RULES.md'],
     };
-    const result = buildPrompt(task, 'src/app.ts');
+    const result = await buildPrompt(task, 'src/app.ts');
     expect(result).toContain('Review src/app.ts.');
     expect(result).toContain('Additional context files:');
     expect(result).toContain('- GUIDELINES.md');
     expect(result).toContain('- RULES.md');
   });
 
-  it('should not append context section when contextFiles is empty', () => {
+  it('should not append context section when contextFiles is empty', async () => {
     const task: PerFileAgenticTask = {
       filePattern: '**/*.ts',
       promptTemplate: 'Review {{file}}.',
       contextFiles: [],
     };
-    const result = buildPrompt(task, 'src/app.ts');
+    const result = await buildPrompt(task, 'src/app.ts');
     expect(result).toBe('Review src/app.ts.');
+  });
+
+  it('should resolve {{include:...}} macros relative to basePath', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'per-file-basepath-'));
+    try {
+      await writeFile(join(tempDir, 'context.md'), 'injected content');
+      const task: PerFileAgenticTask = {
+        filePattern: '**/*.ts',
+        promptTemplate: 'Review {{file}}.\n{{include:context.md}}',
+        basePath: tempDir,
+      };
+      const result = await buildPrompt(task, 'src/app.ts');
+      expect(result).toBe('Review src/app.ts.\ninjected content');
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -5,6 +5,7 @@ import type {
 } from '../bzjs/bugzilla-types.js';
 import { Bugzilla } from '../bzjs/bugzilla.js';
 import type { LoopState } from '../loop-state.js';
+import { expandIncludes } from './expand-includes.js';
 import type { Prompt, PromptGenerator } from './prompt-generators.js';
 
 /**
@@ -37,6 +38,15 @@ export interface BugzillaAgenticTask {
    *   - `{{whiteboard}}` - the bug's whiteboard field
    */
   promptTemplate: string;
+
+  /**
+   * Directory used to resolve `{{include:...}}` paths in `promptTemplate`.
+   * Defaults to `process.cwd()` when not specified. Callers that load this
+   * task from a config file should pass `path.dirname(configFilePath)` so
+   * that includes are resolved relative to the config file rather than the
+   * process working directory.
+   */
+  basePath?: string;
 }
 
 /**
@@ -59,7 +69,7 @@ export class BugzillaPromptGenerator implements PromptGenerator {
       if (loopState.isOutstanding(id)) {
         yield {
           id,
-          prompt: buildBugPrompt(this.#task, bug),
+          prompt: await buildBugPrompt(this.#task, bug),
         };
       }
     }
@@ -70,11 +80,14 @@ export class BugzillaPromptGenerator implements PromptGenerator {
  * Build the full prompt for a single bug by substituting placeholders in the
  * template with values from the bug.
  */
-function buildBugPrompt(task: BugzillaAgenticTask, bug: Bug): string {
+async function buildBugPrompt(
+  task: BugzillaAgenticTask,
+  bug: Bug,
+): Promise<string> {
   const bz = new Bugzilla(task.bugzilla);
   const url = `${bz.origin}/show_bug.cgi?id=${bug.id}`;
 
-  return task.promptTemplate
+  const prompt = task.promptTemplate
     .replaceAll('{{id}}', String(bug.id))
     .replaceAll('{{summary}}', bug.summary)
     .replaceAll('{{url}}', url)
@@ -84,4 +97,6 @@ function buildBugPrompt(task: BugzillaAgenticTask, bug: Bug): string {
     .replaceAll('{{status}}', bug.status)
     .replaceAll('{{assignee}}', bug.assigned_to)
     .replaceAll('{{whiteboard}}', bug.whiteboard);
+
+  return expandIncludes(prompt, task.basePath ?? process.cwd());
 }

@@ -1,6 +1,7 @@
 import { glob } from 'glob';
 
 import type { LoopState } from '../loop-state.js';
+import { expandIncludes } from './expand-includes.js';
 import type { Prompt, PromptGenerator } from './prompt-generators.js';
 
 /**
@@ -28,6 +29,15 @@ export interface PerFileAgenticTask {
    * Additional files to add to the prompt context
    */
   contextFiles?: Array<string>;
+
+  /**
+   * Directory used to resolve `{{include:...}}` paths in `promptTemplate`.
+   * Defaults to `process.cwd()` when not specified. Callers that load this
+   * task from a config file should pass `path.dirname(configFilePath)` so
+   * that includes are resolved relative to the config file rather than the
+   * process working directory.
+   */
+  basePath?: string;
 }
 
 /**
@@ -49,7 +59,7 @@ export class PerFilePromptGenerator implements PromptGenerator {
       if (loopState.isOutstanding(file)) {
         yield {
           id: file,
-          prompt: buildPrompt(this.#task, file),
+          prompt: await buildPrompt(this.#task, file),
         };
       }
     }
@@ -60,7 +70,10 @@ export class PerFilePromptGenerator implements PromptGenerator {
  * Build the full prompt for a single file by substituting `{{file}}` in the
  * template and appending any context file references.
  */
-export function buildPrompt(task: PerFileAgenticTask, file: string): string {
+export async function buildPrompt(
+  task: PerFileAgenticTask,
+  file: string,
+): Promise<string> {
   let prompt = task.promptTemplate.replaceAll('{{file}}', file);
 
   if (task.contextFiles && task.contextFiles.length > 0) {
@@ -70,7 +83,7 @@ export function buildPrompt(task: PerFileAgenticTask, file: string): string {
     }
   }
 
-  return prompt;
+  return expandIncludes(prompt, task.basePath ?? process.cwd());
 }
 
 /**
