@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { agenticLoop } from 'agentic-loop';
 import type { Prompt, PromptGenerator } from 'agentic-loop';
 import { TestAgent } from 'agentic-loop/agents/test';
-import { Git } from 'agentic-loop/git';
-import type { LoopState } from 'agentic-loop/loop-state';
 import { YamlReporter } from 'agentic-loop/reporters/yaml';
 import type { AgenticLoopCliConfig } from 'agentic-loop/types';
+import { Git } from 'agentic-loop/util/git';
+import type { LoopState } from 'agentic-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**

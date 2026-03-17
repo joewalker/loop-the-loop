@@ -1,4 +1,4 @@
-import type { LoopState } from '../loop-state.js';
+import type { LoopState } from '../util/loop-state.js';
 import { BugzillaPromptGenerator } from './bugzilla.js';
 import { PerFilePromptGenerator } from './per-file.js';
 
