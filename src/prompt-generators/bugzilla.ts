@@ -1,10 +1,10 @@
+import type { LoopState } from '../loop-state.js';
 import type {
   Bug,
   BugzillaConstructorOptions,
   SearchParams,
-} from '../bzjs/bugzilla-types.js';
-import { Bugzilla } from '../bzjs/bugzilla.js';
-import type { LoopState } from '../loop-state.js';
+} from './bugzilla/bugzilla-types.js';
+import { Bugzilla } from './bugzilla/bugzilla.js';
 import { expandIncludes } from './expand-includes.js';
 import type { Prompt, PromptGenerator } from './prompt-generators.js';
 
