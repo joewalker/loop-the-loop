@@ -9,9 +9,8 @@ import {
   resolveFiles,
 } from 'agentic-loop/prompt-generators/per-file';
 import type { Prompt } from 'agentic-loop/prompt-generators/prompt-generators';
+import { LoopState } from 'agentic-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-import { LoopState } from '../loop-state.js';
 
 describe('buildPrompt', () => {
   it('should substitute {{file}} in the template', async () => {

@@ -1,7 +1,7 @@
 import { glob } from 'glob';
 
-import type { LoopState } from '../loop-state.js';
-import { expandIncludes } from './expand-includes.js';
+import { expandIncludes } from '../util/expand-includes.js';
+import type { LoopState } from '../util/loop-state.js';
 import type { Prompt, PromptGenerator } from './prompt-generators.js';
 
 /**

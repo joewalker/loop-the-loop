@@ -2,9 +2,6 @@
 import { join } from 'node:path';
 
 import { createAgent, type Agent } from './agents/agents.js';
-import { Git } from './git.js';
-import { LoopState } from './loop-state.js';
-import { expandIncludes } from './prompt-generators/expand-includes.js';
 import {
   createPromptGenerator,
   type PromptGenerator,
@@ -15,6 +12,9 @@ import {
   type Reporter,
 } from './reporters/report.js';
 import type { AgenticLoopCliConfig } from './types.js';
+import { expandIncludes } from './util/expand-includes.js';
+import { Git } from './util/git.js';
+import { LoopState } from './util/loop-state.js';
 
 /**
  * We pause in between processing files

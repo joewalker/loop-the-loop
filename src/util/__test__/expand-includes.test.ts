@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { expandIncludes } from 'agentic-loop/prompt-generators/expand-includes';
+import { expandIncludes } from 'agentic-loop/util/expand-includes';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('expandIncludes', () => {

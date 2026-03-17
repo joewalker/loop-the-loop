@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import type { InvokeResult } from './types.js';
+import type { InvokeResult } from '../types.js';
 
 interface FailedState {
   readonly id: string;
