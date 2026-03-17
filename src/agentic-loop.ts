@@ -1,6 +1,8 @@
 /* eslint-disable no-console */
 import { join } from 'node:path';
 
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
+
 import { createAgent, type Agent } from './agents/agents.js';
 import {
   createPromptGenerator,
@@ -46,6 +48,9 @@ export async function agenticLoop(
     interPromptPause = PAUSE_SECS,
     systemPrompt,
     outputSchema,
+    allowedTools,
+    disallowedTools,
+    mcpServers,
   } = config;
 
   const resolvedSystemPrompt =
@@ -70,6 +75,9 @@ export async function agenticLoop(
       ? { systemPrompt: resolvedSystemPrompt }
       : {}),
     ...(outputSchema !== undefined ? { outputSchema } : {}),
+    ...(allowedTools !== undefined ? { allowedTools } : {}),
+    ...(disallowedTools !== undefined ? { disallowedTools } : {}),
+    ...(mcpServers !== undefined ? { mcpServers } : {}),
   });
 }
 
@@ -87,6 +95,9 @@ interface AgenticLoopConfig {
   readonly interPromptPause: number;
   readonly systemPrompt?: string;
   readonly outputSchema?: OutputSchema;
+  readonly allowedTools?: ReadonlyArray<string>;
+  readonly disallowedTools?: ReadonlyArray<string>;
+  readonly mcpServers?: Record<string, McpServerConfig>;
 }
 
 /**
@@ -103,6 +114,9 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
     interPromptPause,
     systemPrompt,
     outputSchema,
+    allowedTools,
+    disallowedTools,
+    mcpServers,
   } = config;
 
   const git = new Git(process.cwd());
@@ -125,6 +139,9 @@ async function agenticLoopImpl(config: AgenticLoopConfig): Promise<string> {
     const result = await agent.invoke(prompt.prompt, {
       ...(systemPrompt !== undefined ? { systemPrompt } : {}),
       ...(outputSchema !== undefined ? { outputSchema } : {}),
+      ...(allowedTools !== undefined ? { allowedTools } : {}),
+      ...(disallowedTools !== undefined ? { disallowedTools } : {}),
+      ...(mcpServers !== undefined ? { mcpServers } : {}),
     });
     await reporter.append(prompt, result);
     await loopState.end(prompt.id, result);

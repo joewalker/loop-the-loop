@@ -25,7 +25,9 @@ export class ClaudeSDKAgent implements Agent {
       const messages = query({
         prompt,
         options: {
-          allowedTools: DEFAULT_TOOLS,
+          allowedTools: options?.allowedTools
+            ? [...options.allowedTools]
+            : DEFAULT_TOOLS,
           permissionMode,
           maxTurns: DEFAULT_MAX_TURNS,
           ...(options?.systemPrompt !== undefined
@@ -38,6 +40,12 @@ export class ClaudeSDKAgent implements Agent {
                   schema: options.outputSchema,
                 },
               }
+            : {}),
+          ...(options?.disallowedTools !== undefined
+            ? { disallowedTools: [...options.disallowedTools] }
+            : {}),
+          ...(options?.mcpServers !== undefined
+            ? { mcpServers: options.mcpServers }
             : {}),
         },
       });

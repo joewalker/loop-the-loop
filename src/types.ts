@@ -1,9 +1,13 @@
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
+
 import type { Agent, AgentType } from './agents/agents.js';
 import type {
   PromptGenerator,
   PromptGeneratorSpec,
 } from './prompt-generators/prompt-generators.js';
 import type { Reporter, ReporterType } from './reporters/report.js';
+
+export type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 
 /**
  * A JSON Schema object describing the expected shape of structured output.
@@ -107,4 +111,22 @@ export interface AgenticLoopCliConfig {
    * the schema instead of (or in addition to) free-form text.
    */
   readonly outputSchema?: OutputSchema;
+
+  /**
+   * Tool names that are auto-allowed without prompting for permission.
+   * When omitted, the agent uses its own defaults.
+   */
+  readonly allowedTools?: ReadonlyArray<string>;
+
+  /**
+   * Tool names that are disallowed. These tools will be removed from the
+   * model's context and cannot be used.
+   */
+  readonly disallowedTools?: ReadonlyArray<string>;
+
+  /**
+   * MCP (Model Context Protocol) server configurations.
+   * Keys are server names, values are server configurations.
+   */
+  readonly mcpServers?: Record<string, McpServerConfig>;
 }

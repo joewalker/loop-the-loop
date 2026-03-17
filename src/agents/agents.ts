@@ -1,3 +1,5 @@
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
+
 import type { InvokeResult, OutputSchema } from '../types.js';
 import { ClaudeSDKAgent } from './claude-sdk.js';
 import { CodexCLIAgent } from './codex-cli.js';
@@ -9,6 +11,9 @@ import { TestAgent } from './test.js';
 export interface InvokeOptions {
   readonly systemPrompt?: string;
   readonly outputSchema?: OutputSchema;
+  readonly allowedTools?: ReadonlyArray<string>;
+  readonly disallowedTools?: ReadonlyArray<string>;
+  readonly mcpServers?: Record<string, McpServerConfig>;
 }
 
 /**
