@@ -88,7 +88,7 @@ export class Git {
     ];
 
     if (committer != null) {
-      args.push(`--author=${committer.name} <${committer.email}>`);
+      args.push(`--author="${committer.name} <${committer.email}>"`);
       env['GIT_COMMITTER_NAME'] = committer.name;
       env['GIT_COMMITTER_EMAIL'] = committer.email;
     }
