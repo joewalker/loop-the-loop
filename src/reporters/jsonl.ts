@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 
 import type { Prompt } from '../prompt-generators/prompt-generators.js';
 import type { InvokeResult } from '../types.js';
-import type { Reporter } from './report.js';
+import type { Reporter } from './reporters.js';
 
 /**
  * A single record written to the JSONL report.

@@ -12,7 +12,7 @@ import {
   createReporter,
   DEFAULT_REPORTER,
   type Reporter,
-} from './reporters/report.js';
+} from './reporters/reporters.js';
 import type { AgenticLoopCliConfig, OutputSchema } from './types.js';
 import { expandIncludes } from './util/expand-includes.js';
 import { Git } from './util/git.js';

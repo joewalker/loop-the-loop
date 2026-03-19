@@ -5,7 +5,7 @@ import type {
   PromptGenerator,
   PromptGeneratorSpec,
 } from './prompt-generators/prompt-generators.js';
-import type { Reporter, ReporterType } from './reporters/report.js';
+import type { Reporter, ReporterType } from './reporters/reporters.js';
 
 export type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 
