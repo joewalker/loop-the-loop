@@ -93,8 +93,9 @@ export interface AgenticLoopCliConfig {
 
   /**
    * An optional system prompt to pass to the agent. Supports
-   * `{{include:path}}` macros which are resolved relative to the current
-   * working directory.
+   * `{{include:path}}` macros. When loaded from a CLI JSON config, these are
+   * resolved relative to the config file. Programmatic callers continue to
+   * resolve them relative to the current working directory.
    */
   readonly systemPrompt?: string;
 

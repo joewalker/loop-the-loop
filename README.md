@@ -78,11 +78,11 @@ The top-level configuration object (`AgenticLoopCliConfig`, defined in `src/type
 | `name` | yes | | Task name, used for report filenames and git commit messages. |
 | `agent` | yes | | Which agent to use (see Agents below). |
 | `promptGenerator` | yes | | Which prompt generator to use (see Prompt Generators below). |
-| `outputDir` | no | cwd | Directory for report and state files. |
+| `outputDir` | no | cwd | Directory for report and state files. CLI JSON configs default this to the config file directory; programmatic calls default to cwd. |
 | `reporter` | no | `'default'` (YAML) | Which reporter to use (see Reporters below). |
 | `maxTurns` | no | unlimited | Stop after processing this many prompts. |
 | `interPromptPause` | no | 5 | Seconds to pause between prompts (helps with rate limits). |
-| `systemPrompt` | no | | System prompt passed to the agent. Supports `{{include:path}}` macros. |
+| `systemPrompt` | no | | System prompt passed to the agent. In CLI JSON configs, `{{include:path}}` macros resolve relative to the config file; programmatic calls resolve relative to cwd. |
 | `outputSchema` | no | | JSON Schema for structured output (agent support varies). |
 | `allowedTools` | no | agent default | Tool names auto-allowed without permission prompts. |
 | `disallowedTools` | no | | Tool names to block entirely. |
@@ -156,7 +156,7 @@ Generates one prompt per file matching a glob pattern. The `{{file}}` placeholde
 | `promptTemplate` | yes | Template string; `{{file}}` is replaced with the file path. |
 | `excludePatterns` | no | Glob patterns to exclude. |
 | `contextFiles` | no | Additional file paths appended to the prompt as context. |
-| `basePath` | no | Base directory for resolving `{{include:...}}` paths. Defaults to cwd. |
+| `basePath` | no | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory. |
 
 Prompt templates support `{{include:path}}` macros that inline the contents of a file (resolved relative to `basePath`). Includes are recursive and circular references are detected.
 
@@ -183,7 +183,7 @@ Queries a Bugzilla instance and generates one prompt per matching bug. Bug field
 | `search` | yes | Search parameters (see below). |
 | `promptTemplate` | yes | Template with bug placeholders (see below). |
 | `bugzilla` | no | Connection options. Defaults to `bugzilla.mozilla.org` with no API key. |
-| `basePath` | no | Base directory for resolving `{{include:...}}` paths. |
+| `basePath` | no | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory. |
 
 Available template placeholders: `{{id}}`, `{{summary}}`, `{{url}}`, `{{component}}`, `{{product}}`, `{{severity}}`, `{{status}}`, `{{assignee}}`, `{{whiteboard}}`.
 
@@ -357,7 +357,7 @@ All extension-relevant types are exported from the package root (`src/index.ts`)
 
 ### Include Macros
 
-Both prompt templates and system prompts support `{{include:path}}` macros. These are expanded recursively at runtime, with paths resolved relative to `basePath` (or cwd). Circular includes are detected and throw an error. This is useful for sharing common instructions across prompts.
+Both prompt templates and system prompts support `{{include:path}}` macros. Prompt template includes are resolved relative to `basePath`. For CLI JSON configs, omitted `basePath` values default to the config file directory and `systemPrompt` includes are expanded relative to that same directory. Programmatic callers that omit `basePath` continue to resolve includes relative to cwd. Circular includes are detected and throw an error. This is useful for sharing common instructions across prompts.
 
 See `src/util/expand-includes.ts` for the implementation.
 

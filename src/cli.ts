@@ -1,9 +1,6 @@
 /* eslint-disable no-console */
-import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-
 import { agenticLoop } from './agentic-loop.js';
-import type { AgenticLoopCliConfig } from './types.js';
+import { loadCliConfig } from './util/load-cli-config.js';
 
 /**
  * CLI entry point for agentic-loop.
@@ -21,21 +18,7 @@ async function main(): Promise<void> {
     throw new Error('Usage: agentic-loop <config.json>');
   }
 
-  const resolvedPath = resolve(configPath);
-  const raw = await readFile(resolvedPath, 'utf-8');
-
-  let config: AgenticLoopCliConfig;
-  try {
-    config = JSON.parse(raw) as AgenticLoopCliConfig;
-  } catch {
-    throw new Error(`Failed to parse config file: ${resolvedPath}`);
-  }
-
-  // Default outputDir to the directory containing the config file
-  if (config.outputDir === undefined) {
-    config = { ...config, outputDir: dirname(resolvedPath) };
-  }
-
+  const config = await loadCliConfig(configPath);
   const result = await agenticLoop(config);
   console.log(result);
 }
