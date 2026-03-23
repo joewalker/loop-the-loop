@@ -13,6 +13,7 @@ tsconfig.tsbuildinfo
 /IGNORE.md
 /WIP.md
 /.claude/worktrees
+/src/examples/experiments
 
 /ignore/
 

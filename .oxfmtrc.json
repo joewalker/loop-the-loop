@@ -9,6 +9,7 @@
     "ignore",
     "node_modules",
     "pnpm-lock.yaml",
+    "src/examples/experiments",
     "**/*.md"
   ],
   "printWidth": 80,
