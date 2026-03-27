@@ -1,4 +1,5 @@
 export type { Agent, AgentSpec, InvokeOptions } from './agents/agents.js';
+export type { Logger, LoggerSpec } from './loggers/loggers.js';
 export type { BugzillaAgenticTask } from './prompt-generators/bugzilla.js';
 export type { PerFileAgenticTask } from './prompt-generators/per-file.js';
 export type {
@@ -19,12 +20,10 @@ export type {
   OutputSchema,
   SuccessfulInvocationResult,
 } from './types.js';
-export type { LoopState } from './util/loop-state.js';
 
 export { agenticLoop } from './agentic-loop.js';
 export { BugzillaPromptGenerator } from './prompt-generators/bugzilla.js';
 export { PerFilePromptGenerator } from './prompt-generators/per-file.js';
 export { JsonlReporter } from './reporters/jsonl.js';
 export { YamlReporter } from './reporters/yaml.js';
-export type { Logger, LoggerSpec } from './loggers/loggers.js';
-export { createLogger, VerboseLogger } from './loggers/loggers.js';
+export { VerboseLogger } from './loggers/loggers.js';

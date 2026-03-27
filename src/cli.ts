@@ -4,8 +4,6 @@ import process from 'node:process';
 import { agenticLoop } from './agentic-loop.js';
 import { loadCliConfig, parseArgs } from './util/load-cli-config.js';
 
-export { parseArgs };
-
 /**
  * CLI entry point for agentic-loop.
  *
