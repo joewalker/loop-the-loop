@@ -6,7 +6,7 @@ import type { Agent, InvokeOptions } from './agents.js';
 // istanbul ignore file
 
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
-const DEFAULT_MAX_TURNS = 5;
+const DEFAULT_MAX_TURNS = 100;
 
 const permissionMode = 'acceptEdits'; // 'bypassPermissions'
 
@@ -16,6 +16,12 @@ export interface ClaudeSDKAgentConfig {
    * Keys are server names, values are server configurations.
    */
   readonly mcpServers?: Record<string, McpServerConfig>;
+
+  /**
+   * Maximum number of agent turns (tool-use/response rounds) allowed per
+   * prompt invocation. Defaults to `DEFAULT_MAX_TURNS` when omitted.
+   */
+  readonly maxTurns?: number;
 }
 
 /**
@@ -54,7 +60,7 @@ export class ClaudeSDKAgent implements Agent {
         options: {
           allowedTools: allowedTools ? [...allowedTools] : DEFAULT_TOOLS,
           permissionMode,
-          maxTurns: DEFAULT_MAX_TURNS,
+          maxTurns: this.#config.maxTurns ?? DEFAULT_MAX_TURNS,
           stderr: (data: string) => {
             stderrChunks.push(data);
           },
@@ -119,8 +125,19 @@ export class ClaudeSDKAgent implements Agent {
             return ClaudeSDKAgent.#successResult(textParts, structuredOutput);
           }
 
+          const resultMsg = message as Record<string, unknown>;
+          if (message.subtype === 'error_max_turns') {
+            const numTurns =
+              typeof resultMsg['num_turns'] === 'number'
+                ? resultMsg['num_turns']
+                : this.#config.maxTurns ?? DEFAULT_MAX_TURNS;
+            const reason = `Prompt failed: agent exhausted all ${numTurns} turns without completing. Increase maxTurns in the claude-sdk agent config to allow more work per prompt.`;
+            logger.error(reason);
+            return { status: 'error', reason };
+          }
+
           const reason = this.#buildErrorReason(
-            'error' in message ? String(message.error) : 'Unknown error',
+            this.#describeResultError(message.subtype, resultMsg),
             stderrChunks,
           );
           logger.error(`Agent result: ${reason}`);
@@ -153,6 +170,24 @@ export class ClaudeSDKAgent implements Agent {
       output: textParts.join('\n'),
       ...(structuredOutput !== undefined ? { structuredOutput } : {}),
     };
+  }
+
+  /**
+   * Builds a descriptive error message from a non-success result message,
+   * including the subtype and any error/message fields present on the result.
+   */
+  #describeResultError(
+    subtype: string | undefined,
+    resultMsg: Record<string, unknown>,
+  ): string {
+    const parts: Array<string> = [`subtype=${subtype ?? 'unknown'}`];
+    if (typeof resultMsg['error'] === 'string' && resultMsg['error']) {
+      parts.push(`error=${resultMsg['error']}`);
+    }
+    if (typeof resultMsg['message'] === 'string' && resultMsg['message']) {
+      parts.push(`message=${resultMsg['message']}`);
+    }
+    return `Agent invocation failed (${parts.join(', ')})`;
   }
 
   /**
