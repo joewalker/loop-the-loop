@@ -7,15 +7,66 @@ import type { AgenticLoopCliConfig } from '../types.js';
 import { expandIncludes } from './expand-includes.js';
 
 /**
+ * These are the properties that parseArgs understands
+ */
+export interface ParsedArgs {
+  readonly configPath: string;
+  readonly verbose?: boolean | undefined;
+  readonly maxPrompts?: number | undefined;
+}
+
+/**
+ * Simple `process.argv.slice(2)` parsing to turn an array of strings into
+ * a ParsedArgs object which describes how to act
+ */
+export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
+  const verbose = args.includes('--verbose');
+  const positional: Array<string> = [];
+  let maxPrompts: number | undefined;
+
+  for (const arg of args) {
+    if (arg === '--verbose') {
+      continue;
+    }
+    const match = arg.match(/^--(\w+)=(.+)$/u); // eslint-disable-line @typescript-eslint/prefer-regexp-exec
+    if (match) {
+      const [, key, value] = match;
+      if (key === 'maxPrompts') {
+        const n = parseInt(value, 10);
+        if (isNaN(n) || n < 0) {
+          throw new Error(`Invalid --maxPrompts value: ${value}`);
+        }
+        maxPrompts = n;
+      } else {
+        throw new Error(`Unknown option: --${key}`);
+      }
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  const configPath = positional[0];
+  if (!configPath) {
+    throw new Error(
+      'Usage: agentic-loop [--verbose] [--maxPrompts=N] <config.json>',
+    );
+  }
+
+  return {
+    configPath,
+    verbose,
+    maxPrompts,
+  };
+}
+
+/**
  * Load a CLI JSON config file and normalize paths that should be interpreted
  * relative to the config file itself.
- * @param verbose Allow the command line to override the verbosity setting in
- * the config file
  */
 export async function loadCliConfig(
-  configPath: string,
-  verbose = false,
+  parsedArgs: ParsedArgs,
 ): Promise<AgenticLoopCliConfig> {
+  const { configPath, maxPrompts, verbose } = parsedArgs;
   const resolvedPath = resolve(configPath);
   const raw = await readFile(resolvedPath, 'utf-8');
 
@@ -28,6 +79,7 @@ export async function loadCliConfig(
 
   return {
     ...(await normalizeCliConfig(config, resolvedPath)),
+    ...(maxPrompts !== undefined ? { maxPrompts } : {}),
     ...(verbose ? { logger: 'verbose' as const } : {}),
   };
 }

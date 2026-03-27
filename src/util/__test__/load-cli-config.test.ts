@@ -10,8 +10,72 @@ import type { AgenticLoopCliConfig } from 'agentic-loop/types';
 import {
   loadCliConfig,
   normalizeCliConfig,
+  parseArgs,
 } from 'agentic-loop/util/load-cli-config';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+describe('parseArgs', () => {
+  it('returns the config path', () => {
+    expect(parseArgs(['config.json'])).toMatchObject({
+      configPath: 'config.json',
+    });
+  });
+
+  it('verbose defaults to false', () => {
+    expect(parseArgs(['config.json']).verbose).toBe(false);
+  });
+
+  it('sets verbose when --verbose is present', () => {
+    expect(parseArgs(['--verbose', 'config.json']).verbose).toBe(true);
+  });
+
+  it('verbose works after the config path too', () => {
+    expect(parseArgs(['config.json', '--verbose']).verbose).toBe(true);
+  });
+
+  it('maxPrompts is empty when no overrides given', () => {
+    expect(parseArgs(['config.json']).maxPrompts).toBeUndefined();
+  });
+
+  it('parses --maxPrompts=N', () => {
+    expect(parseArgs(['--maxPrompts=5', 'config.json']).maxPrompts).toEqual(5);
+  });
+
+  it('parses --maxPrompts=0 (allow zero)', () => {
+    expect(parseArgs(['--maxPrompts=0', 'config.json']).maxPrompts).toEqual(0);
+  });
+
+  it('combines --verbose and --maxPrompts', () => {
+    const result = parseArgs(['--verbose', '--maxPrompts=3', 'config.json']);
+    expect(result).toMatchObject({
+      verbose: true,
+      maxPrompts: 3,
+      configPath: 'config.json',
+    });
+  });
+
+  it('throws on missing config path', () => {
+    expect(() => parseArgs([])).toThrow('Usage:');
+  });
+
+  it('throws on invalid --maxPrompts value', () => {
+    expect(() => parseArgs(['--maxPrompts=abc', 'config.json'])).toThrow(
+      'Invalid --maxPrompts value: abc',
+    );
+  });
+
+  it('throws on negative --maxPrompts value', () => {
+    expect(() => parseArgs(['--maxPrompts=-1', 'config.json'])).toThrow(
+      'Invalid --maxPrompts value: -1',
+    );
+  });
+
+  it('throws on unknown flag', () => {
+    expect(() => parseArgs(['--unknown=x', 'config.json'])).toThrow(
+      'Unknown option: --unknown',
+    );
+  });
+});
 
 describe('loadCliConfig', () => {
   let tempDir: string;
@@ -58,7 +122,11 @@ describe('loadCliConfig', () => {
       )}\n`,
     );
 
-    const config = await loadCliConfig(join(configDir, 'config.json'));
+    const config = await loadCliConfig({
+      configPath: join(configDir, 'config.json'),
+      verbose: false,
+      maxPrompts: undefined,
+    });
     const task = getPerFileTask(config);
 
     expect(config.outputDir).toBe(configDir);
@@ -151,7 +219,11 @@ describe('loadCliConfig', () => {
       )}\n`,
     );
 
-    const config = await loadCliConfig(join(configDir, 'config.json'));
+    const config = await loadCliConfig({
+      configPath: join(configDir, 'config.json'),
+      verbose: false,
+      maxPrompts: undefined,
+    });
 
     expect(config.systemPrompt).toBe(
       'Header\nSystem preface.\nNested system instructions.\nFooter',
