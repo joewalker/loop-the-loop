@@ -199,7 +199,7 @@ describe('main', () => {
       promptGenerator,
       maxPrompts: 1,
     });
-    expect(result).toContain('reached limit of 1 turns');
+    expect(result).toContain('Done (reached limit of 1 prompts)');
   });
 
   it('should throw if working directory is not clean when allowSourceUpdate is true', async () => {
