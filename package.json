@@ -8,13 +8,12 @@
     "dist"
   ],
   "scripts": {
-    "prepare": "node ./node_modules/typescript/bin/tsc --build tsconfig.json",
-    "tsc": "node ./node_modules/typescript/bin/tsc --build tsconfig.json",
-    "test": "NODE_ENV=test vitest run",
+    "compile": "deno compile --sloppy-imports --allow-read --allow-write --allow-run --allow-env --allow-net --output=dist/loop-the-loop src/cli.ts",
     "eslint": "node --max-old-space-size=8192 ./node_modules/eslint/bin/eslint.js --cache --cache-location cache/eslint/",
-    "oxlint": "oxlint src",
     "oxfmt": "oxfmt",
-    "compile": "deno compile --sloppy-imports --allow-read --allow-write --allow-run --allow-env --allow-net --output=dist/agentic-loop src/cli.ts"
+    "oxlint": "oxlint src",
+    "test": "NODE_ENV=test vitest run",
+    "tsc": "node ./node_modules/typescript/bin/tsc --build tsconfig.json"
   },
   "exports": {
     ".": {
