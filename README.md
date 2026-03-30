@@ -67,7 +67,7 @@ loop({
 }).catch(console.error);
 ```
 
-See `src/examples/react-review.ts` and `src/examples/bugzilla-retriage.ts` for complete working examples.
+See `src/examples/review.ts` and `src/examples/bugzilla-retriage.ts` for complete working examples.
 
 ## Configuration
 
