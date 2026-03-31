@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 
 import { createAgent, type Agent } from './agents.js';
-import { createLogger, type Logger } from './loggers/loggers.js';
+import { createLogger, type Logger } from './loggers.js';
 import {
   createPromptGenerator,
   type PromptGenerator,
