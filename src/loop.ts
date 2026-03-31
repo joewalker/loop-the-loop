@@ -15,7 +15,7 @@ import {
   type Reporter,
 } from './reporters.js';
 import type { LoopCliConfig, OutputSchema } from './types.js';
-import { expandIncludes } from './util/expand-includes.js';
+import { expandPrompt } from './util/expand-prompt.js';
 import { Git } from './util/git.js';
 import { LoopState } from './util/loop-state.js';
 
@@ -51,7 +51,7 @@ export async function loop(config: LoopCliConfig): Promise<string> {
     interPromptPause: config.interPromptPause ?? PAUSE_SECS,
     systemPrompt:
       config.systemPrompt != null
-        ? await expandIncludes(config.systemPrompt, process.cwd())
+        ? await expandPrompt(config.systemPrompt, process.cwd(), {})
         : undefined,
     outputSchema: config.outputSchema,
     allowedTools: config.allowedTools,

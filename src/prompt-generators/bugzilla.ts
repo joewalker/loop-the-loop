@@ -1,8 +1,7 @@
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
-import { expandIncludes } from '../util/expand-includes.js';
+import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
 import type {
-  Bug,
   BugzillaConstructorOptions,
   SearchParams,
 } from './bugzilla/bugzilla-types.js';
@@ -27,15 +26,15 @@ export interface BugzillaTask {
   /**
    * How to construct a prompt for each bug. The following placeholders are
    * substituted:
-   *   - `{{id}}` - the bug id
-   *   - `{{summary}}` - the bug summary
-   *   - `{{url}}` - link to the bug on Bugzilla
-   *   - `{{component}}` - the bug's component
-   *   - `{{product}}` - the bug's product
-   *   - `{{severity}}` - the bug's severity
-   *   - `{{status}}` - the bug's status
-   *   - `{{assignee}}` - the bug's assignee
-   *   - `{{whiteboard}}` - the bug's whiteboard field
+   * - `{{id}}` - the bug id
+   * - `{{summary}}` - the bug summary
+   * - `{{url}}` - link to the bug on Bugzilla
+   * - `{{component}}` - the bug's component
+   * - `{{product}}` - the bug's product
+   * - `{{severity}}` - the bug's severity
+   * - `{{status}}` - the bug's status
+   * - `{{assignee}}` - the bug's assignee
+   * - `{{whiteboard}}` - the bug's whiteboard field
    */
   promptTemplate: string;
 
@@ -73,38 +72,23 @@ export class BugzillaPromptGenerator implements PromptGenerator {
     for (const bug of bugs) {
       const id = String(bug.id);
       if (loopState.isOutstanding(id)) {
-        yield {
-          id,
-          prompt: await buildBugPrompt(this.#task, bug),
+        const template = this.#task.promptTemplate;
+        const basePath = this.#task.basePath ?? process.cwd();
+        const variables = {
+          id: String(bug.id),
+          summary: bug.summary,
+          url: `${bz.origin}/show_bug.cgi?id=${bug.id}`,
+          component: bug.component,
+          product: bug.product,
+          severity: bug.severity,
+          status: bug.status,
+          assignee: bug.assigned_to,
+          whiteboard: bug.whiteboard,
         };
+        const prompt = await expandPrompt(template, basePath, variables);
+
+        yield { id, prompt };
       }
     }
   }
-}
-
-/**
- * Build the full prompt for a single bug by substituting placeholders in the
- * template with values from the bug.
- */
-async function buildBugPrompt(task: BugzillaTask, bug: Bug): Promise<string> {
-  const bz = new Bugzilla(task.bugzilla);
-  const url = `${bz.origin}/show_bug.cgi?id=${bug.id}`;
-
-  // Expand includes first so that data placeholders inside included files
-  // are visible to the subsequent replaceAll calls.
-  const expanded = await expandIncludes(
-    task.promptTemplate,
-    task.basePath ?? process.cwd(),
-  );
-
-  return expanded
-    .replaceAll('{{id}}', String(bug.id))
-    .replaceAll('{{summary}}', bug.summary)
-    .replaceAll('{{url}}', url)
-    .replaceAll('{{component}}', bug.component)
-    .replaceAll('{{product}}', bug.product)
-    .replaceAll('{{severity}}', bug.severity)
-    .replaceAll('{{status}}', bug.status)
-    .replaceAll('{{assignee}}', bug.assigned_to)
-    .replaceAll('{{whiteboard}}', bug.whiteboard);
 }

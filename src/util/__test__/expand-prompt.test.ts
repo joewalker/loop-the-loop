@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { expandIncludes } from 'loop-the-loop/util/expand-includes';
+import { expandIncludes, expandPrompt } from 'loop-the-loop/util/expand-prompt';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('expandIncludes', () => {
@@ -93,5 +93,45 @@ describe('expandIncludes', () => {
     await expect(expandIncludes(`{{include:a.md}}`, tempDir)).rejects.toThrow(
       /circular/i,
     );
+  });
+});
+
+describe('expandTemplate', () => {
+  let tempDir: string;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'expand-template-'));
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('substitutes a single variable', async () => {
+    const result = await expandPrompt('Hello {{name}}!', tempDir, {
+      name: 'world',
+    });
+    expect(result).toBe('Hello world!');
+  });
+
+  it('substitutes multiple variables', async () => {
+    const result = await expandPrompt('Bug {{id}}: {{summary}}', tempDir, {
+      id: '42',
+      summary: 'Something is broken',
+    });
+    expect(result).toBe('Bug 42: Something is broken');
+  });
+
+  it('substitutes variables after expanding includes', async () => {
+    await writeFile(join(tempDir, 'context.md'), 'Review {{file}} carefully.');
+    const result = await expandPrompt('{{include:context.md}}', tempDir, {
+      file: 'src/foo.ts',
+    });
+    expect(result).toBe('Review src/foo.ts carefully.');
+  });
+
+  it('returns the template unchanged when variables is empty', async () => {
+    const result = await expandPrompt('No placeholders here.', tempDir, {});
+    expect(result).toBe('No placeholders here.');
   });
 });

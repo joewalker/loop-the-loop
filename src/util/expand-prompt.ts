@@ -4,6 +4,31 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 const INCLUDE_PATTERN = /\{\{include:([^}]+)\}\}/g;
 
 /**
+ * Expand a prompt template by first resolving all `{{include:...}}` macros
+ * (via {@link expandIncludes}), then substituting each entry in `variables`
+ * as a `{{key}}` placeholder. This is the standard two-step expansion used
+ * by all prompt generators.
+ *
+ * @param template - The raw template string.
+ * @param basePath - Directory used to resolve relative `{{include:...}}` paths.
+ * @param variables - Map of placeholder names to their replacement values.
+ *   A key `"file"` will replace every occurrence of `{{file}}` in the template.
+ */
+export async function expandPrompt(
+  template: string,
+  basePath: string,
+  variables: Readonly<Record<string, string>>,
+): Promise<string> {
+  let result = await expandIncludes(template, basePath);
+
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+
+  return result;
+}
+
+/**
  * Expand all `{{include:path}}` macros in `text`, replacing each with the
  * contents of the referenced file. Relative paths are resolved against
  * `basePath`. Expansion is recursive: included files may themselves contain

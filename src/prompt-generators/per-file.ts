@@ -1,7 +1,7 @@
 import { glob } from 'glob';
 
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
-import { expandIncludes } from '../util/expand-includes.js';
+import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
 
 /**
@@ -58,31 +58,13 @@ export class PerFilePromptGenerator implements PromptGenerator {
 
     for (const file of allFiles) {
       if (loopState.isOutstanding(file)) {
-        yield {
-          id: file,
-          prompt: await buildPrompt(this.#task, file),
-        };
+        const basePath = this.#task.basePath ?? process.cwd();
+        const template = this.#task.promptTemplate;
+        const prompt = await expandPrompt(template, basePath, { file });
+        yield { id: file, prompt };
       }
     }
   }
-}
-
-/**
- * Build the full prompt for a single file by substituting `{{file}}` in the
- * template and appending any context file references.
- */
-export async function buildPrompt(
-  task: PerFileTask,
-  file: string,
-): Promise<string> {
-  // Expand includes first so that data placeholders inside included files
-  // are visible to the subsequent replaceAll call.
-  const prompt = await expandIncludes(
-    task.promptTemplate,
-    task.basePath ?? process.cwd(),
-  );
-
-  return prompt.replaceAll('{{file}}', file);
 }
 
 /**

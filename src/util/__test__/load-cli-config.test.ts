@@ -2,10 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  buildPrompt,
-  type PerFileTask,
-} from 'loop-the-loop/prompt-generators/per-file';
+import type { PerFileTask } from 'loop-the-loop/prompt-generators/per-file';
 import type { LoopCliConfig } from 'loop-the-loop/types';
 import {
   loadCliConfig,
@@ -131,9 +128,6 @@ describe('loadCliConfig', () => {
 
     expect(config.outputDir).toBe(configDir);
     expect(task.basePath).toBe(configDir);
-    await expect(buildPrompt(task, 'src/example.ts')).resolves.toContain(
-      'Shared guidance.',
-    );
   });
 
   it('should rebase a relative basePath against the config file directory', async () => {

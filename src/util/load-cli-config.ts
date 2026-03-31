@@ -4,7 +4,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import type { BugzillaTask } from '../prompt-generators/bugzilla.js';
 import type { PerFileTask } from '../prompt-generators/per-file.js';
 import type { LoopCliConfig } from '../types.js';
-import { expandIncludes } from './expand-includes.js';
+import { expandIncludes } from './expand-prompt.js';
 
 /**
  * These are the properties that parseArgs understands

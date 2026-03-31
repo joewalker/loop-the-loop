@@ -4,49 +4,12 @@ import { join } from 'node:path';
 
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import {
-  buildPrompt,
   type PerFileTask,
   PerFilePromptGenerator,
   resolveFiles,
 } from 'loop-the-loop/prompt-generators/per-file';
 import { LoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-describe('buildPrompt', () => {
-  it('should substitute {{file}} in the template', async () => {
-    const task: PerFileTask = {
-      filePattern: '**/*.ts',
-      promptTemplate: 'Review the file {{file}} for issues.',
-    };
-    const result = await buildPrompt(task, 'src/foo.ts');
-    expect(result).toBe('Review the file src/foo.ts for issues.');
-  });
-
-  it('should substitute multiple occurrences of {{file}}', async () => {
-    const task: PerFileTask = {
-      filePattern: '**/*.ts',
-      promptTemplate: 'Check {{file}}. The file {{file}} needs review.',
-    };
-    const result = await buildPrompt(task, 'bar.ts');
-    expect(result).toBe('Check bar.ts. The file bar.ts needs review.');
-  });
-
-  it('should resolve {{include:...}} macros relative to basePath', async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), 'per-file-basepath-'));
-    try {
-      await writeFile(join(tempDir, 'context.md'), 'injected content');
-      const task: PerFileTask = {
-        filePattern: '**/*.ts',
-        promptTemplate: 'Review {{file}}.\n{{include:context.md}}',
-        basePath: tempDir,
-      };
-      const result = await buildPrompt(task, 'src/app.ts');
-      expect(result).toBe('Review src/app.ts.\ninjected content');
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  });
-});
 
 describe('resolveFiles', () => {
   let tempDir: string;
