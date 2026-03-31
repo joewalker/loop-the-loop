@@ -17,4 +17,10 @@ describe('createAgent', () => {
     const agent = await createAgent(TestAgent.agentName);
     expect(agent).toBeInstanceOf(TestAgent);
   });
+
+  it('should return a pre-constructed Agent instance as-is', async () => {
+    const agent = new TestAgent();
+    const result = await createAgent(agent);
+    expect(result).toBe(agent);
+  });
 });

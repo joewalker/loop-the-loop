@@ -106,4 +106,23 @@ describe('PerFilePromptGenerator', () => {
 
     expect(prompts).toStrictEqual([]);
   });
+
+  it('should skip files that are already tracked in the loop state', async () => {
+    const file1 = join(tempDir, 'file1.ts');
+    const loopState = new LoopState('loop-state-ignore.json', [file1], []);
+
+    const task: PerFileTask = {
+      filePattern: join(tempDir, '*.ts'),
+      promptTemplate: 'Review {{file}}',
+    };
+    const generator = new PerFilePromptGenerator(task);
+    const prompts: Array<Prompt> = [];
+
+    for await (const prompt of generator.generate(loopState)) {
+      prompts.push(prompt);
+    }
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].id).toContain('file2.ts');
+  });
 });
