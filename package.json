@@ -12,6 +12,7 @@
     "eslint": "node --max-old-space-size=8192 ./node_modules/eslint/bin/eslint.js --cache --cache-location cache/eslint/",
     "oxfmt": "oxfmt",
     "oxlint": "oxlint src",
+    "prepare": "node ./node_modules/typescript/bin/tsc --build tsconfig.json",
     "test": "NODE_ENV=test vitest run",
     "tsc": "node ./node_modules/typescript/bin/tsc --build tsconfig.json"
   },
