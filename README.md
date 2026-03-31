@@ -219,6 +219,51 @@ Config example:
 
 Source: `src/prompt-generators/bugzilla.ts`, `src/prompt-generators/bugzilla/`
 
+### `json`
+
+Iterates over elements of a JSON array or object and generates one prompt per element. The data can be supplied inline or loaded from a file.
+
+Field            | Required | Description
+-----------------|----------|------------
+`data`           | one of `data`/`dataFile` | Inline JSON value (array or object) to iterate over
+`dataFile`       | one of `data`/`dataFile` | Path to a JSON file to read. Resolved relative to `basePath`
+`promptTemplate` | yes      | Template string with placeholder substitution (see below)
+`path`           | no       | Dot-notation path into the JSON to reach the array or object to iterate (e.g. `"results.bugs"`). Defaults to the root value
+`idField`        | no       | Field name on each element to use as the unique ID for state tracking. Defaults to the array index or object key
+`basePath`       | no       | Base directory for resolving `{{include:...}}` paths and `dataFile`. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
+
+Template placeholders for object elements: `{{fieldName}}` for any top-level field, `{{id}}` for the resolved tracking ID, `{{index}}` for the 0-based position. For non-object elements (strings, numbers), use `{{value}}`. The `{{include:path}}` macro is also supported.
+
+Config example with a file:
+
+```json
+[
+  "json", {
+    "dataFile": "data/bugs.json",
+    "path": "results.bugs",
+    "idField": "id",
+    "promptTemplate": "Triage bug {{id}}: {{summary}}\nSeverity: {{severity}}\n\n{{include:prompts/triage.md}}"
+  }
+]
+```
+
+Config example with inline data:
+
+```json
+[
+  "json", {
+    "data": [
+      { "id": "foo", "description": "First task" },
+      { "id": "bar", "description": "Second task" }
+    ],
+    "idField": "id",
+    "promptTemplate": "Complete task {{id}}: {{description}}"
+  }
+]
+```
+
+Source: `src/prompt-generators/json.ts`
+
 ## Reporters
 
 A reporter persists results after each agent invocation. Results are appended incrementally, so partial runs still produce useful output.
@@ -351,14 +396,14 @@ All extension-relevant types are exported from the package root (`src/index.ts`)
 - `PromptGenerator`, `Prompt` -- the prompt generator contract and its output type
 - `InvokeResult`, `SuccessfulInvocationResult`, `GlitchedInvocationResult`, `ErrorInvocationResult` -- the three-state result type
 - `OutputSchema` -- JSON Schema type for structured output
-- `PerFileTask`, `BugzillaTask` -- config types for the built-in generators
+- `PerFileTask`, `BugzillaTask`, `JsonTask` -- config types for the built-in generators
 - `YamlReporter`, `JsonlReporter` -- the built-in reporter classes
 
 ### Include Macros
 
 Both prompt templates and system prompts support `{{include:path}}` macros. Prompt template includes are resolved relative to `basePath`. For CLI JSON configs, omitted `basePath` values default to the config file directory and `systemPrompt` includes are expanded relative to that same directory. Programmatic callers that omit `basePath` continue to resolve includes relative to cwd. Circular includes are detected and throw an error. This is useful for sharing common instructions across prompts.
 
-See `src/util/expand-includes.ts` for the implementation.
+See `src/util/expand-prompt.ts` for the implementation.
 
 ## Examples
 

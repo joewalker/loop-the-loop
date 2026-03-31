@@ -1,4 +1,5 @@
 import { BugzillaPromptGenerator } from './prompt-generators/bugzilla.js';
+import { JsonPromptGenerator } from './prompt-generators/json.js';
 import { PerFilePromptGenerator } from './prompt-generators/per-file.js';
 import type { LoopState } from './util/loop-state.js';
 
@@ -65,6 +66,7 @@ export type PromptGeneratorCreator = (
  */
 const promptGeneratorCreators = {
   [BugzillaPromptGenerator.promptGeneratorName]: BugzillaPromptGenerator.create,
+  [JsonPromptGenerator.promptGeneratorName]: JsonPromptGenerator.create,
   [PerFilePromptGenerator.promptGeneratorName]: PerFilePromptGenerator.create,
 } satisfies Record<string, PromptGeneratorCreator>;
 
