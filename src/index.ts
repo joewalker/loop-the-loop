@@ -1,5 +1,6 @@
 export type { Agent, AgentSpec, InvokeOptions } from './agents.js';
 export type { Logger, LoggerSpec } from './loggers.js';
+export type { BatchTask } from './prompt-generators/batch.js';
 export type { BugzillaTask } from './prompt-generators/bugzilla.js';
 export type { JsonTask } from './prompt-generators/json.js';
 export type { PerFileTask } from './prompt-generators/per-file.js';
@@ -19,6 +20,7 @@ export type {
 } from './types.js';
 
 export { loop } from './loop.js';
+export { BatchPromptGenerator } from './prompt-generators/batch.js';
 export { BugzillaPromptGenerator } from './prompt-generators/bugzilla.js';
 export { JsonPromptGenerator } from './prompt-generators/json.js';
 export { PerFilePromptGenerator } from './prompt-generators/per-file.js';

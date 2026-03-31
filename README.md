@@ -264,6 +264,52 @@ Config example with inline data:
 
 Source: `src/prompt-generators/json.ts`
 
+### `batch`
+
+Wraps any other prompt generator and processes its items in fixed-size batches, injecting a summary prompt after each batch. This is useful when you want to run 50 bugs through an analysis agent, synthesise the results, then run the next 50 and synthesise again.
+
+Field                   | Required | Default | Description
+------------------------|----------|---------|------------
+`source`                | yes      |         | The inner generator, specified as a `["generator-name", { ...config }]` tuple or a `PromptGenerator` instance
+`summaryPromptTemplate` | yes      |         | Template for the summary prompt injected after each batch (see below)
+`reportFile`            | yes      |         | Path to the report file the loop is writing to; injected as `{{reportFile}}` in the summary template
+`batchSize`             | no       | 50      | Number of source items per batch
+`basePath`              | no       | cwd     | Base directory for resolving `{{include:...}}` paths in `summaryPromptTemplate`
+
+The summary prompt is injected after every `batchSize` items, and again at the end for any leftover items. Summary prompts are tracked in LoopState under IDs of the form `batch-summary-after-{lastItemId}`, so they are skipped on resume if already completed.
+
+Available template placeholders in `summaryPromptTemplate`:
+
+Placeholder      | Description
+-----------------|------------
+`{{batchSize}}`  | Number of items in this batch
+`{{batchIds}}`   | Newline-separated list of item IDs in this batch
+`{{reportFile}}` | Path to the report file (same as the `reportFile` config field)
+
+The summary prompt tells the agent where to find the results rather than including them directly. The agent reads the report file using its `Read` or `Grep` tools and focuses on the listed IDs.
+
+Config example:
+
+```json
+[
+  "batch", {
+    "source": [
+      "bugzilla", {
+        "search": { "product": "Core", "components": ["DOM: Workers"], "bugStatus": ["NEW"] },
+        "promptTemplate": "Analyse bug {{id}}: {{summary}}. What is the root cause?"
+      }
+    ],
+    "batchSize": 50,
+    "summaryPromptTemplate": "The results for {{batchSize}} bugs are in {{reportFile}}.\nThe bug IDs are:\n{{batchIds}}\n\nRead the report and write a synthesis identifying common root causes and patterns.",
+    "reportFile": "output/dom-analysis-report.yaml"
+  }
+]
+```
+
+Note: if a run crashes after all items in a batch are processed but before the summary prompt runs, the summary will not be retried on resume (the source skips all completed items, so the batch boundary is never reached again). In practice this is rare since items and summaries are processed sequentially.
+
+Source: `src/prompt-generators/batch.ts`
+
 ## Reporters
 
 A reporter persists results after each agent invocation. Results are appended incrementally, so partial runs still produce useful output.
@@ -396,7 +442,7 @@ All extension-relevant types are exported from the package root (`src/index.ts`)
 - `PromptGenerator`, `Prompt` -- the prompt generator contract and its output type
 - `InvokeResult`, `SuccessfulInvocationResult`, `GlitchedInvocationResult`, `ErrorInvocationResult` -- the three-state result type
 - `OutputSchema` -- JSON Schema type for structured output
-- `PerFileTask`, `BugzillaTask`, `JsonTask` -- config types for the built-in generators
+- `BatchTask`, `PerFileTask`, `BugzillaTask`, `JsonTask` -- config types for the built-in generators
 - `YamlReporter`, `JsonlReporter` -- the built-in reporter classes
 
 ### Include Macros

@@ -1,3 +1,7 @@
+import {
+  BatchPromptGenerator,
+  type BatchTask,
+} from './prompt-generators/batch.js';
 import { BugzillaPromptGenerator } from './prompt-generators/bugzilla.js';
 import { JsonPromptGenerator } from './prompt-generators/json.js';
 import { PerFilePromptGenerator } from './prompt-generators/per-file.js';
@@ -62,7 +66,11 @@ export type PromptGeneratorCreator = (
 ) => Promise<PromptGenerator>;
 
 /**
- * To add a new built-in PromptGenerator, add it in here
+ * To add a new built-in PromptGenerator, add it in here.
+ *
+ * Note: BatchPromptGenerator is handled separately in createPromptGenerator
+ * below because its source spec creates a circular type dependency if it is
+ * registered here.
  */
 const promptGeneratorCreators = {
   [BugzillaPromptGenerator.promptGeneratorName]: BugzillaPromptGenerator.create,
@@ -72,9 +80,14 @@ const promptGeneratorCreators = {
 
 type PromptGeneratorCreators = typeof promptGeneratorCreators;
 type PromptGeneratorName = keyof PromptGeneratorCreators;
-type PromptGeneratorConfig = {
-  [T in PromptGeneratorName]: [T, ...Parameters<PromptGeneratorCreators[T]>];
-}[PromptGeneratorName];
+type PromptGeneratorConfig =
+  | {
+      [T in PromptGeneratorName]: [
+        T,
+        ...Parameters<PromptGeneratorCreators[T]>,
+      ];
+    }[PromptGeneratorName]
+  | [typeof BatchPromptGenerator.promptGeneratorName, BatchTask];
 
 /**
  * To specify a PromptGenerator in a config file, pass either:
@@ -82,14 +95,17 @@ type PromptGeneratorConfig = {
  * - an array where the first element is the PromptGeneratorName (i.e.
  *   'bugzilla', 'per-file', etc) and subsequent parameters are then passed to
  *   the creator function for that type of PromptGenerator.
- * PromptGeneratorSpec defineds these options.
+ * PromptGeneratorSpec defines these options.
  */
 export type PromptGeneratorSpec = PromptGenerator | PromptGeneratorConfig;
 
 /**
  * Enable unit tests to know what prompt generators are available
  */
-export const promptGeneratorTypes = Object.keys(promptGeneratorCreators);
+export const promptGeneratorTypes = [
+  ...Object.keys(promptGeneratorCreators),
+  BatchPromptGenerator.promptGeneratorName,
+];
 
 /**
  * Allow easy switching between different PromptGenerator types
@@ -99,6 +115,12 @@ export async function createPromptGenerator(
 ): Promise<PromptGenerator> {
   if (Array.isArray(promptGeneratorSpec)) {
     const [type, ...args] = promptGeneratorSpec;
+    if (type === BatchPromptGenerator.promptGeneratorName) {
+      const [task] = args as [BatchTask];
+      return BatchPromptGenerator.create(task, spec =>
+        createPromptGenerator(spec as PromptGeneratorSpec),
+      );
+    }
     const creator = promptGeneratorCreators[type] as PromptGeneratorCreator;
     return creator(...args);
   }
