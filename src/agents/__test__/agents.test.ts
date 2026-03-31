@@ -1,4 +1,4 @@
-import { agentTypes, createAgent } from 'loop-the-loop/agents/agents';
+import { agentTypes, createAgent } from 'loop-the-loop/agents';
 import { ClaudeSDKAgent } from 'loop-the-loop/agents/claude-sdk';
 import { CodexCLIAgent } from 'loop-the-loop/agents/codex-cli';
 import { TestAgent } from 'loop-the-loop/agents/test';

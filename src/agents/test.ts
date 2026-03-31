@@ -1,5 +1,5 @@
 import type { InvokeResult } from '../types.js';
-import type { Agent, InvokeOptions } from './agents.js';
+import type { Agent, InvokeOptions } from '../agents.js';
 
 /**
  * A test implementation of the Agent interface allows us to insert test

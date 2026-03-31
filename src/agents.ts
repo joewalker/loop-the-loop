@@ -1,8 +1,8 @@
-import type { Logger } from '../loggers/loggers.js';
-import type { InvokeResult, OutputSchema } from '../types.js';
-import { ClaudeSDKAgent } from './claude-sdk.js';
-import { CodexCLIAgent } from './codex-cli.js';
-import { TestAgent } from './test.js';
+import type { Logger } from './loggers/loggers.js';
+import type { InvokeResult, OutputSchema } from './types.js';
+import { ClaudeSDKAgent } from './agents/claude-sdk.js';
+import { CodexCLIAgent } from './agents/codex-cli.js';
+import { TestAgent } from './agents/test.js';
 
 /**
  * Options passed to `Agent.invoke()` alongside the prompt.

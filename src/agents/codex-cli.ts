@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import type { InvokeResult } from '../types.js';
-import type { Agent, InvokeOptions } from './agents.js';
+import type { Agent, InvokeOptions } from '../agents.js';
 
 // istanbul ignore file
 

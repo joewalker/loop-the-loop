@@ -1,7 +1,7 @@
 import { query, type McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 
 import type { InvokeResult, SuccessfulInvocationResult } from '../types.js';
-import type { Agent, InvokeOptions } from './agents.js';
+import type { Agent, InvokeOptions } from '../agents.js';
 
 // istanbul ignore file
 

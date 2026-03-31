@@ -1,4 +1,4 @@
-export type { Agent, AgentSpec, InvokeOptions } from './agents/agents.js';
+export type { Agent, AgentSpec, InvokeOptions } from './agents.js';
 export type { Logger, LoggerSpec } from './loggers/loggers.js';
 export type { BugzillaTask } from './prompt-generators/bugzilla.js';
 export type { PerFileTask } from './prompt-generators/per-file.js';
