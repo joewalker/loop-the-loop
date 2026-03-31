@@ -20,6 +20,14 @@ Other useful commands:
 
 We don't use `npm` (or `npx`). Use `pnpm` or `pnpx` instead.
 
+## Writing Code
+
+- Understand the full requirement before writing anything, ask if needed
+- Plan the simplest working solution. No over-engineering
+- Run the tests before writing code to check we start clean
+- Use Red/Greed TDD where possible
+- Test after writing. Never leave code untested
+
 ## Documentation Style
 
 When writing reports, documents, technical explanations, analyses, or any long-form content:
@@ -28,6 +36,7 @@ When writing reports, documents, technical explanations, analyses, or any long-f
 - Use standard paragraph breaks for organization and reserve markdown primarily for `inline code`, code blocks (```...```), and simple headings (##, and ###).
 - Avoid using **bold** and *italics* particularly in headings.
 - Unless otherwise specified, write reports to new files in the `docs/wip/` folder for future reference.
+- Avoid em dashes, smart quotes, non-breaking-spaces/zero-width-spaces/etc
 
 ## Code Style
 

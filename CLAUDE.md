@@ -1,6 +1,6 @@
 @AGENTS.md
 
-- When asked to commit code, unless otherwise directed, use "Claude <noreply@anthropic.com>" as the author (rather than relying on the information in `~/.gitconfig`).
+- When asked to commit code, unless otherwise directed, use the information in `~/.gitconfig`.
 
 ## Code Intelligence
 
@@ -18,3 +18,11 @@ Before renaming or changing a function signature, use `findReferences` to find a
 Use Grep/Glob only for text/pattern searches (comments, strings, config values) where LSP doesn't help.
 
 After writing or editing code, check LSP diagnostics before moving on. Fix any type errors or missing imports immediately.
+
+## Output
+
+- Avoid sycophantic openers or closing fluff. Be concise. If unsure, say so.
+
+## Override Rule
+
+User instructions always override this file
