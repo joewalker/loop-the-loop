@@ -1,9 +1,10 @@
 {
   "deno.enable": false,
-  "editor.formatOnSave": true,
   "editor.defaultFormatter": "oxc.oxc-vscode",
+  "editor.formatOnSave": true,
   "files.exclude": {
     "**/node_modules": true,
     "dist": true
-  }
+  },
+  "vitest.runtime": "node"
 }
