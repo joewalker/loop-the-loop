@@ -9,7 +9,6 @@
   ],
   "scripts": {
     "compile": "deno compile --sloppy-imports --allow-read --allow-write --allow-run --allow-env --allow-net --output=dist/loop-the-loop src/cli.ts",
-    "eslint": "node --max-old-space-size=8192 ./node_modules/eslint/bin/eslint.js --cache --cache-location cache/eslint/",
     "format": "oxfmt",
     "lint": "oxlint src",
     "prepare": "node ./node_modules/typescript/bin/tsc --build tsconfig.json",
@@ -36,21 +35,11 @@
     "typescript": "6.0.3"
   },
   "devDependencies": {
-    "@eslint/compat": "2.0.5",
-    "@eslint/js": "9.39.2",
     "@types/node": "25.8.0",
-    "@typescript-eslint/utils": "8.59.1",
     "@vitest/coverage-v8": "4.1.6",
-    "eslint": "9.39.2",
-    "eslint-plugin-import": "2.32.0",
-    "eslint-plugin-n": "17.24.0",
-    "eslint-plugin-react": "7.37.5",
-    "eslint-plugin-react-hooks": "7.1.1",
-    "globals": "17.6.0",
     "nyc": "18.0.0",
     "oxfmt": "0.49.0",
     "oxlint": "1.64.0",
-    "typescript-eslint": "8.59.1",
     "v8-to-istanbul": "9.3.0",
     "vitest": "4.1.6"
   },
