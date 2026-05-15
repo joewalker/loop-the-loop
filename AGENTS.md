@@ -6,21 +6,23 @@ Simply run the following commands from a clean checkout:
 
 ``` sh
 pnpm install
+pnpm tsc
 ```
 
-At this point we should be able to run tests (`pnpm test`).
+At this point we should be able to run tests (`pnpm test`). Do not add `... 2>&1 | tail -XX` to the end of test commands - vitest recognises agents and uses a minimal reporter and the pipe may mean a user permissions request.
 
 Other useful commands:
 
 - Build: `pnpm tsc`.
-- Lint code: `pnpm run eslint`
+- Lint code: `pnpm lint`
 - Run all vitest tests: `pnpm test`
 - Run specific test: `pnpm test path/to/file.test.ts`
 - Update snapshots: `pnpm test -u`
+- Format code: `pnpm format`
 
 We don't use `npm` (or `npx`). Use `pnpm` or `pnpx` instead.
 
-## Documentation Style
+## Writing Documentation
 
 When writing reports, documents, technical explanations, analyses, or any long-form content:
 
@@ -28,18 +30,19 @@ When writing reports, documents, technical explanations, analyses, or any long-f
 - Use standard paragraph breaks for organization and reserve markdown primarily for `inline code`, code blocks (```...```), and simple headings (##, and ###).
 - Avoid using **bold** and *italics* particularly in headings.
 - Unless otherwise specified, write reports to new files in the `docs/wip/` folder for future reference.
-- Avoid em dashes, smart quotes, non-breaking-spaces/zero-width-spaces/etc
+- Avoid em dashes, smart quotes, non-breaking spaces, zero-width spaces, and similar non-ASCII punctuation in all output including code comments, documentation, and prose.
+
+## Bug Tracking
+
+Bugs are tracked as issues in this [project's Github repository](https://github.com/joewalker/loop-the-loop/issues). Use the `gh` CLI tool to create, list, and view issues from the terminal.
 
 ## Writing Code
 
 - Understand the full requirement before writing anything, ask if needed
 - Plan the simplest working solution. No over-engineering
 - Run the tests before writing code to check we start clean
-- Use Red/Greed TDD where possible
+- Write tests first. Use Red/Green TDD
 - Test after writing. Never leave code untested
-
-## Code Style
-
 - TypeScript: strict mode, explicit types at module boundaries
 - Arrays: prefer `Array<Type>` over `Type[]`
 - Strings: single quotes, template literals for interpolation
@@ -59,15 +62,18 @@ When writing reports, documents, technical explanations, analyses, or any long-f
   - Importing files from another package in this project - use an absolute path and omit the file extension
   - Importing files from the same package - use a relative path (beginning "./" or "../") and end with ".js"
   - Test files should always use absolute paths without file extensions even when importing from the same package
-- Use `git log --oneline` when formatting a commit message
+- If you want to create a temporary script to check something out, write it to `cache/tmp/…` rather than `/tmp/…` or `/private/tmp/…`
+- Ask the user for anything that mutates packages: `pnpm install`, `pnpm add`, `pnpm remove`, `pnpm update`, `pnpm patch`. The user manages the dependency list.
+- Never bypass pnpm safety prompts with `CI=true`, `--force`, or `confirmModulesPurge=false`. Those exist to prevent silent destruction of `node_modules` when the lockfile is out of sync. If pnpm refuses to proceed, stop and ask.
+- Never edit files in a `node_modules` folder without explicit permission from the user.
 
-## Creating Commits
+## Completing Work
 
-- Before committing you MUST:
+- If you have changed any code, before finishing:
   - Check tests pass `pnpm tsc && pnpm test`
-  - Check with eslint and fix any linting errors `pnpm run eslint`
-  - Run oxfmt `pnpm run oxfmt`
-- When creating a commit message, take note of the instructions about commit tags in [the README](README.md)
-- Always wait for the user to ask before committing code.
+  - Check with lint and fix any linting errors `pnpm lint`
+  - Run oxfmt `pnpm format`
+- Never alter git (this includes staging files) without the users explicit request
+- If the user asks, when creating a commit message, take note of the instructions about commit tags in [the README](README.md)
 - When asked to commit code use the default information in `~/.gitconfig` rather than specifying an author.
 - Avoid `Co-Authored-By` trailers to commit messages
