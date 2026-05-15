@@ -3,8 +3,6 @@ import { query, type McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import type { Agent, InvokeOptions } from '../agents.js';
 import type { InvokeResult, SuccessfulInvocationResult } from '../types.js';
 
-// istanbul ignore file
-
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
 const DEFAULT_MAX_TURNS = 100;
 
@@ -55,12 +53,14 @@ export class ClaudeSDKAgent implements Agent {
       const textParts: Array<string> = [];
       let structuredOutput: unknown;
 
-      const toolSet = allowedTools ? [...allowedTools] : DEFAULT_TOOLS;
+      const { tools, allowedTools: allowedToolPatterns } = splitAllowedTools(
+        allowedTools ?? DEFAULT_TOOLS,
+      );
       const messages = query({
         prompt,
         options: {
-          tools: toolSet,
-          allowedTools: toolSet,
+          tools: [...tools],
+          allowedTools: [...allowedToolPatterns],
           permissionMode,
           maxTurns: this.#config.maxTurns ?? DEFAULT_MAX_TURNS,
           stderr: (data: string) => {
@@ -217,4 +217,30 @@ export class ClaudeSDKAgent implements Agent {
       text.includes('quota')
     );
   }
+}
+
+/**
+ * Split a user-provided tool list into the two shapes the Claude Agent SDK
+ * expects. The SDK's `tools` option restricts which tools are *loaded* and
+ * accepts only bare names (e.g. `"Bash"`). Its `allowedTools` option is the
+ * auto-approval list and accepts both bare names and permission patterns
+ * (e.g. `"Bash(gh issue create *)"`).
+ *
+ * The caller writes a single flat list mixing the two forms; this helper
+ * pulls bare names (stripping any `(...)` suffix) for `tools`, deduplicates
+ * them, and returns the original list unchanged for `allowedTools`.
+ */
+export function splitAllowedTools(input: ReadonlyArray<string>): {
+  readonly tools: ReadonlyArray<string>;
+  readonly allowedTools: ReadonlyArray<string>;
+} {
+  const bareNames = new Set<string>();
+  for (const entry of input) {
+    const parenIdx = entry.indexOf('(');
+    const bare = (parenIdx === -1 ? entry : entry.slice(0, parenIdx)).trim();
+    if (bare.length > 0) {
+      bareNames.add(bare);
+    }
+  }
+  return { tools: [...bareNames], allowedTools: [...input] };
 }
