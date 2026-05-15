@@ -89,7 +89,9 @@ export class ClaudeSDKAgent implements Agent {
           // The SDK message shape includes message.content with text blocks.
           // We access these dynamically since the SDK types may not fully resolve.
           const content = (
-            message as { message: { content: Array<Record<string, unknown>> } }
+            message as unknown as {
+              message: { content: Array<Record<string, unknown>> };
+            }
           ).message.content;
           for (const block of content) {
             if (typeof block['text'] === 'string') {
