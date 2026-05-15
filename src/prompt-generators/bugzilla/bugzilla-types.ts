@@ -9,7 +9,7 @@ export interface BugzillaConstructorOptions {
 export type QueryParam = readonly [key: string, value: string];
 
 /**
- *
+ * Common query options shared by Bugzilla endpoint helpers.
  */
 export interface QueryParams {
   /**

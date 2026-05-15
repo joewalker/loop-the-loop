@@ -110,6 +110,10 @@ export async function normalizeCliConfig(
   };
 }
 
+/**
+ * Normalize prompt-generator config values that need CLI-specific path or type
+ * conversions.
+ */
 function normalizePromptGenerator(
   promptGenerator: LoopCliConfig['promptGenerator'],
   configDir: string,
@@ -223,6 +227,9 @@ function normalizeBasePath(
   return isAbsolute(basePath) ? basePath : resolve(configDir, basePath);
 }
 
+/**
+ * Check whether an unknown value has the shape of a per-file task config.
+ */
 function isPerFileTaskConfig(value: unknown): value is PerFileTask {
   return (
     typeof value === 'object' &&
@@ -235,6 +242,9 @@ function isPerFileTaskConfig(value: unknown): value is PerFileTask {
   );
 }
 
+/**
+ * Check whether an unknown value has the shape of a Bugzilla task config.
+ */
 function isBugzillaTaskConfig(value: unknown): value is BugzillaTask {
   return (
     typeof value === 'object' &&
