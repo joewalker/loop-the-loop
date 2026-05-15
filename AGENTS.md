@@ -66,6 +66,7 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
 - Ask the user for anything that mutates packages: `pnpm install`, `pnpm add`, `pnpm remove`, `pnpm update`, `pnpm patch`. The user manages the dependency list.
 - Never bypass pnpm safety prompts with `CI=true`, `--force`, or `confirmModulesPurge=false`. Those exist to prevent silent destruction of `node_modules` when the lockfile is out of sync. If pnpm refuses to proceed, stop and ask.
 - Never edit files in a `node_modules` folder without explicit permission from the user.
+- The JSON Schema at `schema/loop-the-loop.schema.json` documents the shape of `LoopCliConfig` and the task types accepted by the prompt generators. When you add, remove, or rename any field that is loadable from a CLI JSON config (the top-level `LoopCliConfig`, agent or generator task types, search parameters, and so on), update the schema in the same change so it stays in step with the runtime types.
 
 ## Completing Work
 

@@ -5,7 +5,9 @@
   "author": "Joe Walker <jwalker@mozilla.com>",
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "schema"
   ],
   "scripts": {
     "compile": "deno compile --sloppy-imports --allow-read --allow-write --allow-run --allow-env --allow-net --output=dist/loop-the-loop src/cli.ts",
@@ -37,6 +39,7 @@
   "devDependencies": {
     "@types/node": "25.8.0",
     "@vitest/coverage-v8": "4.1.6",
+    "ajv": "8.20.0",
     "nyc": "18.0.0",
     "oxfmt": "0.49.0",
     "oxlint": "1.64.0",

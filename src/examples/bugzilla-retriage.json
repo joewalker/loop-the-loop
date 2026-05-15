@@ -1,4 +1,5 @@
 {
+  "$schema": "../../schema/loop-the-loop.schema.json",
   "name": "dom-workers-retriage",
   "agent": "claude-sdk",
   "promptGenerator": [

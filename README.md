@@ -87,6 +87,29 @@ Field         | Required | Default | Description
 `allowedTools`     | no  | see agent | Tool names auto-allowed without permission prompts
 `disallowedTools`  | no  |      | Tool names to block entirely
 
+## Schema
+
+A JSON Schema describing the CLI config lives at `schema/loop-the-loop.schema.json`. Editors that understand JSON Schema (VS Code and the JetBrains family among them) will surface inline diagnostics and autocompletion if you add a `$schema` pointer to the top of your config file.
+
+The simplest pointer uses the published copy on GitHub:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "my-task"
+}
+```
+
+Consumers working from a local checkout or an installed package can point at the file on disk instead, which is useful when working offline or when you want to pin to the version you have installed:
+
+```json
+{
+  "$schema": "./node_modules/loop-the-loop/schema/loop-the-loop.schema.json"
+}
+```
+
+The schema is also useful for command-line validators such as `ajv-cli` if you want to validate configs in CI.
+
 ## How the Loop Works
 
 1. The working directory must be git-clean (no uncommitted changes).
