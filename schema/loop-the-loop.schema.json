@@ -169,6 +169,13 @@
           "minItems": 2,
           "maxItems": 2,
           "additionalItems": false,
+          "items": [{ "const": "test" }, { "$ref": "#/definitions/testTask" }]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
           "items": [{ "const": "batch" }, { "$ref": "#/definitions/batchTask" }]
         }
       ]
@@ -644,6 +651,18 @@
         { "required": ["data"], "not": { "required": ["dataFile"] } },
         { "required": ["dataFile"], "not": { "required": ["data"] } }
       ]
+    },
+    "testTask": {
+      "type": "object",
+      "required": ["prompts"],
+      "additionalProperties": false,
+      "properties": {
+        "prompts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Prompts to yield, in order. Prompt IDs are stable stringified array indices."
+        }
+      }
     },
     "batchTask": {
       "type": "object",

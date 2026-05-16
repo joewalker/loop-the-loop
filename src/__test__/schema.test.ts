@@ -151,6 +151,19 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'test prompts',
+        {
+          name: 'test',
+          agent: 'test',
+          promptGenerator: [
+            'test',
+            {
+              prompts: ['First prompt', 'Second prompt'],
+            },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {
@@ -226,6 +239,19 @@ describe('CLI config schema', () => {
             { filePattern: 'x', promptTemplate: 'y' },
           ],
           notARealField: true,
+        },
+      ],
+      [
+        'rejects malformed test prompts',
+        {
+          name: 'x',
+          agent: 'test',
+          promptGenerator: [
+            'test',
+            {
+              prompts: ['First prompt', 42],
+            },
+          ],
         },
       ],
     ];

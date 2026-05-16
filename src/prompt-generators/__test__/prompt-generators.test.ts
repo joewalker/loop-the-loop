@@ -28,11 +28,23 @@ describe('promptGeneratorTypes', () => {
   it('should include gitlab', () => {
     expect(promptGeneratorTypes).toContain('gitlab');
   });
+
+  it('should include test', () => {
+    expect(promptGeneratorTypes).toContain('test');
+  });
 });
 
 describe('createPromptGenerator', () => {
   it('should return a PromptGenerator with generate()', async () => {
     const generator = await createPromptGenerator(['per-file', task]);
+    expect(typeof generator.generate).toBe('function');
+  });
+
+  it('should resolve a test prompt generator', async () => {
+    const generator = await createPromptGenerator([
+      'test',
+      { prompts: ['First prompt'] },
+    ]);
     expect(typeof generator.generate).toBe('function');
   });
 

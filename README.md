@@ -453,6 +453,31 @@ Config example with inline data:
 
 Source: `src/prompt-generators/json.ts`
 
+### `test`
+
+Generates a fixed list of prompts from config. This is useful for exercising
+loop behavior without querying external services or templating another data
+source.
+
+Field     | Required | Description
+----------|----------|------------
+`prompts` | yes      | Array of prompt strings to yield in order. Prompt IDs are stable stringified array indices.
+
+Config example:
+
+```json
+[
+  "test", {
+    "prompts": [
+      "Check that the first workflow succeeds.",
+      "Check that the second workflow succeeds."
+    ]
+  }
+]
+```
+
+Source: `src/prompt-generators/test.ts`
+
 ### `batch`
 
 Wraps any other prompt generator and processes its items in fixed-size batches, injecting a summary prompt after each batch. This is useful when you want to run 50 bugs through an analysis agent, synthesise the results, then run the next 50 and synthesise again.

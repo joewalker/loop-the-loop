@@ -15,6 +15,10 @@ import {
   normalizePerFileTaskConfig,
   PerFilePromptGenerator,
 } from './prompt-generators/per-file.js';
+import {
+  normalizeTestTaskConfig,
+  TestPromptGenerator,
+} from './prompt-generators/test.js';
 import type { PromptGeneratorConfigContext } from './prompt-generators/util/config.js';
 import type { LoopState } from './util/loop-state.js';
 
@@ -89,6 +93,7 @@ const promptGeneratorCreators = {
   [GitLabPromptGenerator.promptGeneratorName]: GitLabPromptGenerator.create,
   [JsonPromptGenerator.promptGeneratorName]: JsonPromptGenerator.create,
   [PerFilePromptGenerator.promptGeneratorName]: PerFilePromptGenerator.create,
+  [TestPromptGenerator.promptGeneratorName]: TestPromptGenerator.create,
 } satisfies Record<string, PromptGeneratorCreator>;
 
 type PromptGeneratorCreators = typeof promptGeneratorCreators;
@@ -160,6 +165,10 @@ export function normalizePromptGeneratorSpec(
 
   if (type === PerFilePromptGenerator.promptGeneratorName) {
     return [type, normalizePerFileTaskConfig(config, context)];
+  }
+
+  if (type === TestPromptGenerator.promptGeneratorName) {
+    return [type, normalizeTestTaskConfig(config)];
   }
 
   return promptGeneratorSpec;
