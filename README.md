@@ -12,6 +12,43 @@ pnpm test
 
 `pnpm install` automatically builds the project. You can rebuild manually with `pnpm tsc`.
 
+## Opt-in Live Tests
+
+The default `pnpm test` run excludes tests tagged `extra`, so it does not call live services or require secrets. Extra tests can be selected with Vitest's native tag filter.
+
+Run individual live checks with:
+
+```sh
+pnpm test --tagsFilter=github
+pnpm test --tagsFilter=gitlab
+pnpm test --tagsFilter=bugzilla
+pnpm test --tagsFilter=claude-sdk
+```
+
+The GitHub check uses `GITHUB_TOKEN` or `GH_TOKEN` if either is present, but it can also run unauthenticated against a public repository. By default it checks `octocat/Hello-World` with a broad issue query. To debug a specific repository or search, set:
+
+```sh
+LOOP_TEST_GITHUB_REPOSITORY=owner/repo LOOP_TEST_GITHUB_QUERY='is:open label:bug' pnpm test --tagsFilter=github
+```
+
+The GitLab check uses `GITLAB_TOKEN` or `GL_TOKEN` if either is present, but it can also run unauthenticated against a public project. By default it checks `gitlab-org/gitlab`. To debug a specific project or search, set:
+
+```sh
+LOOP_TEST_GITLAB_PROJECT=group/project LOOP_TEST_GITLAB_SEARCH='crash' pnpm test --tagsFilter=gitlab
+```
+
+The Bugzilla check defaults to bug 2000000 on `bugzilla.mozilla.org`. To debug a specific Bugzilla bug, set:
+
+```sh
+LOOP_TEST_BUGZILLA_ID=2000000 pnpm test --tagsFilter=bugzilla
+```
+
+Run every live network-backed check with:
+
+```sh
+pnpm test --tagsFilter=network
+```
+
 ## Running the Loop
 
 There are two ways to run a loop: from a JSON config file via the CLI, or programmatically from TypeScript.
@@ -214,6 +251,7 @@ Search parameters (`search` field):
 Field         | Description
 --------------|------------
 `product`     | Restrict to a single product
+`ids`         | Array of specific bug IDs
 `components`  | Array of component names (OR match)
 `bugStatus`   | Array of statuses: `UNCONFIRMED`, `NEW`, `ASSIGNED`, `REOPENED`, `RESOLVED`, `VERIFIED`, `CLOSED`
 `keywords`.   | Array of keywords (OR match)

@@ -12,6 +12,30 @@ export default defineConfig({
     globals: true,
     include: ['**/__test__/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/worktrees/**'],
+    tags: [
+      {
+        name: 'extra',
+        description:
+          'Opt-in tests that are excluded from the default local and CI run.',
+      },
+      {
+        name: 'network',
+        description: 'Tests that call live network services.',
+      },
+      {
+        name: 'github',
+        description: 'Tests that call live GitHub services.',
+      },
+      {
+        name: 'gitlab',
+        description: 'Tests that call live GitLab services.',
+      },
+      {
+        name: 'bugzilla',
+        description: 'Tests that call live Bugzilla services.',
+      },
+    ],
+    tagsFilter: ['!extra'],
     coverage: {
       provider: 'v8',
       reporter: ['html', 'json', 'json-summary'],

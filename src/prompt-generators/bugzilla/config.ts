@@ -94,6 +94,7 @@ function assertBugzillaSearchParams(search: Record<string, unknown>): void {
       'change',
       'components',
       'dryRun',
+      'ids',
       'keywords',
       'logQuery',
       'product',
@@ -105,6 +106,7 @@ function assertBugzillaSearchParams(search: Record<string, unknown>): void {
   assertOptionalBoolean(search, 'logQuery', 'bugzilla.search.logQuery');
   assertOptionalString(search, 'product', 'bugzilla.search.product');
   assertOptionalString(search, 'assignedTo', 'bugzilla.search.assignedTo');
+  assertOptionalPositiveIntegerArray(search, 'ids', 'bugzilla.search.ids');
   assertOptionalStringArray(search, 'components', 'bugzilla.search.components');
   assertOptionalStringArray(search, 'bugStatus', 'bugzilla.search.bugStatus');
   assertOptionalStringArray(search, 'keywords', 'bugzilla.search.keywords');
@@ -121,6 +123,29 @@ function assertBugzillaSearchParams(search: Record<string, unknown>): void {
 
   if ('change' in search) {
     assertBugzillaChangeClause(search['change']);
+  }
+}
+
+/**
+ * Assert that an optional object property is an array of positive integers.
+ */
+function assertOptionalPositiveIntegerArray(
+  value: Record<string, unknown>,
+  key: string,
+  field: string,
+): void {
+  if (!(key in value)) {
+    return;
+  }
+
+  const array = value[key];
+  if (
+    !Array.isArray(array) ||
+    array.some(
+      item => typeof item !== 'number' || !Number.isInteger(item) || item < 1,
+    )
+  ) {
+    throw new Error(`${field} must be an array of positive integers`);
   }
 }
 

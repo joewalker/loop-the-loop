@@ -480,6 +480,11 @@
           "type": "string",
           "description": "Restrict the search to a single product."
         },
+        "ids": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "description": "Specific bug IDs to match."
+        },
         "components": {
           "type": "array",
           "items": { "type": "string" },

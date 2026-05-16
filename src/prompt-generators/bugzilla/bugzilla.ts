@@ -164,6 +164,14 @@ export class Bugzilla {
 
     appendBugFieldSelection(queryParams, params.bugFields);
 
+    if (params.ids != null) {
+      appendRepeatedQueryParams(
+        queryParams,
+        'id',
+        params.ids.map(id => String(id)),
+      );
+    }
+
     if (params.components != null) {
       appendRepeatedQueryParams(queryParams, 'component', params.components);
     }

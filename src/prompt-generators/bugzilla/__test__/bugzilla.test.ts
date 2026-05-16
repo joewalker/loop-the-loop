@@ -256,6 +256,17 @@ describe('Bugzilla', () => {
       ]);
     });
 
+    it('should repeat id params', async () => {
+      const bz = new Bugzilla({ origin: 'https://bz.test' });
+      await bz.search({ ids: [1, 2] });
+
+      const params = parseQuery(fetchedUrl());
+      expect(params.filter(([k]) => k === 'id')).toEqual([
+        ['id', '1'],
+        ['id', '2'],
+      ]);
+    });
+
     it('should include bugFields as include_fields with response names', async () => {
       const bz = new Bugzilla({ origin: 'https://bz.test' });
       await bz.search({ bugFields: ['bug_status', 'component'] });

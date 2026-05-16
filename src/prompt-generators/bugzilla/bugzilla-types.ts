@@ -33,6 +33,11 @@ export interface SearchParams extends QueryParams {
   readonly dryRun?: boolean;
 
   /**
+   * Match specific bug IDs.
+   */
+  readonly ids?: ReadonlyArray<number>;
+
+  /**
    * This is an 'OR' criteria so any of these keywords must match
    */
   readonly components?: ReadonlyArray<string>;

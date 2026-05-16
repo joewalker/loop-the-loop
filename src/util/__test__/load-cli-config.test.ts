@@ -270,6 +270,31 @@ describe('loadCliConfig', () => {
     ).rejects.toThrow('bugzilla.search.components must be an array of strings');
   });
 
+  it('should reject malformed Bugzilla search ids', async () => {
+    const configDir = join(tempDir, 'config');
+
+    await expect(
+      normalizeCliConfig(
+        {
+          name: 'test',
+          agent: 'test',
+          promptGenerator: [
+            'bugzilla',
+            {
+              search: {
+                ids: ['1'],
+              },
+              promptTemplate: 'Review {{id}}',
+            } as unknown as BugzillaTask,
+          ],
+        },
+        join(configDir, 'config.json'),
+      ),
+    ).rejects.toThrow(
+      'bugzilla.search.ids must be an array of positive integers',
+    );
+  });
+
   it('should normalize GitHub task basePath relative to the config file', async () => {
     const configDir = join(tempDir, 'config');
     await mkdir(configDir, { recursive: true });
