@@ -1,70 +1,6 @@
-
-# loop-the-loop
+# Loop the Loop
 
 A framework for running generated prompts through coding agents in an automated loop. You define a source of prompts (a prompt generator), an agent to process them, and a reporter to capture the results. The loop handles sequencing, state persistence, git commits, and error recovery.
-
-## Getting Started
-
-```sh
-pnpm install
-pnpm tsc
-pnpm test
-```
-
-Use `pnpm build` when you need the package-ready `dist` output used by `pnpm pack` and `pnpm publish`.
-
-## Opt-in Live Tests
-
-The default `pnpm test` run excludes tests tagged `extra`, so it does not call live services or require secrets. Extra tests can be selected with Vitest's native tag filter.
-
-Run individual live checks with:
-
-```sh
-pnpm test --tagsFilter=github
-pnpm test --tagsFilter=gitlab
-pnpm test --tagsFilter=bugzilla
-pnpm test --tagsFilter=claude-sdk
-pnpm test --tagsFilter=codex-cli
-```
-
-The GitHub check uses `GITHUB_TOKEN` or `GH_TOKEN` if either is present, but it can also run unauthenticated against a public repository. By default it checks `octocat/Hello-World` with a broad issue query. To debug a specific repository or search, set:
-
-```sh
-LOOP_TEST_GITHUB_REPOSITORY=owner/repo LOOP_TEST_GITHUB_QUERY='is:open label:bug' pnpm test --tagsFilter=github
-```
-
-The GitLab check uses `GITLAB_TOKEN` or `GL_TOKEN` if either is present, but it can also run unauthenticated against a public project. By default it checks `gitlab-org/gitlab`. To debug a specific project or search, set:
-
-```sh
-LOOP_TEST_GITLAB_PROJECT=group/project LOOP_TEST_GITLAB_SEARCH='crash' pnpm test --tagsFilter=gitlab
-```
-
-The Bugzilla check defaults to bug 2000000 on `bugzilla.mozilla.org`. To debug a specific Bugzilla bug, set:
-
-```sh
-LOOP_TEST_BUGZILLA_ID=2000000 pnpm test --tagsFilter=bugzilla
-```
-
-The Claude SDK check requires a working local Claude Agent SDK authentication
-setup. It runs the `test` prompt generator against `claude-sdk` with a cheap
-arithmetic prompt and asserts the exact answer:
-
-```sh
-pnpm test --tagsFilter=claude-sdk
-```
-
-The Codex CLI check requires a working local `codex` binary and authentication
-setup. It uses the same generated arithmetic prompt and exact-answer assertion:
-
-```sh
-pnpm test --tagsFilter=codex-cli
-```
-
-Run every live network-backed check with:
-
-```sh
-pnpm test --tagsFilter=network
-```
 
 ## Running the Loop
 
@@ -707,23 +643,3 @@ See `src/util/expand-prompt.ts` for the implementation.
 ## Examples
 
 See the [`src/examples`](https://github.com/joewalker/loop-the-loop/tree/main/src/examples) folder for more examples.
-
-## Publishing
-
-Before publishing, update the package version in `package.json`, then run:
-
-```sh
-pnpm format
-pnpm tsc
-pnpm test
-pnpm lint
-pnpm pack --dry-run
-```
-
-`pnpm pack --dry-run` runs the package build through `prepack` and prints the files that would be published.
-
-Publish from a clean worktree:
-
-```sh
-pnpm publish
-```
