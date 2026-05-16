@@ -1,11 +1,19 @@
 import {
   BatchPromptGenerator,
   type BatchTask,
+  normalizeBatchTaskConfig,
 } from './prompt-generators/batch.js';
 import { BugzillaPromptGenerator } from './prompt-generators/bugzilla.js';
+import { normalizeBugzillaTaskConfig } from './prompt-generators/bugzilla/config.js';
+import type { PromptGeneratorConfigContext } from './prompt-generators/config.js';
 import { GitHubPromptGenerator } from './prompt-generators/github.js';
+import { normalizeGitHubTaskConfig } from './prompt-generators/github/config.js';
 import { JsonPromptGenerator } from './prompt-generators/json.js';
-import { PerFilePromptGenerator } from './prompt-generators/per-file.js';
+import { normalizeJsonTaskConfig } from './prompt-generators/json.js';
+import {
+  normalizePerFileTaskConfig,
+  PerFilePromptGenerator,
+} from './prompt-generators/per-file.js';
 import type { LoopState } from './util/loop-state.js';
 
 /**
@@ -108,6 +116,47 @@ export const promptGeneratorTypes = [
   ...Object.keys(promptGeneratorCreators),
   BatchPromptGenerator.promptGeneratorName,
 ];
+
+/**
+ * Normalize prompt-generator config values loaded from a CLI JSON config.
+ */
+export function normalizePromptGeneratorSpec(
+  promptGeneratorSpec: PromptGeneratorSpec,
+  context: PromptGeneratorConfigContext,
+): PromptGeneratorSpec {
+  if (!Array.isArray(promptGeneratorSpec)) {
+    return promptGeneratorSpec;
+  }
+
+  const [type, config] = promptGeneratorSpec;
+
+  if (type === BatchPromptGenerator.promptGeneratorName) {
+    return [
+      type,
+      normalizeBatchTaskConfig(config, context, source =>
+        normalizePromptGeneratorSpec(source as PromptGeneratorSpec, context),
+      ),
+    ];
+  }
+
+  if (type === BugzillaPromptGenerator.promptGeneratorName) {
+    return [type, normalizeBugzillaTaskConfig(config, context)];
+  }
+
+  if (type === GitHubPromptGenerator.promptGeneratorName) {
+    return [type, normalizeGitHubTaskConfig(config, context)];
+  }
+
+  if (type === JsonPromptGenerator.promptGeneratorName) {
+    return [type, normalizeJsonTaskConfig(config, context)];
+  }
+
+  if (type === PerFilePromptGenerator.promptGeneratorName) {
+    return [type, normalizePerFileTaskConfig(config, context)];
+  }
+
+  return promptGeneratorSpec;
+}
 
 /**
  * Allow easy switching between different PromptGenerator types

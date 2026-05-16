@@ -3,6 +3,15 @@ import { glob } from 'glob';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
+import {
+  assertKnownProperties,
+  assertOptionalString,
+  assertOptionalStringArray,
+  assertRequiredString,
+  isRecord,
+  normalizeTaskBasePath,
+  type PromptGeneratorConfigContext,
+} from './config.js';
 
 /**
  * Configuration for a single loop task. Describes which files to process,
@@ -33,6 +42,17 @@ export interface PerFileTask {
    * process working directory.
    */
   basePath?: string;
+}
+
+/**
+ * Normalize per-file task config values loaded from JSON.
+ */
+export function normalizePerFileTaskConfig(
+  config: unknown,
+  context: PromptGeneratorConfigContext,
+): PerFileTask {
+  assertPerFileTaskConfig(config);
+  return normalizeTaskBasePath(config, context);
 }
 
 /**
@@ -83,4 +103,28 @@ export async function resolveFiles(
   // Sort for deterministic processing order
   files.sort();
   return files;
+}
+
+/**
+ * Assert that an unknown value has the runtime shape required for a per-file
+ * task config.
+ */
+function assertPerFileTaskConfig(value: unknown): asserts value is PerFileTask {
+  if (!isRecord(value)) {
+    throw new Error('per-file task config must be an object');
+  }
+
+  assertKnownProperties(
+    value,
+    ['filePattern', 'excludePatterns', 'promptTemplate', 'basePath'],
+    'per-file',
+  );
+  assertRequiredString(value, 'filePattern', 'per-file.filePattern');
+  assertRequiredString(value, 'promptTemplate', 'per-file.promptTemplate');
+  assertOptionalString(value, 'basePath', 'per-file.basePath');
+  assertOptionalStringArray(
+    value,
+    'excludePatterns',
+    'per-file.excludePatterns',
+  );
 }

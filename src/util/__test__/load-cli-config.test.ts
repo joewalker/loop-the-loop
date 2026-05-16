@@ -2,8 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { BatchTask } from 'loop-the-loop/prompt-generators/batch';
 import type { BugzillaTask } from 'loop-the-loop/prompt-generators/bugzilla';
 import type { GitHubTask } from 'loop-the-loop/prompt-generators/github';
+import type { JsonTask } from 'loop-the-loop/prompt-generators/json';
 import type { PerFileTask } from 'loop-the-loop/prompt-generators/per-file';
 import type { LoopCliConfig } from 'loop-the-loop/types';
 import {
@@ -291,6 +293,82 @@ describe('loadCliConfig', () => {
     );
 
     expect(getGitHubTask(config).basePath).toBe(join(configDir, 'prompts'));
+  });
+
+  it('should normalize JSON task basePath relative to the config file', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'test',
+        promptGenerator: [
+          'json',
+          {
+            dataFile: 'bugs.json',
+            promptTemplate: 'Review {{id}}',
+            basePath: './data',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    expect(getJsonTask(config).basePath).toBe(join(configDir, 'data'));
+  });
+
+  it('should normalize batch tasks and their nested source configs', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'test',
+        promptGenerator: [
+          'batch',
+          {
+            source: [
+              'bugzilla',
+              {
+                search: {
+                  change: {
+                    field: 'bug_status',
+                    from: '2025-01-15',
+                    to: '2025-02-15',
+                    value: 'RESOLVED',
+                  },
+                },
+                promptTemplate: 'Review {{id}}',
+                basePath: './bug-prompts',
+              },
+            ],
+            summaryPromptTemplate: 'Summarize {{batchIds}}',
+            reportFile: 'report.yaml',
+            basePath: './summary-prompts',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    const batchTask = getBatchTask(config);
+    expect(batchTask.basePath).toBe(join(configDir, 'summary-prompts'));
+
+    if (!Array.isArray(batchTask.source)) {
+      throw new TypeError('Expected a tuple source generator config');
+    }
+
+    const [, nestedTask] = batchTask.source;
+    const bugzillaTask = nestedTask as BugzillaTask;
+    const change = bugzillaTask.search.change;
+
+    expect(bugzillaTask.basePath).toBe(join(configDir, 'bug-prompts'));
+    expect(change?.from).toBeInstanceOf(Date);
+    expect(change?.from.toISOString()).toBe('2025-01-15T00:00:00.000Z');
+    expect(change?.to).toBeInstanceOf(Date);
+    expect(change?.to.toISOString()).toBe('2025-02-15T00:00:00.000Z');
   });
 
   it('should reject GitHub search config without a string repository', async () => {
@@ -648,4 +726,22 @@ function getGitHubTask(config: LoopCliConfig): GitHubTask {
 
   const [, task] = config.promptGenerator;
   return task as GitHubTask;
+}
+
+function getJsonTask(config: LoopCliConfig): JsonTask {
+  if (!Array.isArray(config.promptGenerator)) {
+    throw new TypeError('Expected a tuple prompt generator config');
+  }
+
+  const [, task] = config.promptGenerator;
+  return task as JsonTask;
+}
+
+function getBatchTask(config: LoopCliConfig): BatchTask {
+  if (!Array.isArray(config.promptGenerator)) {
+    throw new TypeError('Expected a tuple prompt generator config');
+  }
+
+  const [, task] = config.promptGenerator;
+  return task as BatchTask;
 }

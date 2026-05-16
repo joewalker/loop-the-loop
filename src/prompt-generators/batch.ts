@@ -1,6 +1,14 @@
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
+import {
+  assertKnownProperties,
+  assertOptionalString,
+  assertRequiredString,
+  isRecord,
+  normalizeBasePath,
+  type PromptGeneratorConfigContext,
+} from './config.js';
 
 const DEFAULT_BATCH_SIZE = 50;
 
@@ -42,9 +50,34 @@ export interface BatchTask {
 
   /**
    * Directory used to resolve `{{include:...}}` paths in
-   * `summaryPromptTemplate`. Defaults to `process.cwd()`.
+   * `summaryPromptTemplate`. Defaults to `process.cwd()` when not specified.
+   * Callers that load this task from a config file should pass
+   * `path.dirname(configFilePath)` so that includes are resolved relative to
+   * the config file rather than the process working directory.
    */
   basePath?: string;
+}
+
+/**
+ * Function used to normalize a batch source prompt-generator spec.
+ */
+export type BatchSourceNormalizer = (source: unknown) => unknown;
+
+/**
+ * Normalize batch task config values loaded from JSON.
+ */
+export function normalizeBatchTaskConfig(
+  config: unknown,
+  context: PromptGeneratorConfigContext,
+  normalizeSource: BatchSourceNormalizer,
+): BatchTask {
+  assertBatchTaskConfig(config);
+
+  return {
+    ...config,
+    source: normalizeSource(config.source),
+    basePath: normalizeBasePath(config.basePath, context.configDir),
+  };
 }
 
 /**
@@ -136,5 +169,43 @@ export class BatchPromptGenerator implements PromptGenerator {
     );
 
     return { id: summaryId, prompt };
+  }
+}
+
+/**
+ * Assert that an unknown value has the runtime shape required for a batch task
+ * config.
+ */
+function assertBatchTaskConfig(value: unknown): asserts value is BatchTask {
+  if (!isRecord(value)) {
+    throw new Error('batch task config must be an object');
+  }
+
+  assertKnownProperties(
+    value,
+    ['source', 'batchSize', 'summaryPromptTemplate', 'reportFile', 'basePath'],
+    'batch',
+  );
+
+  if (!('source' in value)) {
+    throw new Error('batch.source is required');
+  }
+
+  assertRequiredString(
+    value,
+    'summaryPromptTemplate',
+    'batch.summaryPromptTemplate',
+  );
+  assertRequiredString(value, 'reportFile', 'batch.reportFile');
+  assertOptionalString(value, 'basePath', 'batch.basePath');
+
+  const batchSize = value['batchSize'];
+  if (
+    'batchSize' in value &&
+    (typeof batchSize !== 'number' ||
+      !Number.isInteger(batchSize) ||
+      batchSize < 1)
+  ) {
+    throw new Error('batch.batchSize must be a positive integer');
   }
 }

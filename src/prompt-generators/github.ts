@@ -50,7 +50,10 @@ export interface GitHubTask {
 
   /**
    * Directory used to resolve `{{include:...}}` paths in `promptTemplate`.
-   * Defaults to `process.cwd()` when not specified.
+   * Defaults to `process.cwd()` when not specified. Callers that load this
+   * task from a config file should pass `path.dirname(configFilePath)` so
+   * that includes are resolved relative to the config file rather than the
+   * process working directory.
    */
   basePath?: string;
 }

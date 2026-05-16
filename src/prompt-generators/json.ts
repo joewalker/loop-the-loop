@@ -4,6 +4,14 @@ import { resolve } from 'node:path';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
+import {
+  assertKnownProperties,
+  assertOptionalString,
+  assertRequiredString,
+  isRecord,
+  normalizeTaskBasePath,
+  type PromptGeneratorConfigContext,
+} from './config.js';
 
 /**
  * Configuration for a prompt generator that iterates over elements of a JSON
@@ -49,8 +57,23 @@ export interface JsonTask {
   /**
    * Directory used to resolve `{{include:...}}` paths in `promptTemplate` and
    * the `dataFile` path. Defaults to `process.cwd()` when not specified.
+   * Callers that load this task from a config file should pass
+   * `path.dirname(configFilePath)` so that includes and data files are
+   * resolved relative to the config file rather than the process working
+   * directory.
    */
   basePath?: string;
+}
+
+/**
+ * Normalize JSON task config values loaded from JSON.
+ */
+export function normalizeJsonTaskConfig(
+  config: unknown,
+  context: PromptGeneratorConfigContext,
+): JsonTask {
+  assertJsonTaskConfig(config);
+  return normalizeTaskBasePath(config, context);
 }
 
 /**
@@ -206,4 +229,33 @@ function buildVariables(
   }
 
   return variables;
+}
+
+/**
+ * Assert that an unknown value has the runtime shape required for a JSON task
+ * config.
+ */
+function assertJsonTaskConfig(value: unknown): asserts value is JsonTask {
+  if (!isRecord(value)) {
+    throw new Error('json task config must be an object');
+  }
+
+  assertKnownProperties(
+    value,
+    ['data', 'dataFile', 'path', 'idField', 'promptTemplate', 'basePath'],
+    'json',
+  );
+  assertRequiredString(value, 'promptTemplate', 'json.promptTemplate');
+  assertOptionalString(value, 'dataFile', 'json.dataFile');
+  assertOptionalString(value, 'path', 'json.path');
+  assertOptionalString(value, 'idField', 'json.idField');
+  assertOptionalString(value, 'basePath', 'json.basePath');
+
+  const hasData = value['data'] !== undefined;
+  const hasDataFile = value['dataFile'] !== undefined;
+  if (hasData === hasDataFile) {
+    throw new Error(
+      'json task config must specify exactly one of json.data or json.dataFile',
+    );
+  }
 }

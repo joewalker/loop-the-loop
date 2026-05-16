@@ -355,7 +355,7 @@ Field                   | Required | Default | Description
 `summaryPromptTemplate` | yes      |         | Template for the summary prompt injected after each batch (see below)
 `reportFile`            | yes      |         | Path to the report file the loop is writing to; injected as `{{reportFile}}` in the summary template
 `batchSize`             | no       | 50      | Number of source items per batch
-`basePath`              | no       | cwd     | Base directory for resolving `{{include:...}}` paths in `summaryPromptTemplate`
+`basePath`              | no       |         | Base directory for resolving `{{include:...}}` paths in `summaryPromptTemplate`. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
 The summary prompt is injected after every `batchSize` items, and again at the end for any leftover items. Summary prompts are tracked in LoopState under IDs of the form `batch-summary-after-{lastItemId}`, so they are skipped on resume if already completed.
 
