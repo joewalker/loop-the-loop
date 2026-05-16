@@ -130,6 +130,27 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'gitlab issue search',
+        {
+          name: 'gitlab',
+          agent: 'test',
+          promptGenerator: [
+            'gitlab',
+            {
+              search: {
+                project: 'gitlab-org/gitlab',
+                state: 'opened',
+                labels: ['bug'],
+                orderBy: 'updated_at',
+                sort: 'desc',
+                maxResults: 25,
+              },
+              promptTemplate: 'Review {{id}}: {{title}}',
+            },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {

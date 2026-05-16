@@ -152,6 +152,16 @@
           "minItems": 2,
           "maxItems": 2,
           "additionalItems": false,
+          "items": [
+            { "const": "gitlab" },
+            { "$ref": "#/definitions/gitlabTask" }
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
           "items": [{ "const": "json" }, { "$ref": "#/definitions/jsonTask" }]
         },
         {
@@ -289,6 +299,145 @@
           "type": "integer",
           "minimum": 0,
           "description": "Maximum number of issues to return across all pages. When omitted, returns up to GitHub's 1,000-result search limit. Larger values are capped at 1,000."
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "When true, skip the actual query and return an empty set."
+        },
+        "logQuery": {
+          "type": "boolean",
+          "description": "When true, log the query URL to stdout before sending."
+        }
+      }
+    },
+    "gitlabTask": {
+      "type": "object",
+      "required": ["search", "promptTemplate"],
+      "additionalProperties": false,
+      "properties": {
+        "gitlab": {
+          "$ref": "#/definitions/gitlabConstructorOptions"
+        },
+        "search": {
+          "$ref": "#/definitions/gitlabSearchParams"
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "Prompt template. Substituted placeholders: {{id}}, {{iid}}, {{project}}, {{title}}, {{url}}, {{state}}, {{author}}, {{assignee}}, {{assignees}}, {{labels}}, {{milestone}}, {{commentCount}}, {{createdAt}}, {{updatedAt}}, {{closedAt}}, {{description}}. Supports {{include:path}} macros."
+        },
+        "basePath": {
+          "type": "string",
+          "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+        }
+      }
+    },
+    "gitlabConstructorOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "GitLab REST API origin. Defaults to https://gitlab.com/api/v4. For GitLab Self-Managed, use the API origin, for example https://gitlab.example.com/api/v4.",
+          "format": "uri"
+        },
+        "token": {
+          "type": "string",
+          "description": "GitLab access token. Prefer tokenEnv for CLI JSON configs."
+        },
+        "tokenEnv": {
+          "type": "string",
+          "description": "Environment variable name from which to read the GitLab access token. Defaults to GITLAB_TOKEN then GL_TOKEN."
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "User-Agent header value for GitLab API requests. Defaults to loop-the-loop."
+        }
+      }
+    },
+    "gitlabSearchParams": {
+      "type": "object",
+      "required": ["project"],
+      "additionalProperties": false,
+      "properties": {
+        "project": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project to search, as a numeric project ID or namespaced project path."
+        },
+        "state": {
+          "type": "string",
+          "enum": ["opened", "closed", "all"],
+          "description": "Return all issues or just opened or closed issues."
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Labels that all returned issues must have."
+        },
+        "search": {
+          "type": "string",
+          "description": "Search project issues against their title and description."
+        },
+        "milestone": {
+          "type": "string",
+          "description": "Milestone title. GitLab also accepts None and Any."
+        },
+        "authorUsername": {
+          "type": "string",
+          "description": "Return issues created by this username."
+        },
+        "assigneeUsername": {
+          "type": "string",
+          "description": "Return issues assigned to this username."
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["created_by_me", "assigned_to_me", "all"],
+          "description": "Return issues for the given scope."
+        },
+        "orderBy": {
+          "type": "string",
+          "description": "Sort field accepted by GitLab project issue search, such as created_at, updated_at, priority, or due_date."
+        },
+        "sort": {
+          "type": "string",
+          "enum": ["asc", "desc"],
+          "description": "Sort order."
+        },
+        "createdAfter": {
+          "type": "string",
+          "description": "Return issues created on or after the given ISO 8601 timestamp."
+        },
+        "createdBefore": {
+          "type": "string",
+          "description": "Return issues created on or before the given ISO 8601 timestamp."
+        },
+        "updatedAfter": {
+          "type": "string",
+          "description": "Return issues updated on or after the given ISO 8601 timestamp."
+        },
+        "updatedBefore": {
+          "type": "string",
+          "description": "Return issues updated on or before the given ISO 8601 timestamp."
+        },
+        "issueType": {
+          "type": "string",
+          "description": "Filter to a GitLab issue type, for example issue, incident, task, or test_case."
+        },
+        "confidential": {
+          "type": "boolean",
+          "description": "Filter confidential or public issues."
+        },
+        "perPage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Number of results to request per API page. GitLab accepts 1 to 100."
+        },
+        "maxResults": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of issues to return across all pages."
         },
         "dryRun": {
           "type": "boolean",

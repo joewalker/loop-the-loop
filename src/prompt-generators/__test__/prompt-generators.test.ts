@@ -24,6 +24,10 @@ describe('promptGeneratorTypes', () => {
   it('should include github', () => {
     expect(promptGeneratorTypes).toContain('github');
   });
+
+  it('should include gitlab', () => {
+    expect(promptGeneratorTypes).toContain('gitlab');
+  });
 });
 
 describe('createPromptGenerator', () => {

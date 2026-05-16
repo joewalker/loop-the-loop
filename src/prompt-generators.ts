@@ -8,6 +8,8 @@ import { normalizeBugzillaTaskConfig } from './prompt-generators/bugzilla/config
 import type { PromptGeneratorConfigContext } from './prompt-generators/config.js';
 import { GitHubPromptGenerator } from './prompt-generators/github.js';
 import { normalizeGitHubTaskConfig } from './prompt-generators/github/config.js';
+import { GitLabPromptGenerator } from './prompt-generators/gitlab.js';
+import { normalizeGitLabTaskConfig } from './prompt-generators/gitlab/config.js';
 import { JsonPromptGenerator } from './prompt-generators/json.js';
 import { normalizeJsonTaskConfig } from './prompt-generators/json.js';
 import {
@@ -84,6 +86,7 @@ export type PromptGeneratorCreator = (
 const promptGeneratorCreators = {
   [BugzillaPromptGenerator.promptGeneratorName]: BugzillaPromptGenerator.create,
   [GitHubPromptGenerator.promptGeneratorName]: GitHubPromptGenerator.create,
+  [GitLabPromptGenerator.promptGeneratorName]: GitLabPromptGenerator.create,
   [JsonPromptGenerator.promptGeneratorName]: JsonPromptGenerator.create,
   [PerFilePromptGenerator.promptGeneratorName]: PerFilePromptGenerator.create,
 } satisfies Record<string, PromptGeneratorCreator>;
@@ -145,6 +148,10 @@ export function normalizePromptGeneratorSpec(
 
   if (type === GitHubPromptGenerator.promptGeneratorName) {
     return [type, normalizeGitHubTaskConfig(config, context)];
+  }
+
+  if (type === GitLabPromptGenerator.promptGeneratorName) {
+    return [type, normalizeGitLabTaskConfig(config, context)];
   }
 
   if (type === JsonPromptGenerator.promptGeneratorName) {

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { BatchTask } from 'loop-the-loop/prompt-generators/batch';
 import type { BugzillaTask } from 'loop-the-loop/prompt-generators/bugzilla';
 import type { GitHubTask } from 'loop-the-loop/prompt-generators/github';
+import type { GitLabTask } from 'loop-the-loop/prompt-generators/gitlab';
 import type { JsonTask } from 'loop-the-loop/prompt-generators/json';
 import type { PerFileTask } from 'loop-the-loop/prompt-generators/per-file';
 import type { LoopCliConfig } from 'loop-the-loop/types';
@@ -295,6 +296,32 @@ describe('loadCliConfig', () => {
     expect(getGitHubTask(config).basePath).toBe(join(configDir, 'prompts'));
   });
 
+  it('should normalize GitLab task basePath relative to the config file', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'test',
+        promptGenerator: [
+          'gitlab',
+          {
+            search: {
+              project: 'gitlab-org/gitlab',
+              state: 'opened',
+            },
+            promptTemplate: 'Review {{id}}',
+            basePath: './prompts',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    expect(getGitLabTask(config).basePath).toBe(join(configDir, 'prompts'));
+  });
+
   it('should normalize JSON task basePath relative to the config file', async () => {
     const configDir = join(tempDir, 'config');
     await mkdir(configDir, { recursive: true });
@@ -417,6 +444,54 @@ describe('loadCliConfig', () => {
         join(configDir, 'config.json'),
       ),
     ).rejects.toThrow('github.search.query must be a string');
+  });
+
+  it('should reject GitLab search config without a string project', async () => {
+    const configDir = join(tempDir, 'config');
+
+    await expect(
+      normalizeCliConfig(
+        {
+          name: 'test',
+          agent: 'test',
+          promptGenerator: [
+            'gitlab',
+            {
+              search: {
+                state: 'opened',
+              },
+              promptTemplate: 'Review {{id}}',
+              basePath: './prompts',
+            } as unknown as GitLabTask,
+          ],
+        },
+        join(configDir, 'config.json'),
+      ),
+    ).rejects.toThrow('gitlab.search.project must be a string');
+  });
+
+  it('should reject malformed GitLab label filters', async () => {
+    const configDir = join(tempDir, 'config');
+
+    await expect(
+      normalizeCliConfig(
+        {
+          name: 'test',
+          agent: 'test',
+          promptGenerator: [
+            'gitlab',
+            {
+              search: {
+                project: 'gitlab-org/gitlab',
+                labels: 'bug',
+              },
+              promptTemplate: 'Review {{id}}',
+            } as unknown as GitLabTask,
+          ],
+        },
+        join(configDir, 'config.json'),
+      ),
+    ).rejects.toThrow('gitlab.search.labels must be an array of strings');
   });
 
   it('should convert Bugzilla change date strings into Date objects', async () => {
@@ -726,6 +801,15 @@ function getGitHubTask(config: LoopCliConfig): GitHubTask {
 
   const [, task] = config.promptGenerator;
   return task as GitHubTask;
+}
+
+function getGitLabTask(config: LoopCliConfig): GitLabTask {
+  if (!Array.isArray(config.promptGenerator)) {
+    throw new TypeError('Expected a tuple prompt generator config');
+  }
+
+  const [, task] = config.promptGenerator;
+  return task as GitLabTask;
 }
 
 function getJsonTask(config: LoopCliConfig): JsonTask {

@@ -300,6 +300,76 @@ Config example:
 
 Source: `src/prompt-generators/github.ts`, `src/prompt-generators/github/`
 
+### `gitlab`
+
+Queries GitLab project issues and generates one prompt per matching issue. The search uses GitLab's project issues endpoint; project paths are URL-encoded into `/projects/:id/issues`.
+
+Field     |   Required | Description
+-----------------|-----|------------
+`search`         | yes | Search parameters (see below)
+`promptTemplate` | yes | Template with issue placeholders (see below)
+`gitlab`         | no  | Connection options. Defaults to `https://gitlab.com/api/v4` and token lookup from `GITLAB_TOKEN` then `GL_TOKEN`
+`basePath`       | no  | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
+
+Available template placeholders: `{{id}}`, `{{iid}}`, `{{project}}`, `{{title}}`, `{{url}}`, `{{state}}`, `{{author}}`, `{{assignee}}`, `{{assignees}}`, `{{labels}}`, `{{milestone}}`, `{{commentCount}}`, `{{createdAt}}`, `{{updatedAt}}`, `{{closedAt}}`, `{{description}}`.
+
+Search parameters (`search` field):
+
+Field              | Description
+-------------------|------------
+`project`          | Project to search, as a numeric project ID or namespaced path such as `gitlab-org/gitlab`
+`state`            | Optional issue state: `opened`, `closed`, or `all`
+`labels`           | Array of label names. GitLab returns issues that have all labels
+`search`           | Search text matched against issue title and description
+`milestone`        | Milestone title. GitLab also accepts `None` and `Any`
+`authorUsername`   | Filter by author username
+`assigneeUsername` | Filter by assignee username
+`scope`            | Optional scope: `created_by_me`, `assigned_to_me`, or `all`
+`orderBy`          | Optional GitLab sort field, for example `created_at`, `updated_at`, `priority`, or `due_date`
+`sort`             | Optional sort order: `asc` or `desc`
+`createdAfter`     | Return issues created on or after an ISO 8601 timestamp
+`createdBefore`    | Return issues created on or before an ISO 8601 timestamp
+`updatedAfter`     | Return issues updated on or after an ISO 8601 timestamp
+`updatedBefore`    | Return issues updated on or before an ISO 8601 timestamp
+`issueType`        | Filter to an issue type, for example `issue`, `incident`, `task`, or `test_case`
+`confidential`     | Filter confidential or public issues
+`perPage`          | Results per API page, from 1 to 100
+`maxResults`       | Maximum number of issues to return across all pages
+`dryRun`           | When true, skip the actual query and return an empty set
+`logQuery`         | When true, log the query URL to stdout
+
+Connection options (`gitlab` field):
+
+Field       | Description
+------------|------------
+`origin`    | GitLab REST API origin. Defaults to `https://gitlab.com/api/v4`. For GitLab Self-Managed, use the API origin, for example `https://gitlab.example.com/api/v4`
+`tokenEnv`  | Environment variable name from which to read an access token. Defaults to `GITLAB_TOKEN` then `GL_TOKEN`
+`token`     | Access token value. Prefer `tokenEnv` for CLI configs so secrets do not need to be written into JSON
+`userAgent` | User-Agent header value. Defaults to `loop-the-loop`
+
+Config example:
+
+```json
+[
+  "gitlab", {
+    "gitlab": {
+      "tokenEnv": "GITLAB_TOKEN"
+    },
+    "search": {
+      "project": "gitlab-org/gitlab",
+      "state": "opened",
+      "labels": ["bug"],
+      "orderBy": "updated_at",
+      "sort": "desc",
+      "maxResults": 25
+    },
+    "promptTemplate": "Triage {{id}}: {{title}}\nURL: {{url}}\nLabels: {{labels}}\nComment count: {{commentCount}}\n\n{{description}}"
+  }
+]
+```
+
+Source: `src/prompt-generators/gitlab.ts`, `src/prompt-generators/gitlab/`
+
 ### `json`
 
 Iterates over elements of a JSON array or object and generates one prompt per element. The data can be supplied inline or loaded from a file.
