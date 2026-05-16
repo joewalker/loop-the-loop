@@ -242,6 +242,64 @@ Config example:
 
 Source: `src/prompt-generators/bugzilla.ts`, `src/prompt-generators/bugzilla/`
 
+### `github`
+
+Queries GitHub issue search and generates one prompt per matching issue. The search uses GitHub's native issue search syntax; the generator adds `repo:<repository>` and `is:issue` so pull requests are excluded and the search stays scoped to one repository.
+
+Field     |   Required | Description
+-----------------|-----|------------
+`search`         | yes | Search parameters (see below)
+`promptTemplate` | yes | Template with issue placeholders (see below)
+`github`         | no  | Connection options. Defaults to `https://api.github.com` and token lookup from `GITHUB_TOKEN` then `GH_TOKEN`
+`basePath`       | no  | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
+
+Available template placeholders: `{{id}}`, `{{number}}`, `{{repository}}`, `{{owner}}`, `{{repo}}`, `{{title}}`, `{{url}}`, `{{state}}`, `{{author}}`, `{{assignee}}`, `{{assignees}}`, `{{labels}}`, `{{milestone}}`, `{{commentCount}}`, `{{createdAt}}`, `{{updatedAt}}`, `{{closedAt}}`, `{{body}}`.
+
+Search parameters (`search` field):
+
+Field        | Description
+-------------|------------
+`repository` | Repository to search in `owner/repo` form
+`query`      | GitHub issue search syntax, for example `is:open label:bug no:assignee`
+`sort`       | Optional GitHub search sort field, for example `updated`, `created`, or `comments`
+`order`      | Optional sort order: `asc` or `desc`
+`perPage`    | Results per API page, from 1 to 100
+`maxResults` | Maximum number of issues to return across all pages. When omitted, returns up to GitHub's 1,000-result search limit; larger values are capped at 1,000
+`dryRun`     | When true, skip the actual query and return an empty set
+`logQuery`   | When true, log the query URL to stdout
+
+Connection options (`github` field):
+
+Field        | Description
+-------------|------------
+`origin`     | GitHub REST API origin. Defaults to `https://api.github.com`. For GitHub Enterprise, use the API origin, for example `https://github.example.com/api/v3`
+`tokenEnv`   | Environment variable name from which to read a bearer token. Defaults to `GITHUB_TOKEN` then `GH_TOKEN`
+`token`      | Bearer token value. Prefer `tokenEnv` for CLI configs so secrets do not need to be written into JSON
+`apiVersion` | GitHub REST API version header. Defaults to `2022-11-28`
+`userAgent`  | User-Agent header value. Defaults to `loop-the-loop`
+
+Config example:
+
+```json
+[
+  "github", {
+    "github": {
+      "tokenEnv": "GITHUB_TOKEN"
+    },
+    "search": {
+      "repository": "octocat/Hello-World",
+      "query": "is:open label:bug no:assignee",
+      "sort": "updated",
+      "order": "desc",
+      "maxResults": 25
+    },
+    "promptTemplate": "Triage {{id}}: {{title}}\nURL: {{url}}\nLabels: {{labels}}\nComment count: {{commentCount}}\n\n{{body}}"
+  }
+]
+```
+
+Source: `src/prompt-generators/github.ts`, `src/prompt-generators/github/`
+
 ### `json`
 
 Iterates over elements of a JSON array or object and generates one prompt per element. The data can be supplied inline or loaded from a file.

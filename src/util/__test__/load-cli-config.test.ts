@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { BugzillaTask } from 'loop-the-loop/prompt-generators/bugzilla';
+import type { GitHubTask } from 'loop-the-loop/prompt-generators/github';
 import type { PerFileTask } from 'loop-the-loop/prompt-generators/per-file';
 import type { LoopCliConfig } from 'loop-the-loop/types';
 import {
@@ -199,6 +200,80 @@ describe('loadCliConfig', () => {
     );
 
     expect(getBugzillaTask(config).search).toBe(search);
+  });
+
+  it('should normalize GitHub task basePath relative to the config file', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'test',
+        promptGenerator: [
+          'github',
+          {
+            search: {
+              repository: 'octocat/Hello-World',
+              query: 'is:open label:bug',
+            },
+            promptTemplate: 'Review {{id}}',
+            basePath: './prompts',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    expect(getGitHubTask(config).basePath).toBe(join(configDir, 'prompts'));
+  });
+
+  it('should reject GitHub search config without a string repository', async () => {
+    const configDir = join(tempDir, 'config');
+
+    await expect(
+      normalizeCliConfig(
+        {
+          name: 'test',
+          agent: 'test',
+          promptGenerator: [
+            'github',
+            {
+              search: {
+                query: 'is:open',
+              },
+              promptTemplate: 'Review {{id}}',
+              basePath: './prompts',
+            } as unknown as GitHubTask,
+          ],
+        },
+        join(configDir, 'config.json'),
+      ),
+    ).rejects.toThrow('github.search.repository must be a string');
+  });
+
+  it('should reject GitHub search config without a string query', async () => {
+    const configDir = join(tempDir, 'config');
+
+    await expect(
+      normalizeCliConfig(
+        {
+          name: 'test',
+          agent: 'test',
+          promptGenerator: [
+            'github',
+            {
+              search: {
+                repository: 'octocat/Hello-World',
+              },
+              promptTemplate: 'Review {{id}}',
+              basePath: './prompts',
+            } as unknown as GitHubTask,
+          ],
+        },
+        join(configDir, 'config.json'),
+      ),
+    ).rejects.toThrow('github.search.query must be a string');
   });
 
   it('should convert Bugzilla change date strings into Date objects', async () => {
@@ -499,4 +574,13 @@ function getBugzillaTask(config: LoopCliConfig): BugzillaTask {
 
   const [, task] = config.promptGenerator;
   return task as BugzillaTask;
+}
+
+function getGitHubTask(config: LoopCliConfig): GitHubTask {
+  if (!Array.isArray(config.promptGenerator)) {
+    throw new TypeError('Expected a tuple prompt generator config');
+  }
+
+  const [, task] = config.promptGenerator;
+  return task as GitHubTask;
 }

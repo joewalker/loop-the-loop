@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
 import type { BugzillaTask } from '../prompt-generators/bugzilla.js';
+import type { GitHubTask } from '../prompt-generators/github.js';
 import type { PerFileTask } from '../prompt-generators/per-file.js';
 import type { LoopCliConfig } from '../types.js';
 import { expandIncludes } from './expand-prompt.js';
@@ -138,6 +139,10 @@ function normalizePromptGenerator(
     return [type, normalizeBugzillaTaskConfig(config, configDir)];
   }
 
+  if (type === 'github') {
+    return [type, normalizeGitHubTaskConfig(config, configDir)];
+  }
+
   return promptGenerator;
 }
 
@@ -152,6 +157,21 @@ function normalizeBugzillaTaskConfig(
     ...config,
     basePath: normalizeBasePath(config.basePath, configDir),
     search: normalizeBugzillaSearchParams(config.search),
+  };
+}
+
+/**
+ * Normalize GitHub task config values loaded from JSON.
+ */
+function normalizeGitHubTaskConfig(
+  config: unknown,
+  configDir: string,
+): GitHubTask {
+  assertGitHubTaskConfig(config);
+
+  return {
+    ...config,
+    basePath: normalizeBasePath(config.basePath, configDir),
   };
 }
 
@@ -256,4 +276,45 @@ function isBugzillaTaskConfig(value: unknown): value is BugzillaTask {
     typeof value.promptTemplate === 'string' &&
     (!('basePath' in value) || typeof value.basePath === 'string')
   );
+}
+
+/**
+ * Check whether an unknown value is a plain object.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Assert that an unknown value has the runtime shape required for a GitHub
+ * task config.
+ */
+function assertGitHubTaskConfig(value: unknown): asserts value is GitHubTask {
+  if (!isRecord(value)) {
+    throw new Error('github task config must be an object');
+  }
+
+  if (
+    !('promptTemplate' in value) ||
+    typeof value['promptTemplate'] !== 'string'
+  ) {
+    throw new Error('github.promptTemplate must be a string');
+  }
+
+  if ('basePath' in value && typeof value['basePath'] !== 'string') {
+    throw new Error('github.basePath must be a string');
+  }
+
+  const search = value['search'];
+  if (!isRecord(search)) {
+    throw new Error('github.search must be an object');
+  }
+
+  if (!('repository' in search) || typeof search['repository'] !== 'string') {
+    throw new Error('github.search.repository must be a string');
+  }
+
+  if (!('query' in search) || typeof search['query'] !== 'string') {
+    throw new Error('github.search.query must be a string');
+  }
 }

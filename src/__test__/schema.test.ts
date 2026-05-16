@@ -110,6 +110,26 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'github issue search',
+        {
+          name: 'github',
+          agent: 'test',
+          promptGenerator: [
+            'github',
+            {
+              search: {
+                repository: 'octocat/Hello-World',
+                query: 'is:open label:bug',
+                sort: 'updated',
+                order: 'desc',
+                maxResults: 25,
+              },
+              promptTemplate: 'Review {{id}}: {{title}}',
+            },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {
@@ -156,6 +176,20 @@ describe('CLI config schema', () => {
                   value: 'RESOLVED',
                 },
               },
+              promptTemplate: 'y',
+            },
+          ],
+        },
+      ],
+      [
+        'rejects github search without repository',
+        {
+          name: 'x',
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'github',
+            {
+              search: { query: 'is:open' },
               promptTemplate: 'y',
             },
           ],

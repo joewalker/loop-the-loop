@@ -142,6 +142,16 @@
           "minItems": 2,
           "maxItems": 2,
           "additionalItems": false,
+          "items": [
+            { "const": "github" },
+            { "$ref": "#/definitions/githubTask" }
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
           "items": [{ "const": "json" }, { "$ref": "#/definitions/jsonTask" }]
         },
         {
@@ -195,6 +205,98 @@
         "basePath": {
           "type": "string",
           "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+        }
+      }
+    },
+    "githubTask": {
+      "type": "object",
+      "required": ["search", "promptTemplate"],
+      "additionalProperties": false,
+      "properties": {
+        "github": {
+          "$ref": "#/definitions/githubConstructorOptions"
+        },
+        "search": {
+          "$ref": "#/definitions/githubSearchParams"
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "Prompt template. Substituted placeholders: {{id}}, {{number}}, {{repository}}, {{owner}}, {{repo}}, {{title}}, {{url}}, {{state}}, {{author}}, {{assignee}}, {{assignees}}, {{labels}}, {{milestone}}, {{commentCount}}, {{createdAt}}, {{updatedAt}}, {{closedAt}}, {{body}}. Supports {{include:path}} macros."
+        },
+        "basePath": {
+          "type": "string",
+          "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+        }
+      }
+    },
+    "githubConstructorOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "origin": {
+          "type": "string",
+          "description": "GitHub REST API origin. Defaults to https://api.github.com. For GitHub Enterprise, use the API origin, for example https://github.example.com/api/v3.",
+          "format": "uri"
+        },
+        "token": {
+          "type": "string",
+          "description": "GitHub bearer token. Prefer tokenEnv for CLI JSON configs."
+        },
+        "tokenEnv": {
+          "type": "string",
+          "description": "Environment variable name from which to read the GitHub bearer token. Defaults to GITHUB_TOKEN then GH_TOKEN."
+        },
+        "apiVersion": {
+          "type": "string",
+          "description": "GitHub REST API version header. Defaults to 2022-11-28."
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "User-Agent header value for GitHub API requests. Defaults to loop-the-loop."
+        }
+      }
+    },
+    "githubSearchParams": {
+      "type": "object",
+      "required": ["repository", "query"],
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "description": "Repository to search, in owner/repo form."
+        },
+        "query": {
+          "type": "string",
+          "description": "GitHub issue search syntax. The client adds repo:<repository> and is:issue."
+        },
+        "sort": {
+          "type": "string",
+          "description": "Sort field accepted by GitHub issue search, such as comments, created, or updated."
+        },
+        "order": {
+          "type": "string",
+          "enum": ["asc", "desc"],
+          "description": "Sort order."
+        },
+        "perPage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Number of results to request per API page. GitHub accepts 1 to 100."
+        },
+        "maxResults": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of issues to return across all pages. When omitted, returns up to GitHub's 1,000-result search limit. Larger values are capped at 1,000."
+        },
+        "dryRun": {
+          "type": "boolean",
+          "description": "When true, skip the actual query and return an empty set."
+        },
+        "logQuery": {
+          "type": "boolean",
+          "description": "When true, log the query URL to stdout before sending."
         }
       }
     },

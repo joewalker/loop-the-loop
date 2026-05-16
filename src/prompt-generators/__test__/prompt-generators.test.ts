@@ -20,6 +20,10 @@ describe('promptGeneratorTypes', () => {
   it('should include bugzilla', () => {
     expect(promptGeneratorTypes).toContain('bugzilla');
   });
+
+  it('should include github', () => {
+    expect(promptGeneratorTypes).toContain('github');
+  });
 });
 
 describe('createPromptGenerator', () => {
