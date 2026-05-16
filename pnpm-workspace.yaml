@@ -1,5 +1,6 @@
+allowBuilds:
+  esbuild: true
 autoInstallPeers: true
 ignoreWorkspaceRootCheck: true
 saveExact: true
-allowBuilds:
-  esbuild: true
+verifyDepsBeforeRun: error
