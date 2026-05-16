@@ -1,3 +1,5 @@
+// @module-tag local
+
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitHubPromptGenerator } from 'loop-the-loop/prompt-generators/github';
 import { LoopState } from 'loop-the-loop/util/loop-state';

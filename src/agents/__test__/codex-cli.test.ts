@@ -1,3 +1,5 @@
+// @module-tag local
+
 import { EventEmitter } from 'node:events';
 
 import { CodexCLIAgent } from 'loop-the-loop/agents/codex-cli';

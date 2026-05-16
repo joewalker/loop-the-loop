@@ -1,3 +1,8 @@
+// @module-tag live
+// @module-tag extra
+// @module-tag network
+// @module-tag gitlab
+
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitLabPromptGenerator } from 'loop-the-loop/prompt-generators/gitlab';
 import { LoopState } from 'loop-the-loop/util/loop-state';
@@ -36,45 +41,41 @@ async function collectPrompts(
   return prompts;
 }
 
-describe(
-  'GitLab live prompt generator',
-  { tags: ['extra', 'network', 'gitlab'] },
-  () => {
-    it(
-      'generates a prompt from a live GitLab issue search',
-      { timeout: 30_000, retry: { count: 1, delay: 1_000 } },
-      async () => {
-        const project = readEnv('LOOP_TEST_GITLAB_PROJECT', DEFAULT_PROJECT);
-        const origin = readOptionalEnv('LOOP_TEST_GITLAB_ORIGIN');
-        const searchText = readOptionalEnv('LOOP_TEST_GITLAB_SEARCH');
-        const generator = new GitLabPromptGenerator({
-          ...(origin === undefined ? {} : { gitlab: { origin } }),
-          search: {
-            project,
-            state: 'opened',
-            ...(searchText === undefined ? {} : { search: searchText }),
-            orderBy: 'updated_at',
-            sort: 'desc',
-            perPage: 1,
-            maxResults: 1,
-          },
-          promptTemplate:
-            'Issue {{id}}\nTitle: {{title}}\nURL: {{url}}\nState: {{state}}\nAuthor: {{author}}\nLabels: {{labels}}\nComment count: {{commentCount}}\n\n{{description}}',
-        });
-        const loopState = new LoopState('ignored.json');
+describe('GitLab live prompt generator', () => {
+  it(
+    'generates a prompt from a live GitLab issue search',
+    { timeout: 30_000, retry: { count: 1, delay: 1_000 } },
+    async () => {
+      const project = readEnv('LOOP_TEST_GITLAB_PROJECT', DEFAULT_PROJECT);
+      const origin = readOptionalEnv('LOOP_TEST_GITLAB_ORIGIN');
+      const searchText = readOptionalEnv('LOOP_TEST_GITLAB_SEARCH');
+      const generator = new GitLabPromptGenerator({
+        ...(origin === undefined ? {} : { gitlab: { origin } }),
+        search: {
+          project,
+          state: 'opened',
+          ...(searchText === undefined ? {} : { search: searchText }),
+          orderBy: 'updated_at',
+          sort: 'desc',
+          perPage: 1,
+          maxResults: 1,
+        },
+        promptTemplate:
+          'Issue {{id}}\nTitle: {{title}}\nURL: {{url}}\nState: {{state}}\nAuthor: {{author}}\nLabels: {{labels}}\nComment count: {{commentCount}}\n\n{{description}}',
+      });
+      const loopState = new LoopState('ignored.json');
 
-        const prompts = await collectPrompts(generator, loopState);
+      const prompts = await collectPrompts(generator, loopState);
 
-        expect(prompts).toHaveLength(1);
+      expect(prompts).toHaveLength(1);
 
-        const [prompt] = prompts;
-        expect(prompt.id.startsWith(`${project}#`)).toBe(true);
-        expect(Number(prompt.id.slice(project.length + 1))).toBeGreaterThan(0);
-        expect(prompt.prompt).toContain(`Issue ${prompt.id}`);
-        expect(prompt.prompt).toContain('Title: ');
-        expect(prompt.prompt).toContain('URL: ');
-        expect(prompt.prompt).toContain('State: ');
-      },
-    );
-  },
-);
+      const [prompt] = prompts;
+      expect(prompt.id.startsWith(`${project}#`)).toBe(true);
+      expect(Number(prompt.id.slice(project.length + 1))).toBeGreaterThan(0);
+      expect(prompt.prompt).toContain(`Issue ${prompt.id}`);
+      expect(prompt.prompt).toContain('Title: ');
+      expect(prompt.prompt).toContain('URL: ');
+      expect(prompt.prompt).toContain('State: ');
+    },
+  );
+});

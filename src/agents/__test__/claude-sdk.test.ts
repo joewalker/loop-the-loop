@@ -1,3 +1,5 @@
+// @module-tag local
+
 import { splitAllowedTools } from 'loop-the-loop/agents/claude-sdk';
 import { describe, expect, it } from 'vitest';
 

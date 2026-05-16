@@ -1,3 +1,8 @@
+// @module-tag live
+// @module-tag extra
+// @module-tag network
+// @module-tag bugzilla
+
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { BugzillaPromptGenerator } from 'loop-the-loop/prompt-generators/bugzilla';
 import { LoopState } from 'loop-the-loop/util/loop-state';
@@ -42,42 +47,38 @@ async function collectPrompts(
   return prompts;
 }
 
-describe(
-  'Bugzilla live prompt generator',
-  { tags: ['extra', 'network', 'bugzilla'] },
-  () => {
-    it(
-      'generates a prompt from a live Bugzilla bug search',
-      { timeout: 30_000, retry: { count: 1, delay: 1_000 } },
-      async () => {
-        const origin = readEnv('LOOP_TEST_BUGZILLA_ORIGIN', DEFAULT_ORIGIN);
-        const bugId = readPositiveIntegerEnv(
-          'LOOP_TEST_BUGZILLA_ID',
-          DEFAULT_BUG_ID,
-        );
-        const generator = new BugzillaPromptGenerator({
-          bugzilla: { origin },
-          search: {
-            ids: [bugId],
-          },
-          promptTemplate:
-            'Bug {{id}}\nSummary: {{summary}}\nURL: {{url}}\nProduct: {{product}}\nComponent: {{component}}\nSeverity: {{severity}}\nStatus: {{status}}\nAssignee: {{assignee}}\nWhiteboard: {{whiteboard}}',
-        });
-        const loopState = new LoopState('ignored.json');
+describe('Bugzilla live prompt generator', () => {
+  it(
+    'generates a prompt from a live Bugzilla bug search',
+    { timeout: 30_000, retry: { count: 1, delay: 1_000 } },
+    async () => {
+      const origin = readEnv('LOOP_TEST_BUGZILLA_ORIGIN', DEFAULT_ORIGIN);
+      const bugId = readPositiveIntegerEnv(
+        'LOOP_TEST_BUGZILLA_ID',
+        DEFAULT_BUG_ID,
+      );
+      const generator = new BugzillaPromptGenerator({
+        bugzilla: { origin },
+        search: {
+          ids: [bugId],
+        },
+        promptTemplate:
+          'Bug {{id}}\nSummary: {{summary}}\nURL: {{url}}\nProduct: {{product}}\nComponent: {{component}}\nSeverity: {{severity}}\nStatus: {{status}}\nAssignee: {{assignee}}\nWhiteboard: {{whiteboard}}',
+      });
+      const loopState = new LoopState('ignored.json');
 
-        const prompts = await collectPrompts(generator, loopState);
+      const prompts = await collectPrompts(generator, loopState);
 
-        expect(prompts).toHaveLength(1);
+      expect(prompts).toHaveLength(1);
 
-        const [prompt] = prompts;
-        expect(prompt.id).toBe(String(bugId));
-        expect(prompt.prompt).toContain(`Bug ${bugId}`);
-        expect(prompt.prompt).toContain(
-          `URL: ${origin}/show_bug.cgi?id=${bugId}`,
-        );
-        expect(prompt.prompt).toContain('Summary: ');
-        expect(prompt.prompt).toContain('Status: ');
-      },
-    );
-  },
-);
+      const [prompt] = prompts;
+      expect(prompt.id).toBe(String(bugId));
+      expect(prompt.prompt).toContain(`Bug ${bugId}`);
+      expect(prompt.prompt).toContain(
+        `URL: ${origin}/show_bug.cgi?id=${bugId}`,
+      );
+      expect(prompt.prompt).toContain('Summary: ');
+      expect(prompt.prompt).toContain('Status: ');
+    },
+  );
+});

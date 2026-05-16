@@ -1,3 +1,5 @@
+// @module-tag local
+
 import { styleText } from 'node:util';
 
 import { createLogger, VerboseLogger } from 'loop-the-loop/loggers.js';

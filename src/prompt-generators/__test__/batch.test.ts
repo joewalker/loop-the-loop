@@ -1,3 +1,5 @@
+// @module-tag local
+
 import type { Prompt, PromptGenerator } from 'loop-the-loop/prompt-generators';
 import {
   BatchPromptGenerator,

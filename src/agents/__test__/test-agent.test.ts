@@ -1,3 +1,5 @@
+// @module-tag local
+
 import { TestAgent } from 'loop-the-loop/agents/test';
 import type { InvokeResult } from 'loop-the-loop/types';
 import { describe, expect, it } from 'vitest';

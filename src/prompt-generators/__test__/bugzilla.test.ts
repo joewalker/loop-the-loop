@@ -1,3 +1,5 @@
+// @module-tag local
+
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { BugzillaPromptGenerator } from 'loop-the-loop/prompt-generators/bugzilla';
 import { LoopState } from 'loop-the-loop/util/loop-state';

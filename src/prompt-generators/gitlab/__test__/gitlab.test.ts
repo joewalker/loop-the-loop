@@ -1,3 +1,5 @@
+// @module-tag local
+
 import {
   GitLab,
   normalizeProjectId,
@@ -299,13 +301,17 @@ describe('GitLab', () => {
           project: 'gitlab-org/gitlab',
           perPage: 1.5,
         }),
-      ).rejects.toThrow('GitLab search perPage must be an integer from 1 to 100');
+      ).rejects.toThrow(
+        'GitLab search perPage must be an integer from 1 to 100',
+      );
       await expect(
         gitlab.searchIssues({
           project: 'gitlab-org/gitlab',
           perPage: 200,
         }),
-      ).rejects.toThrow('GitLab search perPage must be an integer from 1 to 100');
+      ).rejects.toThrow(
+        'GitLab search perPage must be an integer from 1 to 100',
+      );
     });
 
     it('should throw when maxResults is negative', async () => {
@@ -315,7 +321,9 @@ describe('GitLab', () => {
           project: 'gitlab-org/gitlab',
           maxResults: -1,
         }),
-      ).rejects.toThrow('GitLab search maxResults must be a non-negative integer');
+      ).rejects.toThrow(
+        'GitLab search maxResults must be a non-negative integer',
+      );
     });
 
     it('should read token from a custom tokenEnv option', async () => {

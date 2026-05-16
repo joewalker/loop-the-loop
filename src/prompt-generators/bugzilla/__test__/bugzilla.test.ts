@@ -1,3 +1,5 @@
+// @module-tag local
+
 import { toResponseFieldName } from 'loop-the-loop/prompt-generators/bugzilla/bug-fields';
 import {
   BugField,

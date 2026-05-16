@@ -14,9 +14,16 @@ export default defineConfig({
     exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/worktrees/**'],
     tags: [
       {
+        name: 'local',
+        description: 'Tests that run without live services or secrets.',
+      },
+      {
+        name: 'live',
+        description: 'Opt-in tests that call live services.',
+      },
+      {
         name: 'extra',
-        description:
-          'Opt-in tests that are excluded from the default local and CI run.',
+        description: 'Compatibility alias for live opt-in tests.',
       },
       {
         name: 'network',
@@ -47,7 +54,7 @@ export default defineConfig({
         description: 'Tests that call live Bugzilla services.',
       },
     ],
-    tagsFilter: ['!extra'],
+    tagsFilter: ['local'],
     coverage: {
       provider: 'v8',
       reporter: ['html', 'json', 'json-summary'],

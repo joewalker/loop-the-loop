@@ -1,3 +1,5 @@
+// @module-tag local
+
 import {
   createPromptGenerator,
   promptGeneratorTypes,

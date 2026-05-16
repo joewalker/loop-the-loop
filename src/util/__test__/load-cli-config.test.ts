@@ -1,3 +1,5 @@
+// @module-tag local
+
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1232,7 +1234,10 @@ describe('loadCliConfig', () => {
         {
           name: 'test',
           agent: 'test',
-          promptGenerator: ['test', 'oops' as unknown as { prompts: ReadonlyArray<string> }],
+          promptGenerator: [
+            'test',
+            'oops' as unknown as { prompts: ReadonlyArray<string> },
+          ],
         },
         join(configDir, 'config.json'),
       ),
@@ -1247,7 +1252,10 @@ describe('loadCliConfig', () => {
         {
           name: 'test',
           agent: 'test',
-          promptGenerator: ['test', { prompts: [42] as unknown as ReadonlyArray<string> }],
+          promptGenerator: [
+            'test',
+            { prompts: [42] as unknown as ReadonlyArray<string> },
+          ],
         },
         join(configDir, 'config.json'),
       ),

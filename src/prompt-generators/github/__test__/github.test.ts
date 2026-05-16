@@ -1,3 +1,5 @@
+// @module-tag local
+
 import {
   buildIssueSearchQuery,
   GitHub,
@@ -356,14 +358,18 @@ describe('GitHub', () => {
           query: 'is:open',
           perPage: 1.5,
         }),
-      ).rejects.toThrow('GitHub search perPage must be an integer from 1 to 100');
+      ).rejects.toThrow(
+        'GitHub search perPage must be an integer from 1 to 100',
+      );
       await expect(
         github.searchIssues({
           repository: 'octocat/Hello-World',
           query: 'is:open',
           perPage: 200,
         }),
-      ).rejects.toThrow('GitHub search perPage must be an integer from 1 to 100');
+      ).rejects.toThrow(
+        'GitHub search perPage must be an integer from 1 to 100',
+      );
     });
 
     it('should throw when maxResults is negative', async () => {
@@ -374,7 +380,9 @@ describe('GitHub', () => {
           query: 'is:open',
           maxResults: -1,
         }),
-      ).rejects.toThrow('GitHub search maxResults must be a non-negative integer');
+      ).rejects.toThrow(
+        'GitHub search maxResults must be a non-negative integer',
+      );
     });
 
     it('should read token from a custom tokenEnv option', async () => {
@@ -425,7 +433,9 @@ describe('GitHub', () => {
       });
 
       expect(log).toHaveBeenCalledTimes(1);
-      expect(log.mock.calls[0][0]).toMatch(/^https:\/\/api\.test\/search\/issues\?/u);
+      expect(log.mock.calls[0][0]).toMatch(
+        /^https:\/\/api\.test\/search\/issues\?/u,
+      );
     });
   });
 });
