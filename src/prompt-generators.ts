@@ -5,7 +5,6 @@ import {
 } from './prompt-generators/batch.js';
 import { BugzillaPromptGenerator } from './prompt-generators/bugzilla.js';
 import { normalizeBugzillaTaskConfig } from './prompt-generators/bugzilla/config.js';
-import type { PromptGeneratorConfigContext } from './prompt-generators/config.js';
 import { GitHubPromptGenerator } from './prompt-generators/github.js';
 import { normalizeGitHubTaskConfig } from './prompt-generators/github/config.js';
 import { GitLabPromptGenerator } from './prompt-generators/gitlab.js';
@@ -16,6 +15,7 @@ import {
   normalizePerFileTaskConfig,
   PerFilePromptGenerator,
 } from './prompt-generators/per-file.js';
+import type { PromptGeneratorConfigContext } from './prompt-generators/util/config.js';
 import type { LoopState } from './util/loop-state.js';
 
 /**

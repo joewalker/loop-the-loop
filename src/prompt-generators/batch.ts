@@ -8,7 +8,7 @@ import {
   isRecord,
   normalizeBasePath,
   type PromptGeneratorConfigContext,
-} from './config.js';
+} from './util/config.js';
 
 const DEFAULT_BATCH_SIZE = 50;
 

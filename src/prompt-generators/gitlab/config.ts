@@ -1,3 +1,4 @@
+import type { GitLabTask } from '../gitlab.js';
 import {
   assertKnownProperties,
   assertOptionalBoolean,
@@ -7,8 +8,7 @@ import {
   isRecord,
   normalizeBasePath,
   type PromptGeneratorConfigContext,
-} from '../config.js';
-import type { GitLabTask } from '../gitlab.js';
+} from '../util/config.js';
 
 /**
  * Normalize GitLab task config values loaded from JSON.

@@ -1,9 +1,9 @@
+import type { GitHubTask } from '../github.js';
 import {
   isRecord,
   normalizeBasePath,
   type PromptGeneratorConfigContext,
-} from '../config.js';
-import type { GitHubTask } from '../github.js';
+} from '../util/config.js';
 
 /**
  * Normalize GitHub task config values loaded from JSON.

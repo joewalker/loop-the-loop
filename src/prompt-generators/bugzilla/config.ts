@@ -8,7 +8,7 @@ import {
   isRecord,
   normalizeBasePath,
   type PromptGeneratorConfigContext,
-} from '../config.js';
+} from '../util/config.js';
 
 /**
  * Normalize Bugzilla task config values loaded from JSON.

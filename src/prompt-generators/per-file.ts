@@ -11,7 +11,7 @@ import {
   isRecord,
   normalizeTaskBasePath,
   type PromptGeneratorConfigContext,
-} from './config.js';
+} from './util/config.js';
 
 /**
  * Configuration for a single loop task. Describes which files to process,
