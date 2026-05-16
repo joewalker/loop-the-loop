@@ -10,7 +10,6 @@ tsconfig.tsbuildinfo
 .env
 /.idea/workspace.xml
 /.claude/worktrees
-/.claude/settings.local.json
 
 /IGNORE.md
 /WIP.md
