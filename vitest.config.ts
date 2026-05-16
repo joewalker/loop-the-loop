@@ -23,6 +23,18 @@ export default defineConfig({
         description: 'Tests that call live network services.',
       },
       {
+        name: 'agent',
+        description: 'Tests that call live LLM agent backends.',
+      },
+      {
+        name: 'claude-sdk',
+        description: 'Tests that call live Claude Agent SDK services.',
+      },
+      {
+        name: 'codex-cli',
+        description: 'Tests that call live Codex CLI services.',
+      },
+      {
         name: 'github',
         description: 'Tests that call live GitHub services.',
       },
