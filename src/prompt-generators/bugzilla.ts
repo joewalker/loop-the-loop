@@ -1,11 +1,12 @@
+import {
+  Bugzilla,
+  type BugzillaConstructorOptions,
+  type SearchParams,
+} from '@joewalker/bzjs';
+
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
-import type {
-  BugzillaConstructorOptions,
-  SearchParams,
-} from './bugzilla/bugzilla-types.js';
-import { Bugzilla } from './bugzilla/bugzilla.js';
 
 /**
  * Configuration for a Bugzilla-driven loop task. Describes which bugs
@@ -67,7 +68,7 @@ export class BugzillaPromptGenerator implements PromptGenerator {
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
     const bz = new Bugzilla(this.#task.bugzilla);
-    const bugs = await bz.search(this.#task.search);
+    const { bugs } = await bz.search(this.#task.search);
 
     for (const bug of bugs) {
       const id = String(bug.id);

@@ -16,7 +16,7 @@ const { mockSearch, MockBugzilla } = vi.hoisted(() => {
   return { mockSearch: search, MockBugzilla: BugzillaClass };
 });
 
-vi.mock('loop-the-loop/prompt-generators/bugzilla/bugzilla', () => ({
+vi.mock('@joewalker/bzjs', () => ({
   Bugzilla: MockBugzilla,
 }));
 
@@ -47,10 +47,13 @@ describe('BugzillaPromptGenerator', () => {
   });
 
   it('should yield a prompt for each bug returned by search', async () => {
-    mockSearch.mockResolvedValue([
-      mockBug({ id: 123, summary: 'Login fails on mobile' }),
-      mockBug({ id: 456, summary: 'CSS regression' }),
-    ]);
+    mockSearch.mockResolvedValue({
+      bugs: [
+        mockBug({ id: 123, summary: 'Login fails on mobile' }),
+        mockBug({ id: 456, summary: 'CSS regression' }),
+      ],
+      checkUrl: 'https://bugzilla.mozilla.org/buglist.cgi?',
+    });
 
     const generator = new BugzillaPromptGenerator({
       search: { product: 'Firefox' },
@@ -71,18 +74,21 @@ describe('BugzillaPromptGenerator', () => {
   });
 
   it('should substitute all supported template variables', async () => {
-    mockSearch.mockResolvedValue([
-      mockBug({
-        id: 789,
-        summary: 'Test bug',
-        product: 'Core',
-        component: 'JavaScript Engine',
-        severity: 'S3',
-        status: 'ASSIGNED',
-        assigned_to: 'dev@mozilla.org',
-        whiteboard: '[test-tag]',
-      }),
-    ]);
+    mockSearch.mockResolvedValue({
+      bugs: [
+        mockBug({
+          id: 789,
+          summary: 'Test bug',
+          product: 'Core',
+          component: 'JavaScript Engine',
+          severity: 'S3',
+          status: 'ASSIGNED',
+          assigned_to: 'dev@mozilla.org',
+          whiteboard: '[test-tag]',
+        }),
+      ],
+      checkUrl: 'https://bugzilla.mozilla.org/buglist.cgi?',
+    });
 
     const generator = new BugzillaPromptGenerator({
       search: {},
@@ -102,7 +108,10 @@ describe('BugzillaPromptGenerator', () => {
   });
 
   it('should yield no prompts when search returns an empty list', async () => {
-    mockSearch.mockResolvedValue([]);
+    mockSearch.mockResolvedValue({
+      bugs: [],
+      checkUrl: 'https://bugzilla.mozilla.org/buglist.cgi?',
+    });
 
     const generator = new BugzillaPromptGenerator({
       search: { product: 'Firefox' },
@@ -119,10 +128,13 @@ describe('BugzillaPromptGenerator', () => {
   });
 
   it('should skip bugs that are already tracked in the loop state', async () => {
-    mockSearch.mockResolvedValue([
-      mockBug({ id: 100, summary: 'Already done' }),
-      mockBug({ id: 200, summary: 'Still to do' }),
-    ]);
+    mockSearch.mockResolvedValue({
+      bugs: [
+        mockBug({ id: 100, summary: 'Already done' }),
+        mockBug({ id: 200, summary: 'Still to do' }),
+      ],
+      checkUrl: 'https://bugzilla.mozilla.org/buglist.cgi?',
+    });
 
     const generator = new BugzillaPromptGenerator({
       search: {},
@@ -142,7 +154,10 @@ describe('BugzillaPromptGenerator', () => {
   });
 
   it('should pass the search params to Bugzilla.search', async () => {
-    mockSearch.mockResolvedValue([]);
+    mockSearch.mockResolvedValue({
+      bugs: [],
+      checkUrl: 'https://bugzilla.mozilla.org/buglist.cgi?',
+    });
 
     const searchParams = { product: 'Core', bugStatus: ['NEW' as const] };
     const generator = new BugzillaPromptGenerator({

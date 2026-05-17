@@ -1,6 +1,6 @@
 // @module-tag local
 
-import { toResponseFieldName } from 'loop-the-loop/prompt-generators/bugzilla/bug-fields';
+import { toResponseFieldName } from '@joewalker/bzjs';
 import {
   BugField,
   BugStatus,
@@ -14,7 +14,7 @@ import {
   Priority,
   Product,
   Type,
-} from 'loop-the-loop/prompt-generators/bugzilla/bugzilla';
+} from '@joewalker/bzjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -281,7 +281,10 @@ describe('Bugzilla', () => {
       const bz = new Bugzilla({ origin: 'https://bz.test' });
       const result = await bz.search({ dryRun: true });
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({
+        bugs: [],
+        checkUrl: 'https://bz.test/buglist.cgi?',
+      });
       expect(fetch).not.toHaveBeenCalled();
     });
 
