@@ -4,7 +4,7 @@
 
 Simply run the following commands from a clean checkout:
 
-``` sh
+```sh
 pnpm install
 pnpm tsc
 ```
@@ -13,9 +13,7 @@ At this point we should be able to run tests (`pnpm test`). Do not add `... 2>&1
 
 Other useful commands:
 
-- Build: `pnpm tsc`.
 - Lint code: `pnpm lint`
-- Run all vitest tests: `pnpm test`
 - Run specific test: `pnpm test path/to/file.test.ts`
 - Update snapshots: `pnpm test -u`
 - Format code: `pnpm format`
@@ -26,8 +24,8 @@ Don't use `npm` (or `npx`). Use `pnpm` or `pnpx` instead.
 
 When writing reports, documents, technical explanations, analyses, or any long-form content:
 
-- Use standard paragraph breaks for organization and reserve markdown primarily for `inline code`, code blocks (```...```), and simple headings (##, and ###).
-- Avoid using **bold** and *italics* particularly in headings.
+- Use standard paragraph breaks for organization and reserve markdown primarily for `inline code`, fenced code blocks (\`\`\`), and simple headings (##, and ###).
+- Avoid using **bold** and _italics_ particularly in headings.
 - Unless otherwise specified, write reports to new files in the `docs/wip/` folder for future reference.
 - Avoid em dashes, smart quotes, non-breaking spaces, zero-width spaces, and similar non-ASCII punctuation in all output including code comments, documentation, and prose.
 
@@ -41,7 +39,6 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
 - Plan the simplest working solution. No over-engineering
 - Run the tests before writing code to check we start clean
 - Write tests first. Use Red/Green TDD
-- Test after writing. Never leave code untested
 - TypeScript: strict mode, explicit types at module boundaries
 - Arrays: prefer `Array<Type>` over `Type[]`
 - Strings: single quotes, template literals for interpolation
@@ -61,10 +58,11 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
   - Importing files from another package in this project - use an absolute path and omit the file extension
   - Importing files from the same package - use a relative path (beginning "./" or "../") and end with ".js"
   - Test files should always use absolute paths without file extensions even when importing from the same package
-- If you want to create temporary files or scripts, write them to `cache/tmp/…` rather than `/tmp/…` or `/private/tmp/…`
+- If you want to create temporary files or scripts, ALWAYS write them to `cache/tmp/…`. NEVER use `/tmp/…` or `/private/tmp/…`
 - Ask the user for anything that mutates packages: `pnpm install`, `pnpm add`, `pnpm remove`, `pnpm update`, `pnpm patch`. The user manages the dependency list.
 - Never bypass pnpm safety prompts with `CI=true`, `--force`, or `confirmModulesPurge=false`. Those exist to prevent silent destruction of `node_modules`.
 - Never edit files in a `node_modules` folder without explicit permission from the user.
+- If pnpm responds to a command with `[ERR_PNPM_VERIFY_DEPS_BEFORE_RUN] Cannot check whether dependencies are outdated`, ALWAYS tell the user what happened and ask for help.
 - The JSON Schema at `schema/loop-the-loop.schema.json` documents the shape of `LoopCliConfig` and the task types accepted by the prompt generators. When you add, remove, or rename any field that is loadable from a CLI JSON config (the top-level `LoopCliConfig`, agent or generator task types, search parameters, and so on), update the schema in the same change so it stays in step with the runtime types.
 
 ## Completing Work
@@ -73,7 +71,7 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
   - Check tests pass `pnpm tsc && pnpm test`
   - Check with lint and fix any linting errors `pnpm lint`
   - Run oxfmt `pnpm format`
-- Never alter git (this includes staging files) without the users explicit request
+- Never alter git (this includes altering the index, e.g. `git add`, `git mv`, `git rm`) without the users explicit request
 - If the user asks, when creating a commit message, take note of recent commits (use `git log --oneline`) and the instructions about commit tags in [the README](README.md).
 - When asked to commit code use the default information in `~/.gitconfig` rather than specifying an author.
 - Avoid `Co-Authored-By` trailers to commit messages

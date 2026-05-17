@@ -1,22 +1,14 @@
 {
   "compilerOptions": {
-    "allowJs": true,
-    "allowSyntheticDefaultImports": true,
     "composite": true,
     "erasableSyntaxOnly": true,
-    "esModuleInterop": true,
     "exactOptionalPropertyTypes": true,
-    "forceConsistentCasingInFileNames": true,
-    "incremental": true,
-    "isolatedModules": true,
     "lib": ["esnext"],
     "module": "NodeNext",
-    "moduleResolution": "NodeNext",
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": true,
-    "noUncheckedSideEffectImports": true,
     "outDir": "./dist",
     "paths": {
       "loop-the-loop/*": ["./src/*"]
@@ -25,7 +17,6 @@
     "rootDir": "./src",
     "skipLibCheck": true,
     "sourceMap": true,
-    "strict": true,
     "target": "es2022",
     "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "types": ["node"],

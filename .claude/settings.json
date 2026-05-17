@@ -32,8 +32,6 @@
       "mcp__ide__*",
       "mcp__mdn__*",
       "mcp__plugin_playwright_playwright__*",
-      "Read(//private/tmp/claude/**)",
-      "Read(//tmp/claude/**)",
       "Skill(code-review:code-review:*)",
       "Skill(code-review:code-review)",
       "WebFetch(domain:api.github.com)",
@@ -42,9 +40,6 @@
       "WebFetch(domain:developer.mozilla.org)",
       "WebFetch(domain:docs.anthropic.com)",
       "WebFetch(domain:docs.github.com)",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:gitlab.com)",
-      "WebFetch(domain:oxc.rs)",
       "WebFetch(domain:registry.npmjs.org)",
       "WebFetch(domain:www.npmjs.com)",
       "WebSearch"
