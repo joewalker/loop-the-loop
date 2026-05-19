@@ -12,7 +12,11 @@ await loop({
     {
       filePattern: 'src/**/*.ts',
       excludePatterns: ['**/__test__/**'],
-      promptTemplate: '/review {{file}}',
+      promptTemplate: [
+        'Review {{file}} for bugs, security issues, and maintainability problems.',
+        'Take care to understand the full context of the codebase before reporting.',
+        'Report findings as a short list. Do not modify the file.',
+      ].join('\n\n'),
     },
   ],
   maxPrompts: 5,
