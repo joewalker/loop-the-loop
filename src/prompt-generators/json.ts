@@ -9,8 +9,6 @@ import {
   assertOptionalString,
   assertRequiredString,
   isRecord,
-  normalizeTaskBasePath,
-  type PromptGeneratorConfigContext,
 } from './util/config.js';
 
 /**
@@ -25,7 +23,7 @@ export interface JsonTask {
 
   /**
    * Path to a JSON file to read. Mutually exclusive with `data`. Resolved
-   * relative to `basePath` (or `process.cwd()` if not set).
+   * relative to the generator's `basePath`.
    */
   dataFile?: string;
 
@@ -53,53 +51,46 @@ export interface JsonTask {
    * - `{{include:path}}` - file include macro (resolved against `basePath`)
    */
   promptTemplate: string;
-
-  /**
-   * Directory used to resolve `{{include:...}}` paths in `promptTemplate` and
-   * the `dataFile` path. Defaults to `process.cwd()` when not specified.
-   * Callers that load this task from a config file should pass
-   * `path.dirname(configFilePath)` so that includes and data files are
-   * resolved relative to the config file rather than the process working
-   * directory.
-   */
-  basePath?: string;
 }
 
 /**
  * Normalize JSON task config values loaded from JSON.
  */
-export function normalizeJsonTaskConfig(
-  config: unknown,
-  context: PromptGeneratorConfigContext,
-): JsonTask {
+export function normalizeJsonTaskConfig(config: unknown): JsonTask {
   assertJsonTaskConfig(config);
-  return normalizeTaskBasePath(config, context);
+  return config;
 }
 
 /**
  * A PromptGenerator that iterates over the elements of a JSON array or object,
- * yielding one prompt per element.
+ * yielding one prompt per element. `basePath` is used to resolve
+ * `{{include:...}}` macros in the prompt template and `dataFile`, and defaults
+ * to `process.cwd()`. CLI config loading passes the config file's directory.
  */
 export class JsonPromptGenerator implements PromptGenerator {
   static readonly promptGeneratorName = 'json';
 
-  static async create(task: JsonTask): Promise<PromptGenerator> {
-    return new JsonPromptGenerator(task);
+  static async create(
+    task: JsonTask,
+    basePath?: string,
+  ): Promise<PromptGenerator> {
+    return new JsonPromptGenerator(task, basePath);
   }
 
   readonly #task: JsonTask;
+  readonly #basePath: string;
 
-  constructor(task: JsonTask) {
+  constructor(task: JsonTask, basePath?: string) {
     this.#task = task;
+    this.#basePath = basePath ?? process.cwd();
   }
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
-    const rawData = await loadData(this.#task);
+    const rawData = await loadData(this.#task, this.#basePath);
     const data = this.#task.path
       ? navigatePath(rawData, this.#task.path)
       : rawData;
     const entries = toEntries(data);
-    const basePath = this.#task.basePath ?? process.cwd();
 
     for (let index = 0; index < entries.length; index++) {
       const [key, element] = entries[index];
@@ -109,7 +100,7 @@ export class JsonPromptGenerator implements PromptGenerator {
         const variables = buildVariables(element, id, index);
         const prompt = await expandPrompt(
           this.#task.promptTemplate,
-          basePath,
+          this.#basePath,
           variables,
         );
         yield { id, prompt };
@@ -121,7 +112,7 @@ export class JsonPromptGenerator implements PromptGenerator {
 /**
  * Load and parse the JSON data from either inline `data` or `dataFile`.
  */
-async function loadData(task: JsonTask): Promise<unknown> {
+async function loadData(task: JsonTask, basePath: string): Promise<unknown> {
   if (task.data !== undefined && task.dataFile !== undefined) {
     throw new Error('JsonTask: specify either "data" or "dataFile", not both');
   }
@@ -129,9 +120,6 @@ async function loadData(task: JsonTask): Promise<unknown> {
     return task.data;
   }
   if (task.dataFile !== undefined) {
-    // v8 ignore start
-    const basePath = task.basePath ?? process.cwd();
-    // v8 ignore end
     const filePath = resolve(basePath, task.dataFile);
     const content = await readFile(filePath, 'utf-8');
     return JSON.parse(content) as unknown;
@@ -244,14 +232,13 @@ function assertJsonTaskConfig(value: unknown): asserts value is JsonTask {
 
   assertKnownProperties(
     value,
-    ['data', 'dataFile', 'path', 'idField', 'promptTemplate', 'basePath'],
+    ['data', 'dataFile', 'path', 'idField', 'promptTemplate'],
     'json',
   );
   assertRequiredString(value, 'promptTemplate', 'json.promptTemplate');
   assertOptionalString(value, 'dataFile', 'json.dataFile');
   assertOptionalString(value, 'path', 'json.path');
   assertOptionalString(value, 'idField', 'json.idField');
-  assertOptionalString(value, 'basePath', 'json.basePath');
 
   const hasData = value['data'] !== undefined;
   const hasDataFile = value['dataFile'] !== undefined;

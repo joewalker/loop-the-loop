@@ -6,22 +6,16 @@ import {
   assertOptionalStringArray,
   assertRequiredString,
   isRecord,
-  normalizeBasePath,
-  type PromptGeneratorConfigContext,
 } from '../util/config.js';
 
 /**
  * Normalize Bugzilla task config values loaded from JSON.
  */
-export function normalizeBugzillaTaskConfig(
-  config: unknown,
-  context: PromptGeneratorConfigContext,
-): BugzillaTask {
+export function normalizeBugzillaTaskConfig(config: unknown): BugzillaTask {
   assertBugzillaTaskConfig(config);
 
   return {
     ...config,
-    basePath: normalizeBasePath(config.basePath, context.configDir),
     search: normalizeBugzillaSearchParams(config.search),
   };
 }
@@ -42,10 +36,6 @@ function assertBugzillaTaskConfig(
     typeof value['promptTemplate'] !== 'string'
   ) {
     throw new Error('bugzilla.promptTemplate must be a string');
-  }
-
-  if ('basePath' in value && typeof value['basePath'] !== 'string') {
-    throw new Error('bugzilla.basePath must be a string');
   }
 
   const search = value['search'];

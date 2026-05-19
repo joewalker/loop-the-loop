@@ -10,7 +10,6 @@ import type {
   OutputSchema,
   SuccessfulInvocationResult,
 } from '../types.js';
-import { expandPrompt } from '../util/expand-prompt.js';
 
 // istanbul ignore file
 
@@ -65,16 +64,15 @@ export class ClaudeSDKAgent implements Agent {
   static readonly agentName = 'claude-sdk';
 
   static async create(config?: ClaudeSDKAgentConfig): Promise<Agent> {
-    const options = await configureQueryOptions(config ?? {});
-    return new ClaudeSDKAgent(config ?? {}, options);
+    return new ClaudeSDKAgent(config ?? {});
   }
 
   readonly #config: ClaudeSDKAgentConfig;
   readonly #options: Options;
 
-  constructor(config: ClaudeSDKAgentConfig, options: Options) {
-    this.#config = config ?? {};
-    this.#options = options;
+  constructor(config: ClaudeSDKAgentConfig) {
+    this.#config = config;
+    this.#options = configureQueryOptions(this.#config);
   }
 
   async invoke(
@@ -244,9 +242,7 @@ export class ClaudeSDKAgent implements Agent {
  * pulls bare names (stripping any `(...)` suffix) for `tools`, deduplicates
  * them, and returns the original list unchanged for `allowedTools`.
  */
-export async function configureQueryOptions(
-  config: ClaudeSDKAgentConfig,
-): Promise<Options> {
+export function configureQueryOptions(config: ClaudeSDKAgentConfig): Options {
   const tools = config.allowedTools ?? DEFAULT_TOOLS;
   const bareNames = new Set<string>();
   for (const tool of tools) {
@@ -258,14 +254,8 @@ export async function configureQueryOptions(
   }
 
   const systemPrompt =
-    config.systemPrompt != null
-      ? /* istanbul ignore next */ {
-          systemPrompt: await expandPrompt(
-            config.systemPrompt,
-            process.cwd(),
-            {},
-          ),
-        }
+    config.systemPrompt !== undefined
+      ? { systemPrompt: config.systemPrompt }
       : {};
 
   const outputSchema =

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { AgentSpec } from 'loop-the-loop/agents';
 import type { BatchTask } from 'loop-the-loop/prompt-generators/batch';
 import type { BugzillaTask } from 'loop-the-loop/prompt-generators/bugzilla';
 import type { GitHubTask } from 'loop-the-loop/prompt-generators/github';
@@ -131,58 +132,54 @@ describe('loadCliConfig', () => {
       verbose: false,
       maxPrompts: undefined,
     });
-    const task = getPerFileTask(config);
 
     expect(config.outputDir).toBe(configDir);
-    expect(task.basePath).toBe(configDir);
+    expect(getSpecBasePath(config)).toBe(configDir);
   });
 
-  it('should rebase a relative basePath against the config file directory', async () => {
+  it('should resolve claude-sdk systemPrompt includes relative to the config file', async () => {
     const configDir = join(tempDir, 'config');
-    await mkdir(configDir, { recursive: true });
+    await mkdir(join(configDir, 'prompts'), { recursive: true });
+    await writeFile(
+      join(configDir, 'prompts', 'system.md'),
+      'Shared system guidance.',
+    );
 
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
-        promptGenerator: [
-          'per-file',
-          {
-            filePattern: 'src/**/*.ts',
-            promptTemplate: 'Review {{file}}',
-            basePath: './prompts',
-          },
+        agent: [
+          'claude-sdk',
+          { systemPrompt: 'Header\n{{include:prompts/system.md}}\nFooter' },
         ],
+        promptGenerator: ['test', { prompts: ['noop'] }],
       },
       join(configDir, 'config.json'),
     );
 
-    expect(getPerFileTask(config).basePath).toBe(join(configDir, 'prompts'));
+    if (!Array.isArray(config.agent) || config.agent[0] !== 'claude-sdk') {
+      throw new TypeError('Expected a claude-sdk agent tuple');
+    }
+    expect(config.agent[1]?.systemPrompt).toBe(
+      'Header\nShared system guidance.\nFooter',
+    );
   });
 
-  it('should preserve an absolute basePath', async () => {
+  it('should pass through a claude-sdk agent spec with no systemPrompt', async () => {
     const configDir = join(tempDir, 'config');
-    const absoluteBasePath = join(tempDir, 'absolute-prompts');
     await mkdir(configDir, { recursive: true });
-    await mkdir(absoluteBasePath, { recursive: true });
 
+    const agent: AgentSpec = ['claude-sdk', { maxTurns: 7 }];
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
-        promptGenerator: [
-          'per-file',
-          {
-            filePattern: 'src/**/*.ts',
-            promptTemplate: 'Review {{file}}',
-            basePath: absoluteBasePath,
-          },
-        ],
+        agent,
+        promptGenerator: ['test', { prompts: ['noop'] }],
       },
       join(configDir, 'config.json'),
     );
 
-    expect(getPerFileTask(config).basePath).toBe(absoluteBasePath);
+    expect(config.agent).toBe(agent);
   });
 
   it('should preserve Bugzilla search params when change is omitted', async () => {
@@ -219,7 +216,6 @@ describe('loadCliConfig', () => {
             'bugzilla',
             {
               promptTemplate: 'Review {{id}}',
-              basePath: './prompts',
             } as unknown as BugzillaTask,
           ],
         },
@@ -240,7 +236,6 @@ describe('loadCliConfig', () => {
             'bugzilla',
             {
               search: {},
-              basePath: './prompts',
             } as unknown as BugzillaTask,
           ],
         },
@@ -297,81 +292,6 @@ describe('loadCliConfig', () => {
     );
   });
 
-  it('should normalize GitHub task basePath relative to the config file', async () => {
-    const configDir = join(tempDir, 'config');
-    await mkdir(configDir, { recursive: true });
-
-    const config = await normalizeCliConfig(
-      {
-        name: 'test',
-        agent: 'test',
-        promptGenerator: [
-          'github',
-          {
-            search: {
-              repository: 'octocat/Hello-World',
-              query: 'is:open label:bug',
-            },
-            promptTemplate: 'Review {{id}}',
-            basePath: './prompts',
-          },
-        ],
-      },
-      join(configDir, 'config.json'),
-    );
-
-    expect(getGitHubTask(config).basePath).toBe(join(configDir, 'prompts'));
-  });
-
-  it('should normalize GitLab task basePath relative to the config file', async () => {
-    const configDir = join(tempDir, 'config');
-    await mkdir(configDir, { recursive: true });
-
-    const config = await normalizeCliConfig(
-      {
-        name: 'test',
-        agent: 'test',
-        promptGenerator: [
-          'gitlab',
-          {
-            search: {
-              project: 'gitlab-org/gitlab',
-              state: 'opened',
-            },
-            promptTemplate: 'Review {{id}}',
-            basePath: './prompts',
-          },
-        ],
-      },
-      join(configDir, 'config.json'),
-    );
-
-    expect(getGitLabTask(config).basePath).toBe(join(configDir, 'prompts'));
-  });
-
-  it('should normalize JSON task basePath relative to the config file', async () => {
-    const configDir = join(tempDir, 'config');
-    await mkdir(configDir, { recursive: true });
-
-    const config = await normalizeCliConfig(
-      {
-        name: 'test',
-        agent: 'test',
-        promptGenerator: [
-          'json',
-          {
-            dataFile: 'bugs.json',
-            promptTemplate: 'Review {{id}}',
-            basePath: './data',
-          },
-        ],
-      },
-      join(configDir, 'config.json'),
-    );
-
-    expect(getJsonTask(config).basePath).toBe(join(configDir, 'data'));
-  });
-
   it('should normalize batch tasks and their nested source configs', async () => {
     const configDir = join(tempDir, 'config');
     await mkdir(configDir, { recursive: true });
@@ -395,34 +315,80 @@ describe('loadCliConfig', () => {
                   },
                 },
                 promptTemplate: 'Review {{id}}',
-                basePath: './bug-prompts',
               },
             ],
             summaryPromptTemplate: 'Summarize {{batchIds}}',
             reportFile: 'report.yaml',
-            basePath: './summary-prompts',
           },
         ],
       },
       join(configDir, 'config.json'),
     );
 
-    const batchTask = getBatchTask(config);
-    expect(batchTask.basePath).toBe(join(configDir, 'summary-prompts'));
+    expect(getSpecBasePath(config)).toBe(configDir);
 
+    const batchTask = getBatchTask(config);
     if (!Array.isArray(batchTask.source)) {
       throw new TypeError('Expected a tuple source generator config');
     }
 
-    const [, nestedTask] = batchTask.source;
-    const bugzillaTask = nestedTask as BugzillaTask;
-    const change = bugzillaTask.search.change;
+    const [, nestedTask, nestedBasePath] = batchTask.source as [
+      string,
+      BugzillaTask,
+      string?,
+    ];
+    const change = nestedTask.search.change;
 
-    expect(bugzillaTask.basePath).toBe(join(configDir, 'bug-prompts'));
+    expect(nestedBasePath).toBe(configDir);
     expect(change?.from).toBeInstanceOf(Date);
     expect(change?.from.toISOString()).toBe('2025-01-15T00:00:00.000Z');
     expect(change?.to).toBeInstanceOf(Date);
     expect(change?.to.toISOString()).toBe('2025-02-15T00:00:00.000Z');
+  });
+
+  it('should accept a valid GitHub task config', async () => {
+    const configDir = join(tempDir, 'config');
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'test',
+        promptGenerator: [
+          'github',
+          {
+            search: {
+              repository: 'octocat/Hello-World',
+              query: 'is:open',
+            },
+            promptTemplate: 'Review {{id}}',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    expect(getSpecBasePath(config)).toBe(configDir);
+  });
+
+  it('should accept a valid JSON task config with dataFile', async () => {
+    const configDir = join(tempDir, 'config');
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'test',
+        promptGenerator: [
+          'json',
+          {
+            dataFile: 'bugs.json',
+            promptTemplate: 'Review {{id}}',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    expect(getSpecBasePath(config)).toBe(configDir);
   });
 
   it('should reject GitHub search config without a string repository', async () => {
@@ -440,7 +406,6 @@ describe('loadCliConfig', () => {
                 query: 'is:open',
               },
               promptTemplate: 'Review {{id}}',
-              basePath: './prompts',
             } as unknown as GitHubTask,
           ],
         },
@@ -464,7 +429,6 @@ describe('loadCliConfig', () => {
                 repository: 'octocat/Hello-World',
               },
               promptTemplate: 'Review {{id}}',
-              basePath: './prompts',
             } as unknown as GitHubTask,
           ],
         },
@@ -488,7 +452,6 @@ describe('loadCliConfig', () => {
                 state: 'opened',
               },
               promptTemplate: 'Review {{id}}',
-              basePath: './prompts',
             } as unknown as GitLabTask,
           ],
         },
@@ -791,28 +754,6 @@ describe('loadCliConfig', () => {
     ).rejects.toThrow('github.promptTemplate must be a string');
   });
 
-  it('should reject GitHub config with a non-string basePath', async () => {
-    const configDir = join(tempDir, 'config');
-
-    await expect(
-      normalizeCliConfig(
-        {
-          name: 'test',
-          agent: 'test',
-          promptGenerator: [
-            'github',
-            {
-              search: { repository: 'octocat/Hello-World', query: 'is:open' },
-              promptTemplate: 'Review {{id}}',
-              basePath: 42,
-            } as unknown as GitHubTask,
-          ],
-        },
-        join(configDir, 'config.json'),
-      ),
-    ).rejects.toThrow('github.basePath must be a string');
-  });
-
   it('should reject GitHub config without an object search', async () => {
     const configDir = join(tempDir, 'config');
 
@@ -866,28 +807,6 @@ describe('loadCliConfig', () => {
         join(configDir, 'config.json'),
       ),
     ).rejects.toThrow('gitlab.promptTemplate must be a string');
-  });
-
-  it('should reject GitLab config with a non-string basePath', async () => {
-    const configDir = join(tempDir, 'config');
-
-    await expect(
-      normalizeCliConfig(
-        {
-          name: 'test',
-          agent: 'test',
-          promptGenerator: [
-            'gitlab',
-            {
-              search: { project: 'gitlab-org/gitlab' },
-              promptTemplate: 'Review {{id}}',
-              basePath: 7,
-            } as unknown as GitLabTask,
-          ],
-        },
-        join(configDir, 'config.json'),
-      ),
-    ).rejects.toThrow('gitlab.basePath must be a string');
   });
 
   it('should reject GitLab config without an object search', async () => {
@@ -947,28 +866,6 @@ describe('loadCliConfig', () => {
         join(configDir, 'config.json'),
       ),
     ).rejects.toThrow('bugzilla task config must be an object');
-  });
-
-  it('should reject Bugzilla config with a non-string basePath', async () => {
-    const configDir = join(tempDir, 'config');
-
-    await expect(
-      normalizeCliConfig(
-        {
-          name: 'test',
-          agent: 'test',
-          promptGenerator: [
-            'bugzilla',
-            {
-              search: { product: 'Core' },
-              promptTemplate: 'Review {{id}}',
-              basePath: 3,
-            } as unknown as BugzillaTask,
-          ],
-        },
-        join(configDir, 'config.json'),
-      ),
-    ).rejects.toThrow('bugzilla.basePath must be a string');
   });
 
   it('should reject Bugzilla search ids containing a non-integer number', async () => {
@@ -1415,15 +1312,6 @@ describe('loadCliConfig', () => {
   });
 });
 
-function getPerFileTask(config: LoopCliConfig): PerFileTask {
-  if (!Array.isArray(config.promptGenerator)) {
-    throw new TypeError('Expected a tuple prompt generator config');
-  }
-
-  const [, task] = config.promptGenerator;
-  return task as PerFileTask;
-}
-
 function getBugzillaTask(config: LoopCliConfig): BugzillaTask {
   if (!Array.isArray(config.promptGenerator)) {
     throw new TypeError('Expected a tuple prompt generator config');
@@ -1433,33 +1321,6 @@ function getBugzillaTask(config: LoopCliConfig): BugzillaTask {
   return task as BugzillaTask;
 }
 
-function getGitHubTask(config: LoopCliConfig): GitHubTask {
-  if (!Array.isArray(config.promptGenerator)) {
-    throw new TypeError('Expected a tuple prompt generator config');
-  }
-
-  const [, task] = config.promptGenerator;
-  return task as GitHubTask;
-}
-
-function getGitLabTask(config: LoopCliConfig): GitLabTask {
-  if (!Array.isArray(config.promptGenerator)) {
-    throw new TypeError('Expected a tuple prompt generator config');
-  }
-
-  const [, task] = config.promptGenerator;
-  return task as GitLabTask;
-}
-
-function getJsonTask(config: LoopCliConfig): JsonTask {
-  if (!Array.isArray(config.promptGenerator)) {
-    throw new TypeError('Expected a tuple prompt generator config');
-  }
-
-  const [, task] = config.promptGenerator;
-  return task as JsonTask;
-}
-
 function getBatchTask(config: LoopCliConfig): BatchTask {
   if (!Array.isArray(config.promptGenerator)) {
     throw new TypeError('Expected a tuple prompt generator config');
@@ -1467,4 +1328,16 @@ function getBatchTask(config: LoopCliConfig): BatchTask {
 
   const [, task] = config.promptGenerator;
   return task as BatchTask;
+}
+
+/**
+ * Return the basePath that `normalizePromptGeneratorSpec` appended as the
+ * third tuple element. Generators that take no basePath omit it.
+ */
+function getSpecBasePath(config: LoopCliConfig): string | undefined {
+  if (!Array.isArray(config.promptGenerator)) {
+    throw new TypeError('Expected a tuple prompt generator config');
+  }
+
+  return config.promptGenerator[2] as string | undefined;
 }

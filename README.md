@@ -201,9 +201,8 @@ Field        | Required | Description
 `filePattern`     | yes | Glob pattern for files to process (e.g. `"src/**/*.ts"`)
 `promptTemplate`  | yes | Template string; `{{file}}` is replaced with the file path
 `excludePatterns` | no  | Glob patterns to exclude
-`basePath`.       | no  | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
-Prompt templates support `{{include:path}}` macros that inline the contents of a file (resolved relative to `basePath`). Includes are recursive and circular references are detected.
+Prompt templates support `{{include:path}}` macros that inline the contents of a file. Includes are recursive and circular references are detected. See [Include Macros](#include-macros) for how the lookup base directory is chosen.
 
 Config example:
 
@@ -228,7 +227,6 @@ Field     |   Required | Description
 `search`         | yes | Search parameters (see below)
 `promptTemplate` | yes | Template with bug placeholders (see below)
 `bugzilla`       | no  | Connection options. Defaults to `bugzilla.mozilla.org` with no API key
-`basePath`       | no  | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
 Available template placeholders: `{{id}}`, `{{summary}}`, `{{url}}`, `{{component}}`, `{{product}}`, `{{severity}}`, `{{status}}`, `{{assignee}}`, `{{whiteboard}}`.
 
@@ -275,7 +273,6 @@ Field     |   Required | Description
 `search`         | yes | Search parameters (see below)
 `promptTemplate` | yes | Template with issue placeholders (see below)
 `github`         | no  | Connection options. Defaults to `https://api.github.com` and token lookup from `GITHUB_TOKEN` then `GH_TOKEN`
-`basePath`       | no  | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
 Available template placeholders: `{{id}}`, `{{number}}`, `{{repository}}`, `{{owner}}`, `{{repo}}`, `{{title}}`, `{{url}}`, `{{state}}`, `{{author}}`, `{{assignee}}`, `{{assignees}}`, `{{labels}}`, `{{milestone}}`, `{{commentCount}}`, `{{createdAt}}`, `{{updatedAt}}`, `{{closedAt}}`, `{{body}}`.
 
@@ -333,7 +330,6 @@ Field     |   Required | Description
 `search`         | yes | Search parameters (see below)
 `promptTemplate` | yes | Template with issue placeholders (see below)
 `gitlab`         | no  | Connection options. Defaults to `https://gitlab.com/api/v4` and token lookup from `GITLAB_TOKEN` then `GL_TOKEN`
-`basePath`       | no  | Base directory for resolving `{{include:...}}` paths. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
 Available template placeholders: `{{id}}`, `{{iid}}`, `{{project}}`, `{{title}}`, `{{url}}`, `{{state}}`, `{{author}}`, `{{assignee}}`, `{{assignees}}`, `{{labels}}`, `{{milestone}}`, `{{commentCount}}`, `{{createdAt}}`, `{{updatedAt}}`, `{{closedAt}}`, `{{description}}`.
 
@@ -401,11 +397,10 @@ Iterates over elements of a JSON array or object and generates one prompt per el
 Field            | Required | Description
 -----------------|----------|------------
 `data`           | one of `data`/`dataFile` | Inline JSON value (array or object) to iterate over
-`dataFile`       | one of `data`/`dataFile` | Path to a JSON file to read. Resolved relative to `basePath`
+`dataFile`       | one of `data`/`dataFile` | Path to a JSON file to read. Resolved against the same base directory as `{{include:...}}` paths
 `promptTemplate` | yes      | Template string with placeholder substitution (see below)
 `path`           | no       | Dot-notation path into the JSON to reach the array or object to iterate (e.g. `"results.bugs"`). Defaults to the root value
 `idField`        | no       | Field name on each element to use as the unique ID for state tracking. Defaults to the array index or object key
-`basePath`       | no       | Base directory for resolving `{{include:...}}` paths and `dataFile`. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
 Template placeholders for object elements: `{{fieldName}}` for any top-level field, `{{id}}` for the resolved tracking ID, `{{index}}` for the 0-based position. For non-object elements (strings, numbers), use `{{value}}`. The `{{include:path}}` macro is also supported.
 
@@ -474,7 +469,6 @@ Field                   | Required | Default | Description
 `summaryPromptTemplate` | yes      |         | Template for the summary prompt injected after each batch (see below)
 `reportFile`            | yes      |         | Path to the report file the loop is writing to; injected as `{{reportFile}}` in the summary template
 `batchSize`             | no       | 50      | Number of source items per batch
-`basePath`              | no       |         | Base directory for resolving `{{include:...}}` paths in `summaryPromptTemplate`. Programmatic callers default to cwd; CLI JSON configs default omitted values to the config file directory
 
 The summary prompt is injected after every `batchSize` items, and again at the end for any leftover items. Summary prompts are tracked in LoopState under IDs of the form `batch-summary-after-{lastItemId}`, so they are skipped on resume if already completed.
 
@@ -647,7 +641,7 @@ All extension-relevant types are exported from the package root (`src/index.ts`)
 
 ### Include Macros
 
-Both prompt templates and the `claude-sdk` agent's `systemPrompt` support `{{include:path}}` macros. Prompt template includes are resolved relative to `basePath` (which defaults to the config file directory when loaded via the CLI, or cwd for programmatic callers). System prompt includes are resolved relative to cwd. Circular includes are detected and throw an error. This is useful for sharing common instructions across prompts.
+Both prompt templates and the `claude-sdk` agent's `systemPrompt` support `{{include:path}}` macros that inline another file's contents. Relative paths are resolved against the config file directory for CLI JSON configs, and against the current working directory for programmatic callers (who can override by passing an explicit base path to the generator's constructor or `create()` factory). Includes are recursive and circular references are detected.
 
 See `src/util/expand-prompt.ts` for the implementation.
 

@@ -77,7 +77,7 @@
       "properties": {
         "systemPrompt": {
           "type": "string",
-          "description": "Optional system prompt prepended to the conversation. Supports {{include:path}} macros."
+          "description": "Optional system prompt prepended to the conversation. Supports {{include:path}} macros (resolved relative to the config file directory)."
         },
         "outputSchema": {
           "type": "object",
@@ -196,11 +196,7 @@
         },
         "promptTemplate": {
           "type": "string",
-          "description": "Prompt template. {{file}} is replaced with each file path. Supports {{include:path}} macros."
-        },
-        "basePath": {
-          "type": "string",
-          "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+          "description": "Prompt template. {{file}} is replaced with each file path. Supports {{include:path}} macros (resolved relative to the config file directory)."
         }
       }
     },
@@ -217,11 +213,7 @@
         },
         "promptTemplate": {
           "type": "string",
-          "description": "Prompt template. Substituted placeholders: {{id}}, {{summary}}, {{url}}, {{component}}, {{product}}, {{severity}}, {{status}}, {{assignee}}, {{whiteboard}}. Supports {{include:path}} macros."
-        },
-        "basePath": {
-          "type": "string",
-          "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+          "description": "Prompt template. Substituted placeholders: {{id}}, {{summary}}, {{url}}, {{component}}, {{product}}, {{severity}}, {{status}}, {{assignee}}, {{whiteboard}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
         }
       }
     },
@@ -238,11 +230,7 @@
         },
         "promptTemplate": {
           "type": "string",
-          "description": "Prompt template. Substituted placeholders: {{id}}, {{number}}, {{repository}}, {{owner}}, {{repo}}, {{title}}, {{url}}, {{state}}, {{author}}, {{assignee}}, {{assignees}}, {{labels}}, {{milestone}}, {{commentCount}}, {{createdAt}}, {{updatedAt}}, {{closedAt}}, {{body}}. Supports {{include:path}} macros."
-        },
-        "basePath": {
-          "type": "string",
-          "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+          "description": "Prompt template. Substituted placeholders: {{id}}, {{number}}, {{repository}}, {{owner}}, {{repo}}, {{title}}, {{url}}, {{state}}, {{author}}, {{assignee}}, {{assignees}}, {{labels}}, {{milestone}}, {{commentCount}}, {{createdAt}}, {{updatedAt}}, {{closedAt}}, {{body}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
         }
       }
     },
@@ -330,11 +318,7 @@
         },
         "promptTemplate": {
           "type": "string",
-          "description": "Prompt template. Substituted placeholders: {{id}}, {{iid}}, {{project}}, {{title}}, {{url}}, {{state}}, {{author}}, {{assignee}}, {{assignees}}, {{labels}}, {{milestone}}, {{commentCount}}, {{createdAt}}, {{updatedAt}}, {{closedAt}}, {{description}}. Supports {{include:path}} macros."
-        },
-        "basePath": {
-          "type": "string",
-          "description": "Base directory for resolving {{include:...}} paths. Defaults to the config file directory."
+          "description": "Prompt template. Substituted placeholders: {{id}}, {{iid}}, {{project}}, {{title}}, {{url}}, {{state}}, {{author}}, {{assignee}}, {{assignees}}, {{labels}}, {{milestone}}, {{commentCount}}, {{createdAt}}, {{updatedAt}}, {{closedAt}}, {{description}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
         }
       }
     },
@@ -628,7 +612,7 @@
         },
         "dataFile": {
           "type": "string",
-          "description": "Path to a JSON file to read. Resolved relative to basePath. Mutually exclusive with data."
+          "description": "Path to a JSON file to read. Resolved relative to the config file directory. Mutually exclusive with data."
         },
         "path": {
           "type": "string",
@@ -640,11 +624,7 @@
         },
         "promptTemplate": {
           "type": "string",
-          "description": "Prompt template. Placeholders for object elements: {{fieldName}}, {{id}}, {{index}}. For non-object elements: {{value}}. Supports {{include:path}} macros."
-        },
-        "basePath": {
-          "type": "string",
-          "description": "Base directory for resolving {{include:...}} paths and dataFile. Defaults to the config file directory."
+          "description": "Prompt template. Placeholders for object elements: {{fieldName}}, {{id}}, {{index}}. For non-object elements: {{value}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
         }
       },
       "oneOf": [
@@ -681,15 +661,11 @@
         },
         "summaryPromptTemplate": {
           "type": "string",
-          "description": "Template for the summary prompt injected after each batch. Available placeholders: {{batchSize}}, {{batchIds}}, {{reportFile}}. Supports {{include:path}} macros."
+          "description": "Template for the summary prompt injected after each batch. Available placeholders: {{batchSize}}, {{batchIds}}, {{reportFile}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
         },
         "reportFile": {
           "type": "string",
           "description": "Path to the report file the loop is writing to. Injected as {{reportFile}} in the summary template."
-        },
-        "basePath": {
-          "type": "string",
-          "description": "Base directory for resolving {{include:...}} paths in summaryPromptTemplate. Defaults to the config file directory."
         }
       }
     }

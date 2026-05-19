@@ -62,8 +62,11 @@ describe('toEntries', () => {
 describe('JsonPromptGenerator', () => {
   const loopState = new LoopState('loop-state-ignore.json');
 
-  async function collect(task: JsonTask): Promise<Array<Prompt>> {
-    const generator = await JsonPromptGenerator.create(task);
+  async function collect(
+    task: JsonTask,
+    basePath?: string,
+  ): Promise<Array<Prompt>> {
+    const generator = await JsonPromptGenerator.create(task, basePath);
     const prompts: Array<Prompt> = [];
     for await (const prompt of generator.generate(loopState)) {
       prompts.push(prompt);
@@ -188,12 +191,14 @@ describe('JsonPromptGenerator', () => {
       const filePath = join(tempDir, 'items.json');
       await writeFile(filePath, JSON.stringify([{ id: 'a' }, { id: 'b' }]));
 
-      const prompts = await collect({
-        dataFile: 'items.json',
-        basePath: tempDir,
-        idField: 'id',
-        promptTemplate: 'item {{id}}',
-      });
+      const prompts = await collect(
+        {
+          dataFile: 'items.json',
+          idField: 'id',
+          promptTemplate: 'item {{id}}',
+        },
+        tempDir,
+      );
 
       expect(prompts).toHaveLength(2);
       expect(prompts[0]).toStrictEqual({ id: 'a', prompt: 'item a' });

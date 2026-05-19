@@ -6,23 +6,14 @@ import {
   assertOptionalStringArray,
   assertRequiredString,
   isRecord,
-  normalizeBasePath,
-  type PromptGeneratorConfigContext,
 } from '../util/config.js';
 
 /**
  * Normalize GitLab task config values loaded from JSON.
  */
-export function normalizeGitLabTaskConfig(
-  config: unknown,
-  context: PromptGeneratorConfigContext,
-): GitLabTask {
+export function normalizeGitLabTaskConfig(config: unknown): GitLabTask {
   assertGitLabTaskConfig(config);
-
-  return {
-    ...config,
-    basePath: normalizeBasePath(config.basePath, context.configDir),
-  };
+  return config;
 }
 
 /**
@@ -39,10 +30,6 @@ function assertGitLabTaskConfig(value: unknown): asserts value is GitLabTask {
     typeof value['promptTemplate'] !== 'string'
   ) {
     throw new Error('gitlab.promptTemplate must be a string');
-  }
-
-  if ('basePath' in value && typeof value['basePath'] !== 'string') {
-    throw new Error('gitlab.basePath must be a string');
   }
 
   const search = value['search'];

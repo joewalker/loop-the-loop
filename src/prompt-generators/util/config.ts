@@ -1,5 +1,3 @@
-import { isAbsolute, resolve } from 'node:path';
-
 /**
  * Context supplied by CLI config loading when normalizing prompt-generator
  * specs that came from a JSON config file.
@@ -9,40 +7,6 @@ export interface PromptGeneratorConfigContext {
    * Directory containing the config file.
    */
   readonly configDir: string;
-}
-
-/**
- * Common task shape for prompt generators that resolve include paths.
- */
-export interface BasePathTaskConfig {
-  readonly basePath?: string;
-}
-
-/**
- * Resolve a possibly relative base path against the config file directory.
- */
-export function normalizeBasePath(
-  basePath: string | undefined,
-  configDir: string,
-): string {
-  if (basePath === undefined) {
-    return configDir;
-  }
-
-  return isAbsolute(basePath) ? basePath : resolve(configDir, basePath);
-}
-
-/**
- * Return a task config with `basePath` normalized relative to the config file.
- */
-export function normalizeTaskBasePath<TConfig extends BasePathTaskConfig>(
-  config: TConfig,
-  context: PromptGeneratorConfigContext,
-): TConfig & { readonly basePath: string } {
-  return {
-    ...config,
-    basePath: normalizeBasePath(config.basePath, context.configDir),
-  };
 }
 
 /**

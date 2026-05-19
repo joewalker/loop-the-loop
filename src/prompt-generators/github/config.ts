@@ -1,23 +1,12 @@
 import type { GitHubTask } from '../github.js';
-import {
-  isRecord,
-  normalizeBasePath,
-  type PromptGeneratorConfigContext,
-} from '../util/config.js';
+import { isRecord } from '../util/config.js';
 
 /**
  * Normalize GitHub task config values loaded from JSON.
  */
-export function normalizeGitHubTaskConfig(
-  config: unknown,
-  context: PromptGeneratorConfigContext,
-): GitHubTask {
+export function normalizeGitHubTaskConfig(config: unknown): GitHubTask {
   assertGitHubTaskConfig(config);
-
-  return {
-    ...config,
-    basePath: normalizeBasePath(config.basePath, context.configDir),
-  };
+  return config;
 }
 
 /**
@@ -34,10 +23,6 @@ function assertGitHubTaskConfig(value: unknown): asserts value is GitHubTask {
     typeof value['promptTemplate'] !== 'string'
   ) {
     throw new Error('github.promptTemplate must be a string');
-  }
-
-  if ('basePath' in value && typeof value['basePath'] !== 'string') {
-    throw new Error('github.basePath must be a string');
   }
 
   const search = value['search'];

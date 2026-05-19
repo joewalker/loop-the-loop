@@ -3,11 +3,8 @@ import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
 import {
   assertKnownProperties,
-  assertOptionalString,
   assertRequiredString,
   isRecord,
-  normalizeBasePath,
-  type PromptGeneratorConfigContext,
 } from './util/config.js';
 
 const DEFAULT_BATCH_SIZE = 50;
@@ -47,15 +44,6 @@ export interface BatchTask {
    * results directly.
    */
   reportFile: string;
-
-  /**
-   * Directory used to resolve `{{include:...}}` paths in
-   * `summaryPromptTemplate`. Defaults to `process.cwd()` when not specified.
-   * Callers that load this task from a config file should pass
-   * `path.dirname(configFilePath)` so that includes are resolved relative to
-   * the config file rather than the process working directory.
-   */
-  basePath?: string;
 }
 
 /**
@@ -68,7 +56,6 @@ export type BatchSourceNormalizer = (source: unknown) => unknown;
  */
 export function normalizeBatchTaskConfig(
   config: unknown,
-  context: PromptGeneratorConfigContext,
   normalizeSource: BatchSourceNormalizer,
 ): BatchTask {
   assertBatchTaskConfig(config);
@@ -76,7 +63,6 @@ export function normalizeBatchTaskConfig(
   return {
     ...config,
     source: normalizeSource(config.source),
-    basePath: normalizeBasePath(config.basePath, context.configDir),
   };
 }
 
@@ -88,6 +74,10 @@ export function normalizeBatchTaskConfig(
  *
  * Summary prompt IDs take the form `batch-summary-after-{lastItemId}`,
  * making them stable and trackable in LoopState across runs.
+ *
+ * `basePath` is used to resolve `{{include:...}}` macros in
+ * `summaryPromptTemplate` and defaults to `process.cwd()`. CLI config loading
+ * passes the config file's directory.
  */
 export class BatchPromptGenerator implements PromptGenerator {
   static readonly promptGeneratorName = 'batch';
@@ -99,26 +89,30 @@ export class BatchPromptGenerator implements PromptGenerator {
    * @param createSource - factory for resolving `task.source` into a
    *   PromptGenerator; injected from `prompt-generators.ts` to avoid a
    *   circular module dependency at runtime.
+   * @param basePath - directory used to resolve `{{include:...}}` macros in
+   *   `summaryPromptTemplate`. Defaults to `process.cwd()`.
    */
   static async create(
     task: BatchTask,
     createSource: (spec: unknown) => Promise<PromptGenerator>,
+    basePath?: string,
   ): Promise<PromptGenerator> {
     const source = await createSource(task.source);
-    return new BatchPromptGenerator(task, source);
+    return new BatchPromptGenerator(task, source, basePath);
   }
 
   readonly #task: BatchTask;
   readonly #source: PromptGenerator;
+  readonly #basePath: string;
 
-  constructor(task: BatchTask, source: PromptGenerator) {
+  constructor(task: BatchTask, source: PromptGenerator, basePath?: string) {
     this.#task = task;
     this.#source = source;
+    this.#basePath = basePath ?? process.cwd();
   }
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
     const batchSize = this.#task.batchSize ?? DEFAULT_BATCH_SIZE;
-    const basePath = this.#task.basePath ?? process.cwd();
     let batch: Array<Prompt> = [];
 
     for await (const item of this.#source.generate(loopState)) {
@@ -126,7 +120,7 @@ export class BatchPromptGenerator implements PromptGenerator {
       yield item;
 
       if (batch.length >= batchSize) {
-        const summary = await this.#buildSummary(batch, loopState, basePath);
+        const summary = await this.#buildSummary(batch, loopState);
         if (summary !== undefined) {
           yield summary;
         }
@@ -135,7 +129,7 @@ export class BatchPromptGenerator implements PromptGenerator {
     }
 
     if (batch.length > 0) {
-      const summary = await this.#buildSummary(batch, loopState, basePath);
+      const summary = await this.#buildSummary(batch, loopState);
       if (summary !== undefined) {
         yield summary;
       }
@@ -149,7 +143,6 @@ export class BatchPromptGenerator implements PromptGenerator {
   async #buildSummary(
     batch: ReadonlyArray<Prompt>,
     loopState: LoopState,
-    basePath: string,
   ): Promise<Prompt | undefined> {
     const lastId = batch[batch.length - 1].id;
     const summaryId = `batch-summary-after-${lastId}`;
@@ -160,7 +153,7 @@ export class BatchPromptGenerator implements PromptGenerator {
 
     const prompt = await expandPrompt(
       this.#task.summaryPromptTemplate,
-      basePath,
+      this.#basePath,
       {
         batchSize: String(batch.length),
         batchIds: batch.map(p => p.id).join('\n'),
@@ -183,7 +176,7 @@ function assertBatchTaskConfig(value: unknown): asserts value is BatchTask {
 
   assertKnownProperties(
     value,
-    ['source', 'batchSize', 'summaryPromptTemplate', 'reportFile', 'basePath'],
+    ['source', 'batchSize', 'summaryPromptTemplate', 'reportFile'],
     'batch',
   );
 
@@ -197,7 +190,6 @@ function assertBatchTaskConfig(value: unknown): asserts value is BatchTask {
     'batch.summaryPromptTemplate',
   );
   assertRequiredString(value, 'reportFile', 'batch.reportFile');
-  assertOptionalString(value, 'basePath', 'batch.basePath');
 
   const batchSize = value['batchSize'];
   if (

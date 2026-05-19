@@ -46,32 +46,30 @@ export interface GitLabTask {
    * - `{{description}}` - issue description
    */
   promptTemplate: string;
-
-  /**
-   * Directory used to resolve `{{include:...}}` paths in `promptTemplate`.
-   * Defaults to `process.cwd()` when not specified. Callers that load this
-   * task from a config file should pass `path.dirname(configFilePath)` so
-   * that includes are resolved relative to the config file rather than the
-   * process working directory.
-   */
-  basePath?: string;
 }
 
 /**
  * A PromptGenerator that queries GitLab for issues matching a search and
- * yields a prompt for each one.
+ * yields a prompt for each one. `basePath` is used to resolve
+ * `{{include:...}}` macros in the prompt template and defaults to
+ * `process.cwd()`. CLI config loading passes the config file's directory.
  */
 export class GitLabPromptGenerator implements PromptGenerator {
   static readonly promptGeneratorName = 'gitlab';
 
-  static async create(task: GitLabTask): Promise<PromptGenerator> {
-    return new GitLabPromptGenerator(task);
+  static async create(
+    task: GitLabTask,
+    basePath?: string,
+  ): Promise<PromptGenerator> {
+    return new GitLabPromptGenerator(task, basePath);
   }
 
   readonly #task: GitLabTask;
+  readonly #basePath: string;
 
-  constructor(task: GitLabTask) {
+  constructor(task: GitLabTask, basePath?: string) {
     this.#task = task;
+    this.#basePath = basePath ?? process.cwd();
   }
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
@@ -83,9 +81,8 @@ export class GitLabPromptGenerator implements PromptGenerator {
       const id = `${project}#${issue.iid}`;
       if (loopState.isOutstanding(id)) {
         const template = this.#task.promptTemplate;
-        const basePath = this.#task.basePath ?? process.cwd();
         const variables = buildVariables(issue, { id, project });
-        const prompt = await expandPrompt(template, basePath, variables);
+        const prompt = await expandPrompt(template, this.#basePath, variables);
 
         yield { id, prompt };
       }

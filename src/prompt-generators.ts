@@ -105,7 +105,7 @@ type PromptGeneratorConfig =
         ...Parameters<PromptGeneratorCreators[T]>,
       ];
     }[PromptGeneratorName]
-  | [typeof BatchPromptGenerator.promptGeneratorName, BatchTask];
+  | [typeof BatchPromptGenerator.promptGeneratorName, BatchTask, string?];
 
 /**
  * To specify a PromptGenerator in a config file, pass either:
@@ -127,6 +127,11 @@ export const promptGeneratorTypes = [
 
 /**
  * Normalize prompt-generator config values loaded from a CLI JSON config.
+ * The returned spec appends `context.configDir` as a third tuple element so
+ * that `createPromptGenerator` can pass it to the generator factory as the
+ * `basePath` used for resolving `{{include:...}}` macros. Programmatic
+ * callers that bypass normalization fall back to `process.cwd()` inside the
+ * generator factory.
  */
 export function normalizePromptGeneratorSpec(
   promptGeneratorSpec: PromptGeneratorSpec,
@@ -137,34 +142,36 @@ export function normalizePromptGeneratorSpec(
   }
 
   const [type, config] = promptGeneratorSpec;
+  const { configDir } = context;
 
   if (type === BatchPromptGenerator.promptGeneratorName) {
     return [
       type,
-      normalizeBatchTaskConfig(config, context, source =>
+      normalizeBatchTaskConfig(config, source =>
         normalizePromptGeneratorSpec(source as PromptGeneratorSpec, context),
       ),
+      configDir,
     ];
   }
 
   if (type === BugzillaPromptGenerator.promptGeneratorName) {
-    return [type, normalizeBugzillaTaskConfig(config, context)];
+    return [type, normalizeBugzillaTaskConfig(config), configDir];
   }
 
   if (type === GitHubPromptGenerator.promptGeneratorName) {
-    return [type, normalizeGitHubTaskConfig(config, context)];
+    return [type, normalizeGitHubTaskConfig(config), configDir];
   }
 
   if (type === GitLabPromptGenerator.promptGeneratorName) {
-    return [type, normalizeGitLabTaskConfig(config, context)];
+    return [type, normalizeGitLabTaskConfig(config), configDir];
   }
 
   if (type === JsonPromptGenerator.promptGeneratorName) {
-    return [type, normalizeJsonTaskConfig(config, context)];
+    return [type, normalizeJsonTaskConfig(config), configDir];
   }
 
   if (type === PerFilePromptGenerator.promptGeneratorName) {
-    return [type, normalizePerFileTaskConfig(config, context)];
+    return [type, normalizePerFileTaskConfig(config), configDir];
   }
 
   /* istanbul ignore else */
@@ -185,9 +192,11 @@ export async function createPromptGenerator(
   if (Array.isArray(promptGeneratorSpec)) {
     const [type, ...args] = promptGeneratorSpec;
     if (type === BatchPromptGenerator.promptGeneratorName) {
-      const [task] = args as [BatchTask];
-      return BatchPromptGenerator.create(task, spec =>
-        createPromptGenerator(spec as PromptGeneratorSpec),
+      const [task, basePath] = args as [BatchTask, string?];
+      return BatchPromptGenerator.create(
+        task,
+        spec => createPromptGenerator(spec as PromptGeneratorSpec),
+        basePath,
       );
     }
     const creator = promptGeneratorCreators[type] as PromptGeneratorCreator;

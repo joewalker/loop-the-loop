@@ -5,12 +5,9 @@ import { expandPrompt } from '../util/expand-prompt.js';
 import type { LoopState } from '../util/loop-state.js';
 import {
   assertKnownProperties,
-  assertOptionalString,
   assertOptionalStringArray,
   assertRequiredString,
   isRecord,
-  normalizeTaskBasePath,
-  type PromptGeneratorConfigContext,
 } from './util/config.js';
 
 /**
@@ -33,43 +30,38 @@ export interface PerFileTask {
    * {{file}} is replaced with the file path.
    */
   promptTemplate: string;
-
-  /**
-   * Directory used to resolve `{{include:...}}` paths in `promptTemplate`.
-   * Defaults to `process.cwd()` when not specified. Callers that load this
-   * task from a config file should pass `path.dirname(configFilePath)` so
-   * that includes are resolved relative to the config file rather than the
-   * process working directory.
-   */
-  basePath?: string;
 }
 
 /**
  * Normalize per-file task config values loaded from JSON.
  */
-export function normalizePerFileTaskConfig(
-  config: unknown,
-  context: PromptGeneratorConfigContext,
-): PerFileTask {
+export function normalizePerFileTaskConfig(config: unknown): PerFileTask {
   assertPerFileTaskConfig(config);
-  return normalizeTaskBasePath(config, context);
+  return config;
 }
 
 /**
  * A PromptGenerator that works on a template that iterates over a subset of
- * files in the filesystem
+ * files in the filesystem. `basePath` is used to resolve `{{include:...}}`
+ * macros in the prompt template and defaults to `process.cwd()`. CLI config
+ * loading passes the config file's directory.
  */
 export class PerFilePromptGenerator implements PromptGenerator {
   static readonly promptGeneratorName = 'per-file';
 
-  static async create(task: PerFileTask): Promise<PromptGenerator> {
-    return new PerFilePromptGenerator(task);
+  static async create(
+    task: PerFileTask,
+    basePath?: string,
+  ): Promise<PromptGenerator> {
+    return new PerFilePromptGenerator(task, basePath);
   }
 
   readonly #task: PerFileTask;
+  readonly #basePath: string;
 
-  constructor(task: PerFileTask) {
+  constructor(task: PerFileTask, basePath?: string) {
     this.#task = task;
+    this.#basePath = basePath ?? process.cwd();
   }
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
@@ -78,9 +70,8 @@ export class PerFilePromptGenerator implements PromptGenerator {
 
     for (const file of allFiles) {
       if (loopState.isOutstanding(file)) {
-        const basePath = this.#task.basePath ?? process.cwd();
         const template = this.#task.promptTemplate;
-        const prompt = await expandPrompt(template, basePath, { file });
+        const prompt = await expandPrompt(template, this.#basePath, { file });
         yield { id: file, prompt };
       }
     }
@@ -116,12 +107,11 @@ function assertPerFileTaskConfig(value: unknown): asserts value is PerFileTask {
 
   assertKnownProperties(
     value,
-    ['filePattern', 'excludePatterns', 'promptTemplate', 'basePath'],
+    ['filePattern', 'excludePatterns', 'promptTemplate'],
     'per-file',
   );
   assertRequiredString(value, 'filePattern', 'per-file.filePattern');
   assertRequiredString(value, 'promptTemplate', 'per-file.promptTemplate');
-  assertOptionalString(value, 'basePath', 'per-file.basePath');
   assertOptionalStringArray(
     value,
     'excludePatterns',
