@@ -9,7 +9,7 @@ pnpm install
 pnpm tsc
 ```
 
-At this point we should be able to run tests (`pnpm test`). Do not add `... 2>&1 | tail -XX` to the end of test commands - vitest recognises agents and uses a minimal reporter and the pipe may mean a user permissions request.
+At this point we should be able to run tests (`pnpm test`). Do not add `| tail -XX` to the end of test commands - vitest recognises agents and uses a minimal reporter and the pipe may mean a user permissions request.
 
 Other useful commands:
 
@@ -26,32 +26,24 @@ When writing reports, documents, technical explanations, analyses, or any long-f
 
 - Use standard paragraph breaks for organization and reserve markdown primarily for `inline code`, fenced code blocks (\`\`\`), and simple headings (##, and ###).
 - Avoid using **bold** and _italics_ particularly in headings.
-- Unless otherwise specified, write reports to new files in the `docs/wip/` folder for future reference.
 - Avoid em dashes, smart quotes, non-breaking spaces, zero-width spaces, and similar non-ASCII punctuation in all output including code comments, documentation, and prose.
 
 ## Bug Tracking
 
-Bugs are tracked as issues in this [project's Github repository](https://github.com/joewalker/loop-the-loop/issues). Use the `gh` CLI tool to create, list, and view issues from the terminal.
+Bugs are tracked as issues in this [project's Github repository](https://github.com/joewalker/loop-the-loop/issues). Use the `gh` CLI tool to create, list, and view issues from the terminal. See [`docs/bug-tracking.md`](docs/bug-tracking.md) for the S1 to S4 severity definitions we use when classifying bugs.
 
 ## Writing Code
 
-- Understand the full requirement before writing anything, ask if needed
-- Plan the simplest working solution. No over-engineering
 - Run the tests before writing code to check we start clean
 - Write tests first. Use Red/Green TDD
-- TypeScript: strict mode, explicit types at module boundaries
 - Arrays: prefer `Array<Type>` over `Type[]`
-- Strings: single quotes, template literals for interpolation
-- Names: camelCase for variables/functions, PascalCase for types/components
-- Errors: proper error handling with typed errors
-- Formatting: 2-space indent, trailing commas, semicolons
 - Use `readonly` and `ReadonlyArray<…>` unless the data is designed to be mutable
 - Prefix unused variables with underscore (\_varName)
 - Always use curly brackets for `if`, `else`, `for`, etc, even when the body fits on one line.
 - Prefer nullish coalescing (??) and optional chaining (?.)
 - Prefer using the EcmaScript standard `#` to denote private members rather than the TypeScript specific `private` keyword (except for constructors since standard EcmaScript doesn't allow the `#constructor` construct).
 - Top level functions should have at least some basic documentation.
-- When using multi-line doc comments (i.e. /\*_ ... _/), ALWAYS to use multiple lines rather than squishing everything onto one line.
+- When using multi-line doc comments (i.e. /\*\* ... \*/), ALWAYS to use multiple lines rather than squishing everything onto one line.
 - Use `// #region ...` markers to divide file sections, never ASCII art lines like `// -----------`.
 - Imports:
   - Sorted via oxfmt (configured in `.oxfmtrc.json`)
