@@ -74,8 +74,11 @@ export async function loadCliConfig(
   let config: LoopCliConfig;
   try {
     config = JSON.parse(raw) as LoopCliConfig;
-  } catch {
-    throw new Error(`Failed to parse config file: ${resolvedPath}`);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to parse config file: ${resolvedPath}: ${detail}`, {
+      cause: err,
+    });
   }
 
   return {

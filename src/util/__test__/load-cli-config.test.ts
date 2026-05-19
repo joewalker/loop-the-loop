@@ -609,19 +609,33 @@ describe('loadCliConfig', () => {
     );
   });
 
-  it('should throw a clear error for malformed JSON', async () => {
+  it('should throw a clear error for malformed JSON that includes the parser detail', async () => {
     const configDir = join(tempDir, 'config');
     await mkdir(configDir, { recursive: true });
     const configPath = join(configDir, 'config.json');
     await writeFile(configPath, '{ not valid json');
 
-    await expect(
-      loadCliConfig({
+    let caught: unknown;
+    try {
+      await loadCliConfig({
         configPath,
         verbose: false,
         maxPrompts: undefined,
-      }),
-    ).rejects.toThrow(`Failed to parse config file: ${configPath}`);
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const error = caught as Error;
+    expect(error.message).toContain(
+      `Failed to parse config file: ${configPath}`,
+    );
+    // The original SyntaxError from JSON.parse should be surfaced, both in
+    // the message (so it shows up in CLI output) and via `cause` (so callers
+    // can inspect the underlying error programmatically).
+    expect(error.cause).toBeInstanceOf(SyntaxError);
+    expect(error.message).toContain((error.cause as Error).message);
   });
 
   it('should preserve a pre-constructed promptGenerator instance', async () => {
