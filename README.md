@@ -143,7 +143,7 @@ Specify an agent in configuration as:
 
 Uses the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`). This is the primary agent for most tasks.
 
-- Default tools: `Read`, `Glob`, `Grep`
+- Default loaded tools: the SDK's `claude_code` preset (the full default Claude Code tool set)
 - Default max turns: 100
 - Permission mode: `acceptEdits`
 
@@ -153,7 +153,8 @@ Field             | Description
 ------------------|------------
 `systemPrompt`    | System prompt prepended to the conversation. Supports `{{include:path}}` macros.
 `outputSchema`    | JSON Schema describing the expected shape of structured output.
-`allowedTools`    | Tool names auto-allowed without permission prompts. Falls back to the defaults above when omitted.
+`allowedTools`    | Tool names or permission patterns auto-allowed without permission prompts. Auto-approval only; does not restrict which built-in tools the SDK loads.
+`loadedTools`     | Restrict which built-in tools the SDK loads. Either an array of tool names, `[]` to disable all built-in tools, or `{ "type": "preset", "preset": "claude_code" }` for the default preset. When omitted the SDK's default preset is used.
 `disallowedTools` | Tool names that are explicitly blocked.
 `mcpServers`      | MCP (Model Context Protocol) server configurations, keyed by server name.
 `maxTurns`        | Maximum tool-use/response rounds per prompt.
@@ -162,7 +163,8 @@ Config example:
 
 ```json
 ["claude-sdk", {
-  "allowedTools": ["Read", "Glob", "Grep", "Bash(gh issue *)"],
+  "allowedTools": ["Bash(gh issue *)"],
+  "loadedTools": ["Read", "Glob", "Grep", "Bash"],
   "mcpServers": { "my-server": { "command": "node", "args": ["server.js"] } }
 }]
 ```

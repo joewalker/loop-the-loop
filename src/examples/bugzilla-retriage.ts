@@ -51,15 +51,6 @@ loop({
   agent: [
     'claude-sdk',
     {
-      /*
-       * The DEFAULT_TOOLS for claude-sdk are only `Read`, `Glob`, and `Grep`,
-       * which see the local checkout and nothing else. A re-triage verdict
-       * needs access to the live bug, related bugs, and authoritative docs,
-       * so we explicitly allow web-fetching tools here. For higher-confidence
-       * verdicts, add a Bugzilla MCP server (e.g. a wrapper around
-       * `@joewalker/bzjs`) and/or `Bash(hg log ...)` against a local
-       * mozilla-central checkout. See `bugzilla-retriage.md` for details.
-       */
       allowedTools: [
         'Read',
         'Glob',

@@ -13,8 +13,16 @@ import type {
 
 // istanbul ignore file
 
-const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
 const DEFAULT_MAX_TURNS = 100;
+
+/**
+ * Shape accepted by the Claude Agent SDK's `tools` option. Either an
+ * explicit list of built-in tool names (or `[]` to disable all built-in
+ * tools) or the `claude_code` preset to load the full default set.
+ */
+export type ClaudeSDKLoadedTools =
+  | ReadonlyArray<string>
+  | { readonly type: 'preset'; readonly preset: 'claude_code' };
 
 export interface ClaudeSDKAgentConfig {
   /**
@@ -31,9 +39,31 @@ export interface ClaudeSDKAgentConfig {
 
   /**
    * Tool names that should be auto-allowed without prompting for
-   * permission. When omitted the agent falls back to its own defaults.
+   * permission. Both bare names (e.g. `"Read"`) and permission patterns
+   * (e.g. `"Bash(gh issue create *)"`) are accepted and are forwarded
+   * unchanged to the SDK's `allowedTools` option.
+   *
+   * This list controls auto-approval only and does NOT restrict which
+   * tools the model can see. To control which built-in tools are loaded,
+   * use `loadedTools`. When `loadedTools` is omitted the SDK falls back
+   * to its own default set (the `claude_code` preset).
    */
   readonly allowedTools?: ReadonlyArray<string>;
+
+  /**
+   * Controls which built-in tools are loaded into the model's context
+   * (the SDK's `tools` option):
+   *
+   * - An array of tool names enables only those built-in tools.
+   * - `[]` (an empty array) disables all built-in tools.
+   * - `{ type: 'preset', preset: 'claude_code' }` loads the full
+   *   Claude Code preset.
+   *
+   * When omitted the agent passes no `tools` option to the SDK, which
+   * means the SDK uses its own default (the `claude_code` preset). This
+   * is independent of `allowedTools`, which only controls auto-approval.
+   */
+  readonly loadedTools?: ClaudeSDKLoadedTools;
 
   /**
    * Tool names that are explicitly blocked. The agent must ensure these
@@ -236,30 +266,31 @@ export class ClaudeSDKAgent implements Agent {
 }
 
 /**
- * Split a user-provided tool list into the two shapes the Claude Agent SDK
- * expects. The SDK's `tools` option restricts which tools are *loaded* and
- * accepts only bare names (e.g. `"Bash"`). Its `allowedTools` option is the
- * auto-approval list and accepts both bare names and permission patterns
- * (e.g. `"Bash(gh issue create *)"`).
+ * Translate a `ClaudeSDKAgentConfig` into the `Options` object accepted
+ * by the Claude Agent SDK's `query()`.
  *
- * The caller writes a single flat list mixing the two forms; this helper
- * pulls bare names (stripping any `(...)` suffix) for `tools`, deduplicates
- * them, and returns the original list unchanged for `allowedTools`.
+ * The SDK exposes two related but independent options:
+ *
+ * - `tools` (the load list): controls which built-in tools are loaded
+ *   into the model's context. Accepts bare names, `[]` to disable all
+ *   built-in tools, or the `claude_code` preset. We surface this as
+ *   `loadedTools` on `ClaudeSDKAgentConfig` and only forward it when the
+ *   caller has set it explicitly. When omitted the SDK falls back to
+ *   its own default set (the `claude_code` preset).
+ *
+ * - `allowedTools` (the auto-approval list): the set of tool names or
+ *   permission patterns whose invocations are auto-approved without
+ *   prompting. This is forwarded unchanged from `config.allowedTools`.
+ *
+ * Earlier versions of this function derived the SDK's `tools` option
+ * from `allowedTools` by extracting bare names. That conflated the two
+ * concerns and meant an empty `allowedTools` accidentally disabled
+ * every built-in tool (see joewalker/loop-the-loop#11).
  */
 export function configureQueryOptions(
   config: ClaudeSDKAgentConfig,
   allowSourceUpdate = false,
 ): Options {
-  const tools = config.allowedTools ?? DEFAULT_TOOLS;
-  const bareNames = new Set<string>();
-  for (const tool of tools) {
-    const parenIdx = tool.indexOf('(');
-    const bare = (parenIdx === -1 ? tool : tool.slice(0, parenIdx)).trim();
-    if (bare.length > 0) {
-      bareNames.add(bare);
-    }
-  }
-
   const systemPrompt =
     config.systemPrompt !== undefined
       ? { systemPrompt: config.systemPrompt }
@@ -275,6 +306,16 @@ export function configureQueryOptions(
         }
       : {};
 
+  const allowedTools =
+    config.allowedTools !== undefined
+      ? { allowedTools: [...config.allowedTools] }
+      : {};
+
+  const loadedTools =
+    config.loadedTools !== undefined
+      ? { tools: normalizeLoadedTools(config.loadedTools) }
+      : {};
+
   const disallowedTools =
     config.disallowedTools !== undefined
       ? { disallowedTools: [...config.disallowedTools] }
@@ -284,8 +325,8 @@ export function configureQueryOptions(
     config?.mcpServers !== undefined ? { mcpServers: config.mcpServers } : {};
 
   return {
-    tools: [...bareNames],
-    allowedTools: [...tools],
+    ...loadedTools,
+    ...allowedTools,
     ...systemPrompt,
     ...outputSchema,
     ...disallowedTools,
@@ -293,4 +334,17 @@ export function configureQueryOptions(
     permissionMode: allowSourceUpdate ? 'acceptEdits' : 'default',
     maxTurns: config.maxTurns ?? DEFAULT_MAX_TURNS,
   };
+}
+
+/**
+ * Convert a `ClaudeSDKLoadedTools` value (which may use `ReadonlyArray`)
+ * into the mutable shape the SDK's `Options.tools` expects.
+ */
+function normalizeLoadedTools(
+  loadedTools: ClaudeSDKLoadedTools,
+): Array<string> | { type: 'preset'; preset: 'claude_code' } {
+  if (Array.isArray(loadedTools)) {
+    return [...loadedTools];
+  }
+  return { ...(loadedTools as { type: 'preset'; preset: 'claude_code' }) };
 }

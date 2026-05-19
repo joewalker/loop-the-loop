@@ -107,7 +107,25 @@
         "allowedTools": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Tool names auto-allowed without permission prompts. Agent-specific defaults apply when omitted."
+          "description": "Tool names or permission patterns auto-allowed without permission prompts. This is the auto-approval list only and does not restrict which built-in tools are loaded; use `loadedTools` for that. Bare names (e.g. 'Read') and patterns (e.g. 'Bash(gh issue create *)') are both accepted."
+        },
+        "loadedTools": {
+          "description": "Controls which built-in tools the SDK loads (the SDK's `tools` option). Provide an array of tool names to restrict the set, `[]` to disable all built-in tools, or `{ type: 'preset', preset: 'claude_code' }` to load the default Claude Code preset. When omitted the SDK falls back to its own default (the `claude_code` preset).",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "preset"],
+              "properties": {
+                "type": { "const": "preset" },
+                "preset": { "const": "claude_code" }
+              }
+            }
+          ]
         },
         "disallowedTools": {
           "type": "array",
