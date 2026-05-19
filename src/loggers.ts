@@ -90,7 +90,13 @@ export class VerboseLogger implements Logger {
     if (!this.#enabled) {
       return;
     }
-    console.error(styleText(color, `[${label}] ${message}`));
+    // Validate the stream we actually write to (stderr) so colors are
+    // governed by stderr's TTY capabilities, not stdout's. Otherwise
+    // mixed redirections (`> out.log` or `2> err.log`) produce missing
+    // colors on a TTY stderr or raw ANSI escape codes in a log file.
+    console.error(
+      styleText(color, `[${label}] ${message}`, { stream: process.stderr }),
+    );
   }
 }
 
