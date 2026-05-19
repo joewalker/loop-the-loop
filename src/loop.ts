@@ -97,6 +97,11 @@ async function loopImpl(config: LoopConfig): Promise<string> {
   const loopState = await LoopState.create(path);
   logger.state(`Loaded loop state from ${path}`);
 
+  if (maxPrompts <= 0) {
+    logger.state(`Reached limit of ${maxPrompts} prompts`);
+    return `Done (reached limit of ${maxPrompts} prompts)`;
+  }
+
   let completed = 0;
   let glitchCount = 0;
   for await (const prompt of promptGenerator.generate(loopState)) {

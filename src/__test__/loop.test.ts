@@ -201,6 +201,22 @@ describe('main', () => {
     expect(result).toContain('Done');
   });
 
+  it('should not invoke the agent when maxPrompts is 0', async () => {
+    const agent = new RecordingAgent({ status: 'success', output: 'unused' });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'a' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'max-prompts-zero',
+      agent,
+      promptGenerator,
+      maxPrompts: 0,
+    });
+    expect(result).toContain('Done (reached limit of 0 prompts)');
+    expect(agent.invokeOptions).toHaveLength(0);
+  });
+
   it('should respect maxPrompts limit', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult(
