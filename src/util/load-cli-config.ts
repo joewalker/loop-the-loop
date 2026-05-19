@@ -13,49 +13,111 @@ import { expandIncludes } from './expand-prompt.js';
 export interface ParsedArgs {
   readonly configPath: string;
   readonly verbose?: boolean | undefined;
+  readonly dryRun?: boolean | undefined;
   readonly maxPrompts?: number | undefined;
 }
 
 /**
- * Simple `process.argv.slice(2)` parsing to turn an array of strings into
- * a ParsedArgs object which describes how to act
+ * Canonical name for each supported flag. Lookups are done after
+ * `normalizeFlagName`, so the keys here are the normalized (lower-case,
+ * alphanumeric-only) form.
+ */
+const BOOLEAN_FLAGS: ReadonlyMap<string, 'verbose' | 'dryRun'> = new Map([
+  ['verbose', 'verbose'],
+  ['dryrun', 'dryRun'],
+]);
+
+const VALUE_FLAGS: ReadonlyMap<string, 'maxPrompts'> = new Map([
+  ['maxprompts', 'maxPrompts'],
+]);
+
+/**
+ * Strip case and any separators (`-`, `_`, etc.) so that `--max-prompts`,
+ * `--max_prompts`, `--MaxPrompts`, and `--MAX_PROMPTS` all resolve to the
+ * same canonical flag.
+ */
+function normalizeFlagName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9]/gu, '').toLowerCase();
+}
+
+/**
+ * Parse `process.argv.slice(2)` into a ParsedArgs object.
+ *
+ * Flag names are matched case-insensitively and ignore separators, so any
+ * of `--max-prompts`, `--max_prompts`, `--maxPrompts`, `--MaxPrompts`, or
+ * `--MAX_PROMPTS` are accepted. Value flags may be written either as
+ * `--max-prompts=5` or `--max-prompts 5`. Flags and the positional config
+ * path may appear in any order.
  */
 export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
-  const verbose = args.includes('--verbose');
   const positional: Array<string> = [];
+  let verbose = false;
+  let dryRun = false;
   let maxPrompts: number | undefined;
 
-  for (const arg of args) {
-    if (arg === '--verbose') {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg.startsWith('--')) {
+      positional.push(arg);
       continue;
     }
-    const match = arg.match(/^--(\w+)=(.+)$/u); // eslint-disable-line @typescript-eslint/prefer-regexp-exec
-    if (match) {
-      const [, key, value] = match;
-      if (key === 'maxPrompts') {
-        const n = parseInt(value, 10);
-        if (isNaN(n) || n < 0) {
-          throw new Error(`Invalid --maxPrompts value: ${value}`);
-        }
-        maxPrompts = n;
-      } else {
-        throw new Error(`Unknown option: --${key}`);
+
+    const body = arg.slice(2);
+    const eqIndex = body.indexOf('=');
+    const rawKey = eqIndex >= 0 ? body.slice(0, eqIndex) : body;
+    const inlineValue = eqIndex >= 0 ? body.slice(eqIndex + 1) : undefined;
+    const key = normalizeFlagName(rawKey);
+
+    const booleanField = BOOLEAN_FLAGS.get(key);
+    if (booleanField !== undefined) {
+      if (inlineValue !== undefined) {
+        throw new Error(`Option --${rawKey} does not take a value`);
       }
+      if (booleanField === 'verbose') {
+        verbose = true;
+      } else {
+        dryRun = true;
+      }
+      continue;
+    }
+
+    const valueField = VALUE_FLAGS.get(key);
+    if (valueField === undefined) {
+      throw new Error(`Unknown option: --${rawKey}`);
+    }
+
+    let value: string;
+    if (inlineValue !== undefined) {
+      value = inlineValue;
     } else {
-      positional.push(arg);
+      const next = args[i + 1];
+      if (next === undefined || next.startsWith('--')) {
+        throw new Error(`Option --${rawKey} requires a value`);
+      }
+      value = next;
+      i += 1;
+    }
+
+    if (valueField === 'maxPrompts') {
+      const n = parseInt(value, 10);
+      if (isNaN(n) || n < 0) {
+        throw new Error(`Invalid --${rawKey} value: ${value}`);
+      }
+      maxPrompts = n;
     }
   }
 
   const configPath = positional[0];
   if (!configPath) {
     throw new Error(
-      'Usage: loop-the-loop [--verbose] [--maxPrompts=N] <config.json>',
+      'Usage: loop-the-loop [--verbose] [--dry-run] [--max-prompts N] <config.json>',
     );
   }
 
   return {
     configPath,
     verbose,
+    dryRun,
     maxPrompts,
   };
 }

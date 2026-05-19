@@ -80,6 +80,122 @@ describe('parseArgs', () => {
       'Unknown option: --unknown',
     );
   });
+
+  // #region Case-insensitive flag names
+
+  it('accepts --max-prompts in kebab-case', () => {
+    expect(parseArgs(['--max-prompts=5', 'config.json']).maxPrompts).toEqual(5);
+  });
+
+  it('accepts --max_prompts in snake_case', () => {
+    expect(parseArgs(['--max_prompts=5', 'config.json']).maxPrompts).toEqual(5);
+  });
+
+  it('accepts --MaxPrompts in PascalCase', () => {
+    expect(parseArgs(['--MaxPrompts=5', 'config.json']).maxPrompts).toEqual(5);
+  });
+
+  it('accepts --MAX_PROMPTS in SCREAMING_SNAKE_CASE', () => {
+    expect(parseArgs(['--MAX_PROMPTS=5', 'config.json']).maxPrompts).toEqual(5);
+  });
+
+  it('accepts --VERBOSE in any case', () => {
+    expect(parseArgs(['--VERBOSE', 'config.json']).verbose).toBe(true);
+  });
+
+  // #endregion
+
+  // #region Space-separated value form
+
+  it('accepts --max-prompts followed by a separate value arg', () => {
+    expect(parseArgs(['--max-prompts', '5', 'config.json']).maxPrompts).toEqual(
+      5,
+    );
+  });
+
+  it('accepts space-separated max-prompts in any case', () => {
+    expect(parseArgs(['--MaxPrompts', '7', 'config.json']).maxPrompts).toEqual(
+      7,
+    );
+  });
+
+  it('throws when --max-prompts is not followed by a value', () => {
+    expect(() => parseArgs(['--max-prompts'])).toThrow(
+      'Option --max-prompts requires a value',
+    );
+  });
+
+  it('throws when --max-prompts is followed by another flag', () => {
+    expect(() =>
+      parseArgs(['--max-prompts', '--verbose', 'config.json']),
+    ).toThrow('Option --max-prompts requires a value');
+  });
+
+  // #endregion
+
+  // #region Order independence
+
+  it('parses flags interleaved before and after the positional arg', () => {
+    expect(
+      parseArgs(['--verbose', 'config.json', '--max-prompts=2']),
+    ).toMatchObject({
+      verbose: true,
+      maxPrompts: 2,
+      configPath: 'config.json',
+    });
+  });
+
+  it('parses flags after the positional arg', () => {
+    expect(
+      parseArgs(['config.json', '--max-prompts=2', '--verbose']),
+    ).toMatchObject({
+      verbose: true,
+      maxPrompts: 2,
+      configPath: 'config.json',
+    });
+  });
+
+  // #endregion
+
+  // #region --dry-run
+
+  it('dryRun defaults to false', () => {
+    expect(parseArgs(['config.json']).dryRun).toBe(false);
+  });
+
+  it('sets dryRun when --dry-run is present', () => {
+    expect(parseArgs(['--dry-run', 'config.json']).dryRun).toBe(true);
+  });
+
+  it('accepts --dry-run after the config path', () => {
+    expect(parseArgs(['config.json', '--dry-run']).dryRun).toBe(true);
+  });
+
+  it('accepts --dryRun in camelCase', () => {
+    expect(parseArgs(['--dryRun', 'config.json']).dryRun).toBe(true);
+  });
+
+  it('accepts --dry_run in snake_case', () => {
+    expect(parseArgs(['--dry_run', 'config.json']).dryRun).toBe(true);
+  });
+
+  it('accepts --DRY-RUN in upper case', () => {
+    expect(parseArgs(['--DRY-RUN', 'config.json']).dryRun).toBe(true);
+  });
+
+  // #endregion
+
+  it('throws when --verbose is given a value', () => {
+    expect(() => parseArgs(['--verbose=true', 'config.json'])).toThrow(
+      'Option --verbose does not take a value',
+    );
+  });
+
+  it('throws when --dry-run is given a value', () => {
+    expect(() => parseArgs(['--dry-run=true', 'config.json'])).toThrow(
+      'Option --dry-run does not take a value',
+    );
+  });
 });
 
 describe('loadCliConfig', () => {
