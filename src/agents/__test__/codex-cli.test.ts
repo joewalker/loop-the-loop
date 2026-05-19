@@ -28,6 +28,7 @@ class FakeStream extends EventEmitter {
 class FakeChildProcess extends EventEmitter {
   readonly stdout = new FakeStream();
   readonly stderr = new FakeStream();
+  readonly kill = vi.fn((_signal?: NodeJS.Signals | number): boolean => true);
 }
 
 describe('CodexCLIAgent', () => {
@@ -167,6 +168,137 @@ describe('CodexCLIAgent', () => {
       expect(result.reason).toContain('exit code: 1');
       expect(result.reason).not.toContain('agent_message');
       expect(result.reason).not.toContain('verbose event');
+    }
+  });
+
+  it('aborts a hung invocation when the caller signals abort', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue('');
+
+    const controller = new AbortController();
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    // Simulate the child process terminating in response to SIGTERM.
+    child.emit('close', null, 'SIGTERM');
+
+    const result = await resultPromise;
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(result.status).toBe('glitch');
+    if (result.status !== 'success') {
+      expect(result.reason).toMatch(/aborted/i);
+    }
+  });
+
+  it('returns a glitch when codex exceeds the configured timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+      readFileMock.mockResolvedValue('');
+
+      const agent = new CodexCLIAgent({ timeoutMs: 1_000 });
+      const resultPromise = agent.invoke('do the thing', {
+        logger: createLogger(false),
+      });
+
+      // Advance past the timeout. The agent should SIGTERM and then settle
+      // when the child eventually closes.
+      await vi.advanceTimersByTimeAsync(1_001);
+      expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+
+      // Simulate the child eventually exiting in response to SIGTERM.
+      child.emit('close', null, 'SIGTERM');
+
+      const result = await resultPromise;
+      expect(result.status).toBe('glitch');
+      if (result.status !== 'success') {
+        expect(result.reason).toMatch(/timed out/i);
+        expect(result.reason).toContain('1000');
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('escalates to SIGKILL when SIGTERM does not stop the child', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+      readFileMock.mockResolvedValue('');
+
+      const agent = new CodexCLIAgent({ timeoutMs: 1_000 });
+      const resultPromise = agent.invoke('do the thing', {
+        logger: createLogger(false),
+      });
+
+      await vi.advanceTimersByTimeAsync(1_001);
+      expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+
+      // The child ignores SIGTERM. After the kill grace period elapses we
+      // should escalate to SIGKILL.
+      await vi.advanceTimersByTimeAsync(5_001);
+      expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+
+      child.emit('close', null, 'SIGKILL');
+      const result = await resultPromise;
+      expect(result.status).toBe('glitch');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the timeout when the child exits normally', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent({ timeoutMs: 1_000 });
+      const resultPromise = agent.invoke('do the thing', {
+        logger: createLogger(false),
+      });
+
+      child.emit('close', 0, null);
+      await expect(resultPromise).resolves.toStrictEqual({
+        status: 'success',
+        output: 'final answer',
+      });
+
+      // Advance past the would-have-been timeout. The child should not be
+      // killed since the run already settled.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(child.kill).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns a glitch when the abort signal is already aborted', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue('');
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+      signal: controller.signal,
+    });
+
+    child.emit('close', null, 'SIGTERM');
+    const result = await resultPromise;
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    expect(result.status).toBe('glitch');
+    if (result.status !== 'success') {
+      expect(result.reason).toMatch(/aborted/i);
     }
   });
 

@@ -12,7 +12,27 @@ import type { InvokeResult } from '../types.js';
 const CODEX_MODEL = process.env['CODEX_MODEL'];
 
 const MAX_CODEX_CAPTURED_OUTPUT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * How long to wait after sending SIGTERM before escalating to SIGKILL.
+ */
+const KILL_GRACE_PERIOD_MS = 5_000;
+
 type JsonObject = Record<string, unknown>;
+
+/**
+ * Configuration for `CodexCLIAgent`. Currently scoped to timeout behaviour
+ * but designed to grow alongside the Codex CLI surface.
+ */
+export interface CodexCLIAgentConfig {
+  /**
+   * Maximum time in milliseconds to wait for a single Codex invocation to
+   * complete before sending SIGTERM (and SIGKILL after a short grace
+   * period). When omitted no timeout is applied. Callers can still cancel
+   * a run via `InvokeOptions.signal`.
+   */
+  readonly timeoutMs?: number;
+}
 
 /**
  * An implementation of the Agent interface that uses Codex via the command
@@ -21,8 +41,14 @@ type JsonObject = Record<string, unknown>;
 export class CodexCLIAgent implements Agent {
   static readonly agentName = 'codex-cli';
 
-  static async create(): Promise<Agent> {
-    return new CodexCLIAgent();
+  static async create(config?: CodexCLIAgentConfig): Promise<Agent> {
+    return new CodexCLIAgent(config);
+  }
+
+  readonly #config: CodexCLIAgentConfig;
+
+  constructor(config: CodexCLIAgentConfig = {}) {
+    this.#config = config;
   }
 
   /**
@@ -33,7 +59,24 @@ export class CodexCLIAgent implements Agent {
     const args = buildCommandArgs(outputPath, prompt, options);
 
     try {
-      const codexResult = await runCodex(args, options?.logger);
+      const timeoutMs = this.#config.timeoutMs;
+      const codexResult = await runCodex(args, options?.logger, {
+        timeoutMs,
+        signal: options?.signal,
+      });
+
+      if (codexResult.timedOut) {
+        return {
+          status: 'glitch',
+          reason: `Codex timed out after ${String(timeoutMs)}ms`,
+        };
+      }
+      if (codexResult.aborted) {
+        return {
+          status: 'glitch',
+          reason: 'Codex invocation aborted by caller',
+        };
+      }
 
       if (codexResult.code === 0 && codexResult.error === undefined) {
         const output = await safeReadOutput(outputPath);
@@ -78,6 +121,13 @@ interface CodexProcessResult {
   readonly truncatedStderrBytes: number;
   readonly maxCapturedOutputBytes: number;
   readonly error?: Error | undefined;
+  readonly timedOut?: boolean;
+  readonly aborted?: boolean;
+}
+
+interface RunCodexOptions {
+  readonly timeoutMs?: number | undefined;
+  readonly signal?: AbortSignal | undefined;
 }
 
 /**
@@ -126,10 +176,17 @@ function buildCommandArgs(
 
 /**
  * Spawn Codex and stream JSONL status events into the verbose logger.
+ *
+ * When `runOptions.timeoutMs` is set, the child is sent SIGTERM if it does
+ * not exit in time and then escalated to SIGKILL after a short grace
+ * period. When `runOptions.signal` is provided, aborting the signal does
+ * the same. In both cases the returned result has `timedOut` or `aborted`
+ * set so the caller can classify the outcome.
  */
 function runCodex(
   args: ReadonlyArray<string>,
   logger?: Logger | undefined,
+  runOptions: RunCodexOptions = {},
 ): Promise<CodexProcessResult> {
   return new Promise(resolve => {
     const child = spawn('codex', [...args], {
@@ -149,15 +206,87 @@ function runCodex(
       : undefined;
     const output = new CappedProcessOutput(MAX_CODEX_CAPTURED_OUTPUT_BYTES);
     let settled = false;
+    let timedOut = false;
+    let aborted = false;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    let killHandle: ReturnType<typeof setTimeout> | undefined;
+
+    const safeKill = (signal: NodeJS.Signals): void => {
+      try {
+        child.kill(signal);
+      } catch {
+        // Best effort: the child may already have exited.
+      }
+    };
+
+    const escalateToSigkill = (): void => {
+      if (killHandle !== undefined) {
+        return;
+      }
+      killHandle = setTimeout(() => {
+        safeKill('SIGKILL');
+      }, KILL_GRACE_PERIOD_MS);
+      killHandle.unref?.();
+    };
+
+    const cleanupTimers = (): void => {
+      if (timeoutHandle !== undefined) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = undefined;
+      }
+      if (killHandle !== undefined) {
+        clearTimeout(killHandle);
+        killHandle = undefined;
+      }
+    };
+
+    const onAbort = (): void => {
+      if (settled) {
+        return;
+      }
+      aborted = true;
+      safeKill('SIGTERM');
+      escalateToSigkill();
+    };
+
+    const signal = runOptions.signal;
+    if (signal !== undefined) {
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    }
+
+    if (runOptions.timeoutMs !== undefined && runOptions.timeoutMs > 0) {
+      timeoutHandle = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        timedOut = true;
+        safeKill('SIGTERM');
+        escalateToSigkill();
+      }, runOptions.timeoutMs);
+      timeoutHandle.unref?.();
+    }
 
     const finish = (result: CodexProcessResult): void => {
       if (settled) {
         return;
       }
       settled = true;
+      cleanupTimers();
+      if (signal !== undefined) {
+        signal.removeEventListener('abort', onAbort);
+      }
       stdoutLogger?.flush();
       stderrLogger?.flush();
-      resolve(result);
+      const annotated: CodexProcessResult = {
+        ...result,
+        ...(timedOut ? { timedOut: true } : {}),
+        ...(aborted ? { aborted: true } : {}),
+      };
+      resolve(annotated);
     };
 
     child.stdout.setEncoding('utf8');
@@ -176,8 +305,8 @@ function runCodex(
       finish(output.toResult(null, null, error));
     });
 
-    child.on('close', (code, signal) => {
-      finish(output.toResult(code, signal));
+    child.on('close', (code, closeSignal) => {
+      finish(output.toResult(code, closeSignal));
     });
   });
 }

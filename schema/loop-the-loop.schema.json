@@ -68,8 +68,29 @@
             { "const": "claude-sdk" },
             { "$ref": "#/definitions/claudeSdkAgentConfig" }
           ]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
+          "items": [
+            { "const": "codex-cli" },
+            { "$ref": "#/definitions/codexCliAgentConfig" }
+          ]
         }
       ]
+    },
+    "codexCliAgentConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum time in milliseconds to wait for a single Codex invocation before sending SIGTERM (then SIGKILL after a short grace period). When omitted, no timeout is applied."
+        }
+      }
     },
     "claudeSdkAgentConfig": {
       "type": "object",

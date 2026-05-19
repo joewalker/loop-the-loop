@@ -21,6 +21,14 @@ export interface InvokeOptions {
    * When true, agents may make source changes during this invocation.
    */
   readonly allowSourceUpdate?: boolean;
+
+  /**
+   * Optional abort signal. When the signal is aborted the agent should
+   * cancel any in-flight work (terminating child processes, closing
+   * network requests, etc.) and resolve with a `glitch` result so the
+   * loop can continue to the next prompt.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /**
