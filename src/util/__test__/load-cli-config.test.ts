@@ -228,7 +228,7 @@ describe('loadCliConfig', () => {
       `${JSON.stringify(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'per-file',
             {
@@ -305,7 +305,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: [
           'bugzilla',
           {
@@ -327,7 +327,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -347,7 +347,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -367,7 +367,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -390,7 +390,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -415,7 +415,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: [
           'batch',
           {
@@ -468,7 +468,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: [
           'github',
           {
@@ -492,7 +492,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: [
           'json',
           {
@@ -514,7 +514,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'github',
             {
@@ -537,7 +537,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'github',
             {
@@ -560,7 +560,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -583,7 +583,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -609,7 +609,7 @@ describe('loadCliConfig', () => {
       `${JSON.stringify(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -652,7 +652,7 @@ describe('loadCliConfig', () => {
       `${JSON.stringify(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -693,7 +693,7 @@ describe('loadCliConfig', () => {
       `${JSON.stringify(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -759,7 +759,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: generator,
       },
       join(tempDir, 'config.json'),
@@ -776,7 +776,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         outputDir,
         promptGenerator: [
           'per-file',
@@ -799,7 +799,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         outputDir: 'reports',
         promptGenerator: [
           'per-file',
@@ -820,7 +820,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: [
           'bugzilla',
           {
@@ -851,7 +851,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -879,7 +879,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: ['github', 'nope' as unknown as GitHubTask],
         },
         join(configDir, 'config.json'),
@@ -894,7 +894,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'github',
             {
@@ -914,7 +914,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'github',
             {
@@ -934,7 +934,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: ['gitlab', null as unknown as GitLabTask],
         },
         join(configDir, 'config.json'),
@@ -949,7 +949,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -969,7 +969,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -989,7 +989,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -1013,7 +1013,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: ['bugzilla', 'oops' as unknown as BugzillaTask],
         },
         join(configDir, 'config.json'),
@@ -1028,7 +1028,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1051,7 +1051,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1073,7 +1073,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: [
           'bugzilla',
           {
@@ -1105,7 +1105,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1126,7 +1126,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1147,7 +1147,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1170,7 +1170,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1191,7 +1191,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1220,7 +1220,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -1241,7 +1241,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -1262,7 +1262,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -1283,7 +1283,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'test',
             'oops' as unknown as { prompts: ReadonlyArray<string> },
@@ -1301,7 +1301,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'test',
             { prompts: [42] as unknown as ReadonlyArray<string> },
@@ -1318,7 +1318,7 @@ describe('loadCliConfig', () => {
     const config = await normalizeCliConfig(
       {
         name: 'test',
-        agent: 'test',
+        agent: 'claude-sdk',
         promptGenerator: ['test', { prompts: ['hello'] }],
       },
       join(configDir, 'config.json'),
@@ -1337,7 +1337,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: ['json', 'oops' as unknown as JsonTask],
         },
         join(configDir, 'config.json'),
@@ -1352,7 +1352,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'json',
             {
@@ -1374,7 +1374,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: ['per-file', 'oops' as unknown as PerFileTask],
         },
         join(configDir, 'config.json'),
@@ -1389,7 +1389,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: ['batch', 'oops' as unknown as BatchTask],
         },
         join(configDir, 'config.json'),
@@ -1404,7 +1404,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'batch',
             {
@@ -1425,7 +1425,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'batch',
             {
@@ -1448,7 +1448,7 @@ describe('loadCliConfig', () => {
       normalizeCliConfig(
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'batch',
             {

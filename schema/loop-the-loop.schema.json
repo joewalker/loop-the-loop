@@ -57,7 +57,7 @@
       "oneOf": [
         {
           "type": "string",
-          "enum": ["claude-sdk", "codex-cli", "test"]
+          "enum": ["claude-sdk", "codex-cli"]
         },
         {
           "type": "array",

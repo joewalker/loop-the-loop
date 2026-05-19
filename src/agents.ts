@@ -1,6 +1,5 @@
 import { ClaudeSDKAgent } from './agents/claude-sdk.js';
 import { CodexCLIAgent } from './agents/codex-cli.js';
-import { TestAgent } from './agents/test.js';
 import type { Logger } from './loggers.js';
 import type { InvokeResult } from './types.js';
 
@@ -51,12 +50,18 @@ export interface Agent {
 export type AgentCreator = (...args: Array<any>) => Promise<Agent>;
 
 /**
- * To add a new built-in Agent, add its creator function here
+ * To add a new built-in Agent, add its creator function here.
+ *
+ * `TestAgent` is intentionally not registered here. It is a test-only utility
+ * that has no way to receive canned responses through a CLI JSON config, so
+ * exposing it as a selectable CLI agent leaves users with a confusing error
+ * on the first prompt (see joewalker/loop-the-loop#19). Tests that need a
+ * `TestAgent` import it directly from `loop-the-loop/agents/test` and call
+ * `setNextInvokeResult` on the concrete instance.
  */
 const agentCreators = {
   [ClaudeSDKAgent.agentName]: ClaudeSDKAgent.create,
   [CodexCLIAgent.agentName]: CodexCLIAgent.create,
-  [TestAgent.agentName]: TestAgent.create,
 } satisfies Record<string, AgentCreator>;
 
 type AgentCreators = typeof agentCreators;
@@ -92,6 +97,11 @@ export const agentTypes = Object.keys(agentCreators);
 export async function createAgent(agentSpec: AgentSpec): Promise<Agent> {
   if (typeof agentSpec === 'string') {
     const creator = agentCreators[agentSpec];
+    if (creator == null) {
+      throw new Error(
+        `Unknown agent '${agentSpec}'. Known agents: ${agentTypes.join('\n')}.`,
+      );
+    }
     return creator();
   }
 

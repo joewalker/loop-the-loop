@@ -7,17 +7,22 @@ import { TestAgent } from 'loop-the-loop/agents/test';
 import { describe, expect, it } from 'vitest';
 
 describe('agentTypes', () => {
-  it('should include default, claude-sdk, codex-cli, and test', () => {
+  it('should include claude-sdk and codex-cli', () => {
     expect(agentTypes).toContain(ClaudeSDKAgent.agentName);
     expect(agentTypes).toContain(CodexCLIAgent.agentName);
-    expect(agentTypes).toContain(TestAgent.agentName);
+  });
+
+  it('should not expose TestAgent as a CLI-selectable agent', () => {
+    expect(agentTypes).not.toContain(TestAgent.agentName);
   });
 });
 
 describe('createAgent', () => {
-  it('should create a TestAgent when type is "test"', async () => {
-    const agent = await createAgent(TestAgent.agentName);
-    expect(agent).toBeInstanceOf(TestAgent);
+  it('should reject the bare "test" agent name', async () => {
+    const spec = TestAgent.agentName as unknown as Parameters<
+      typeof createAgent
+    >[0];
+    await expect(createAgent(spec)).rejects.toThrow(/test/);
   });
 
   it('should return a pre-constructed Agent instance as-is', async () => {

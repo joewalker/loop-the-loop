@@ -74,7 +74,7 @@ describe('CLI config schema', () => {
         'bugzilla with change clause',
         {
           name: 'change',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'bugzilla',
             {
@@ -116,7 +116,7 @@ describe('CLI config schema', () => {
         'github issue search',
         {
           name: 'github',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'github',
             {
@@ -136,7 +136,7 @@ describe('CLI config schema', () => {
         'gitlab issue search',
         {
           name: 'gitlab',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'gitlab',
             {
@@ -157,7 +157,7 @@ describe('CLI config schema', () => {
         'test prompts',
         {
           name: 'test',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'test',
             {
@@ -247,11 +247,24 @@ describe('CLI config schema', () => {
         'rejects malformed test prompts',
         {
           name: 'x',
-          agent: 'test',
+          agent: 'claude-sdk',
           promptGenerator: [
             'test',
             {
               prompts: ['First prompt', 42],
+            },
+          ],
+        },
+      ],
+      [
+        'rejects bare "test" agent (test-only utility)',
+        {
+          name: 'x',
+          agent: 'test',
+          promptGenerator: [
+            'test',
+            {
+              prompts: ['First prompt'],
             },
           ],
         },
