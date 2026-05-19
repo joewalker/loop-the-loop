@@ -92,11 +92,15 @@ export class CodexCLIAgent implements Agent {
 
       const output = await safeReadOutput(outputPath);
       const baseError = buildExecErrorText(codexResult);
-      const errorText = (output ? `${baseError}\n${output}` : baseError).trim();
-
       const reason =
-        errorText || 'Codex invocation failed with no error output';
-      const status = isTokenLimitError(reason) ? 'glitch' : 'error';
+        (output ? `${baseError}\n${output}` : baseError).trim() ||
+        'Codex invocation failed with no error output';
+
+      // Classify only from process metadata (`baseError`), never from the
+      // assistant body. Otherwise prompts that elicit words like "token"
+      // would be misclassified as transient glitches and retried up to
+      // MAX_CONSECUTIVE_GLITCHES times. See issue #14.
+      const status = isTokenLimitError(baseError) ? 'glitch' : 'error';
       return { status, reason };
     } finally {
       try {
@@ -131,12 +135,19 @@ interface RunCodexOptions {
 }
 
 /**
- * Return whether Codex output looks like a transient token/quota failure.
+ * Return whether Codex process metadata looks like a transient token/quota
+ * failure. The patterns here are intentionally narrow: the bare word
+ * `token` matches far too many unrelated errors (tokenisers, JWTs, OAuth
+ * tokens, etc.), so we require a phrase that is specific to model token
+ * accounting. See issue #14.
  */
 function isTokenLimitError(text: string): boolean {
   const lower = text.toLowerCase();
   return (
-    lower.includes('token') ||
+    lower.includes('tokens remaining') ||
+    lower.includes('token limit') ||
+    lower.includes('token quota') ||
+    lower.includes('context window') ||
     lower.includes('rate_limit') ||
     lower.includes('rate limit') ||
     lower.includes('quota') ||

@@ -302,6 +302,98 @@ describe('CodexCLIAgent', () => {
     }
   });
 
+  it('classifies failures as error when only the assistant body mentions tokens', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue(
+      'Here is an explanation of OAuth tokens and bearer tokens.',
+    );
+
+    const resultPromise = new CodexCLIAgent().invoke(
+      'Explain how OAuth tokens work.',
+      {
+        logger: createLogger(false),
+      },
+    );
+
+    child.stderr.emit('data', 'unrelated authentication failure\n');
+    child.emit('close', 1, null);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('error');
+    if (result.status !== 'success') {
+      expect(result.reason).toContain('OAuth tokens');
+      expect(result.reason).toContain('unrelated authentication failure');
+    }
+  });
+
+  it('classifies a rate-limited failure as a glitch from stderr alone', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue('');
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+    });
+
+    child.stderr.emit('data', 'request failed: 429 Too Many Requests\n');
+    child.emit('close', 1, null);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('glitch');
+  });
+
+  it('classifies a context-window failure as a glitch when stderr reports it', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue('');
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+    });
+
+    child.stderr.emit('data', 'prompt exceeds the model context window\n');
+    child.emit('close', 1, null);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('glitch');
+  });
+
+  it('classifies a token-limit failure as a glitch when stderr mentions token limits', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue('');
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+    });
+
+    child.stderr.emit('data', 'request exceeded the token limit\n');
+    child.emit('close', 1, null);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('glitch');
+  });
+
+  it('does not classify stderr containing only the bare word "token" as a glitch', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+    readFileMock.mockResolvedValue('');
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+    });
+
+    child.stderr.emit(
+      'data',
+      'TypeError: failed to tokenize input at module foo\n',
+    );
+    child.emit('close', 1, null);
+
+    const result = await resultPromise;
+    expect(result.status).toBe('error');
+  });
+
   it('caps captured process output while counting total bytes', async () => {
     const child = new FakeChildProcess();
     const maxCapturedOutputBytes = 10 * 1024 * 1024;
