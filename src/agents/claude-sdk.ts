@@ -187,7 +187,7 @@ export class ClaudeSDKAgent implements Agent {
           }
 
           const reason = this.#buildErrorReason(
-            this.#describeResultError(message.subtype, resultMsg),
+            describeResultError(message.subtype, resultMsg),
             stderrChunks,
           );
           logger.error(`Agent result: ${reason}`);
@@ -227,24 +227,6 @@ export class ClaudeSDKAgent implements Agent {
   }
 
   /**
-   * Builds a descriptive error message from a non-success result message,
-   * including the subtype and any error/message fields present on the result.
-   */
-  #describeResultError(
-    subtype: string | undefined,
-    resultMsg: Record<string, unknown>,
-  ): string {
-    const parts: Array<string> = [`subtype=${subtype ?? 'unknown'}`];
-    if (typeof resultMsg['error'] === 'string' && resultMsg['error']) {
-      parts.push(`error=${resultMsg['error']}`);
-    }
-    if (typeof resultMsg['message'] === 'string' && resultMsg['message']) {
-      parts.push(`message=${resultMsg['message']}`);
-    }
-    return `Agent invocation failed (${parts.join(', ')})`;
-  }
-
-  /**
    * Combines an error message with any captured stderr output to provide
    * more diagnostic context when the Claude Code process fails.
    */
@@ -258,6 +240,57 @@ export class ClaudeSDKAgent implements Agent {
     }
     return `${message}\nstderr: ${stderr}`;
   }
+}
+
+/**
+ * Build a descriptive failure reason from a non-success SDK result
+ * message. Surfaces the structured fields the SDK actually populates
+ * (`errors: string[]`, `terminal_reason`, `stop_reason`) so callers can
+ * tell what went wrong instead of seeing only `subtype=...`.
+ *
+ * Per `SDKResultError` in `@anthropic-ai/claude-agent-sdk/sdk.d.ts`, the
+ * diagnostic text lives on `errors: string[]`. The legacy `error` and
+ * `message` field reads are kept as a defensive fallback in case the
+ * SDK shape changes or a non-standard transport synthesises a result.
+ * See joewalker/loop-the-loop#6.
+ */
+export function describeResultError(
+  subtype: string | undefined,
+  resultMsg: Record<string, unknown>,
+): string {
+  const parts: Array<string> = [`subtype=${subtype ?? 'unknown'}`];
+
+  const rawErrors = resultMsg['errors'];
+  if (Array.isArray(rawErrors)) {
+    const errorStrings = rawErrors.filter(
+      (e): e is string => typeof e === 'string' && e.length > 0,
+    );
+    if (errorStrings.length > 0) {
+      parts.push(`errors=${errorStrings.join('; ')}`);
+    }
+  }
+
+  const terminalReason = resultMsg['terminal_reason'];
+  if (typeof terminalReason === 'string' && terminalReason) {
+    parts.push(`terminal_reason=${terminalReason}`);
+  }
+
+  const stopReason = resultMsg['stop_reason'];
+  if (typeof stopReason === 'string' && stopReason) {
+    parts.push(`stop_reason=${stopReason}`);
+  }
+
+  // Defensive fallback: older or alternative shapes may put diagnostic
+  // text on `error` or `message` instead of (or in addition to) the
+  // `errors` array.
+  if (typeof resultMsg['error'] === 'string' && resultMsg['error']) {
+    parts.push(`error=${resultMsg['error']}`);
+  }
+  if (typeof resultMsg['message'] === 'string' && resultMsg['message']) {
+    parts.push(`message=${resultMsg['message']}`);
+  }
+
+  return `Agent invocation failed (${parts.join(', ')})`;
 }
 
 /**

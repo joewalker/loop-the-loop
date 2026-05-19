@@ -3,6 +3,7 @@
 import {
   classifyResultStatus,
   configureQueryOptions,
+  describeResultError,
   isTokenLimitError,
 } from 'loop-the-loop/agents/claude-sdk';
 import { describe, expect, it } from 'vitest';
@@ -148,6 +149,67 @@ describe('configureQueryOptions', () => {
       expect(isTokenLimitError('ENOENT: no such file or directory')).toBe(
         false,
       );
+    });
+  });
+
+  describe('describeResultError', () => {
+    it('surfaces the SDK `errors` array joined into the reason', () => {
+      // Regression for joewalker/loop-the-loop#6: the SDK puts the
+      // diagnostic strings on `errors: string[]`, not on `error` or
+      // `message`. Previously the reason only said
+      // `subtype=error_during_execution` with no detail.
+      const reason = describeResultError('error_during_execution', {
+        errors: ['mcp tool failed', 'connection refused'],
+      });
+      expect(reason).toContain('subtype=error_during_execution');
+      expect(reason).toContain('errors=mcp tool failed; connection refused');
+    });
+
+    it('ignores non-string entries in the SDK `errors` array', () => {
+      const reason = describeResultError('error_during_execution', {
+        errors: ['boom', 42, null, 'kaboom'],
+      });
+      expect(reason).toContain('errors=boom; kaboom');
+    });
+
+    it('omits the errors clause when the array is empty', () => {
+      const reason = describeResultError('error_during_execution', {
+        errors: [],
+      });
+      expect(reason).not.toContain('errors=');
+    });
+
+    it('surfaces `terminal_reason` and `stop_reason` when present', () => {
+      const reason = describeResultError('error_during_execution', {
+        errors: ['boom'],
+        terminal_reason: 'blocking_limit',
+        stop_reason: 'max_tokens',
+      });
+      expect(reason).toContain('terminal_reason=blocking_limit');
+      expect(reason).toContain('stop_reason=max_tokens');
+    });
+
+    it('falls back to legacy `error` and `message` fields if no `errors` array', () => {
+      // Keep the legacy reads as a defensive fallback so older or
+      // alternative result shapes still produce useful diagnostics.
+      const reason = describeResultError('error_during_execution', {
+        error: 'legacy error string',
+        message: 'legacy message string',
+      });
+      expect(reason).toContain('error=legacy error string');
+      expect(reason).toContain('message=legacy message string');
+    });
+
+    it('describes the subtype even when no diagnostic fields are present', () => {
+      const reason = describeResultError('error_during_execution', {});
+      expect(reason).toBe(
+        'Agent invocation failed (subtype=error_during_execution)',
+      );
+    });
+
+    it('handles an undefined subtype gracefully', () => {
+      const reason = describeResultError(undefined, {});
+      expect(reason).toContain('subtype=unknown');
     });
   });
 
