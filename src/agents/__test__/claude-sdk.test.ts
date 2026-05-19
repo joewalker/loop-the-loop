@@ -1,6 +1,10 @@
 // @module-tag local
 
-import { configureQueryOptions } from 'loop-the-loop/agents/claude-sdk';
+import {
+  classifyResultStatus,
+  configureQueryOptions,
+  isTokenLimitError,
+} from 'loop-the-loop/agents/claude-sdk';
 import { describe, expect, it } from 'vitest';
 
 describe('configureQueryOptions', () => {
@@ -87,6 +91,114 @@ describe('configureQueryOptions', () => {
       });
       expect(result.tools).toEqual(['Bash']);
       expect(result.allowedTools).toEqual(['Bash(ls *)']);
+    });
+  });
+
+  describe('isTokenLimitError', () => {
+    it('matches a rate-limit phrase regardless of letter case', () => {
+      // Regression for joewalker/loop-the-loop#8: prior to the fix the
+      // substring check was case-sensitive, so HTTP status text using
+      // "Rate Limit" did not classify as a transient glitch.
+      expect(isTokenLimitError('HTTP 429: Rate limit exceeded')).toBe(true);
+      expect(isTokenLimitError('HTTP 429: RATE LIMIT EXCEEDED')).toBe(true);
+    });
+
+    it('matches the `rate_limit` underscore variant case-insensitively', () => {
+      expect(isTokenLimitError('rate_limit reached')).toBe(true);
+      expect(isTokenLimitError('Rate_Limit reached')).toBe(true);
+    });
+
+    it('matches the bare 429 status code', () => {
+      expect(isTokenLimitError('request failed: 429 Too Many Requests')).toBe(
+        true,
+      );
+    });
+
+    it('matches "quota" case-insensitively', () => {
+      expect(isTokenLimitError('Quota exceeded for the day')).toBe(true);
+    });
+
+    it('matches "context window" phrasing', () => {
+      expect(isTokenLimitError('prompt exceeds the model context window')).toBe(
+        true,
+      );
+    });
+
+    it('matches a "token limit" phrase', () => {
+      expect(isTokenLimitError('request exceeded the Token Limit')).toBe(true);
+    });
+
+    it('does not match unrelated errors that just contain the word "token"', () => {
+      // Regression for joewalker/loop-the-loop#8: the bare substring
+      // `"token"` was previously broad enough to misclassify unrelated
+      // errors (tokenisers, JWTs, OAuth tokens, etc.) as transient
+      // glitches and keep retrying them indefinitely.
+      expect(isTokenLimitError('TypeError: failed to tokenize input')).toBe(
+        false,
+      );
+      expect(
+        isTokenLimitError('OAuth bearer token rejected: invalid signature'),
+      ).toBe(false);
+      expect(
+        isTokenLimitError('Unexpected token < in JSON at position 0'),
+      ).toBe(false);
+    });
+
+    it('does not match an unrelated failure', () => {
+      expect(isTokenLimitError('ENOENT: no such file or directory')).toBe(
+        false,
+      );
+    });
+  });
+
+  describe('classifyResultStatus', () => {
+    it('classifies the SDK `error_max_budget_usd` subtype as a glitch', () => {
+      // The SDK signals that the budget cap was hit via the result
+      // subtype rather than the reason string; prefer the structured
+      // field over substring sniffing.
+      expect(
+        classifyResultStatus('error_max_budget_usd', {}, 'budget exhausted'),
+      ).toBe('glitch');
+    });
+
+    it('classifies a `blocking_limit` terminal_reason as a glitch', () => {
+      expect(
+        classifyResultStatus(
+          'error_during_execution',
+          { terminal_reason: 'blocking_limit' },
+          'failure',
+        ),
+      ).toBe('glitch');
+    });
+
+    it('classifies a `rapid_refill_breaker` terminal_reason as a glitch', () => {
+      expect(
+        classifyResultStatus(
+          'error_during_execution',
+          { terminal_reason: 'rapid_refill_breaker' },
+          'failure',
+        ),
+      ).toBe('glitch');
+    });
+
+    it('falls back to substring matching when no structured signal is set', () => {
+      expect(
+        classifyResultStatus(
+          'error_during_execution',
+          {},
+          'HTTP 429: Rate limit exceeded',
+        ),
+      ).toBe('glitch');
+    });
+
+    it('returns `error` for an unrelated failure with no structured signal', () => {
+      expect(
+        classifyResultStatus(
+          'error_during_execution',
+          {},
+          'unexpected JSON parse failure',
+        ),
+      ).toBe('error');
     });
   });
 

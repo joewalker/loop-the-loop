@@ -191,7 +191,11 @@ export class ClaudeSDKAgent implements Agent {
             stderrChunks,
           );
           logger.error(`Agent result: ${reason}`);
-          const status = this.#isTokenLimitError(reason) ? 'glitch' : 'error';
+          const status = classifyResultStatus(
+            message.subtype,
+            resultMsg,
+            reason,
+          );
           return { status, reason };
         }
       }
@@ -206,7 +210,7 @@ export class ClaudeSDKAgent implements Agent {
         stderrChunks,
       );
       logger.error(`Agent exception: ${reason}`);
-      const status = this.#isTokenLimitError(reason) ? 'glitch' : 'error';
+      const status = isTokenLimitError(reason) ? 'glitch' : 'error';
       return { status, reason };
     }
   }
@@ -254,15 +258,66 @@ export class ClaudeSDKAgent implements Agent {
     }
     return `${message}\nstderr: ${stderr}`;
   }
+}
 
-  #isTokenLimitError(text: string): boolean {
-    // TODO: This is a bit wooly. Is there a error id associated with this?
-    return (
-      text.includes('token') ||
-      text.includes('rate_limit') ||
-      text.includes('quota')
-    );
+/**
+ * Classify a non-success SDK result as either a transient `glitch`
+ * (which the loop tolerates up to `MAX_CONSECUTIVE_GLITCHES`) or a
+ * fatal `error` (which aborts the loop immediately).
+ *
+ * The SDK exposes structured failure shapes that are far more reliable
+ * than substring sniffing, so this helper checks those first:
+ *
+ * - The `error_max_budget_usd` result subtype signals that the
+ *   configured cost cap was reached and should be treated as transient.
+ * - The `blocking_limit` and `rapid_refill_breaker` terminal reasons
+ *   are the SDK's typed rate-limit signals.
+ *
+ * Only when no structured signal applies do we fall back to substring
+ * matching via `isTokenLimitError`. See joewalker/loop-the-loop#8.
+ */
+export function classifyResultStatus(
+  subtype: string | undefined,
+  resultMsg: Record<string, unknown>,
+  reason: string,
+): 'glitch' | 'error' {
+  if (subtype === 'error_max_budget_usd') {
+    return 'glitch';
   }
+  const terminalReason = resultMsg['terminal_reason'];
+  if (
+    terminalReason === 'blocking_limit' ||
+    terminalReason === 'rapid_refill_breaker'
+  ) {
+    return 'glitch';
+  }
+  return isTokenLimitError(reason) ? 'glitch' : 'error';
+}
+
+/**
+ * Return whether SDK error text looks like a transient token/quota or
+ * rate-limit failure. The patterns are deliberately narrow because the
+ * bare word `token` matches far too many unrelated errors (tokenisers,
+ * OAuth tokens, JWTs, "Unexpected token" JSON parse errors, etc.) and
+ * would otherwise cause the loop to retry real prompt errors up to
+ * `MAX_CONSECUTIVE_GLITCHES` times.
+ *
+ * Matching is case-insensitive so that capitalised HTTP status text
+ * like `"HTTP 429: Rate limit exceeded"` is recognised as a glitch.
+ * See joewalker/loop-the-loop#8 and #14.
+ */
+export function isTokenLimitError(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes('tokens remaining') ||
+    lower.includes('token limit') ||
+    lower.includes('token quota') ||
+    lower.includes('context window') ||
+    lower.includes('rate_limit') ||
+    lower.includes('rate limit') ||
+    lower.includes('quota') ||
+    lower.includes('429')
+  );
 }
 
 /**
