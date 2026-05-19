@@ -174,7 +174,7 @@ Source: `src/agents/claude-sdk.ts`
 Invokes the Codex CLI (`codex exec`) as an external process.
 
 - The `codex` binary must be installed, authenticated, and available on `PATH`
-- Sandbox mode: read-only
+- Sandbox mode: read-only by default; workspace-write when `allowSourceUpdate` is true
 - Custom model via `CODEX_MODEL` environment variable
 - Takes no configuration
 

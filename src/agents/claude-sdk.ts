@@ -16,8 +16,6 @@ import type {
 const DEFAULT_TOOLS = ['Read', 'Glob', 'Grep'];
 const DEFAULT_MAX_TURNS = 100;
 
-const permissionMode = 'acceptEdits'; // 'bypassPermissions'
-
 export interface ClaudeSDKAgentConfig {
   /**
    * Optional system prompt prepended to the conversation.
@@ -68,18 +66,17 @@ export class ClaudeSDKAgent implements Agent {
   }
 
   readonly #config: ClaudeSDKAgentConfig;
-  readonly #options: Options;
 
   constructor(config: ClaudeSDKAgentConfig) {
     this.#config = config;
-    this.#options = configureQueryOptions(this.#config);
   }
 
   async invoke(
     prompt: string,
     invokeOptions: InvokeOptions,
   ): Promise<InvokeResult> {
-    const { logger } = invokeOptions;
+    const { logger, allowSourceUpdate } = invokeOptions;
+    const options = configureQueryOptions(this.#config, allowSourceUpdate);
 
     const stderrChunks: Array<string> = [];
     try {
@@ -89,7 +86,7 @@ export class ClaudeSDKAgent implements Agent {
       const messages = query({
         prompt,
         options: {
-          ...this.#options,
+          ...options,
           stderr: (data: string) => {
             stderrChunks.push(data);
           },
@@ -242,7 +239,10 @@ export class ClaudeSDKAgent implements Agent {
  * pulls bare names (stripping any `(...)` suffix) for `tools`, deduplicates
  * them, and returns the original list unchanged for `allowedTools`.
  */
-export function configureQueryOptions(config: ClaudeSDKAgentConfig): Options {
+export function configureQueryOptions(
+  config: ClaudeSDKAgentConfig,
+  allowSourceUpdate = false,
+): Options {
   const tools = config.allowedTools ?? DEFAULT_TOOLS;
   const bareNames = new Set<string>();
   for (const tool of tools) {
@@ -283,7 +283,7 @@ export function configureQueryOptions(config: ClaudeSDKAgentConfig): Options {
     ...outputSchema,
     ...disallowedTools,
     ...mcpServers,
-    permissionMode,
+    permissionMode: allowSourceUpdate ? 'acceptEdits' : 'default',
     maxTurns: config.maxTurns ?? DEFAULT_MAX_TURNS,
   };
 }

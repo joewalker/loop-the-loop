@@ -17,6 +17,11 @@ export interface InvokeOptions {
    * text, etc.) through this logger.
    */
   readonly logger: Logger;
+
+  /**
+   * When true, agents may make source changes during this invocation.
+   */
+  readonly allowSourceUpdate?: boolean;
 }
 
 /**

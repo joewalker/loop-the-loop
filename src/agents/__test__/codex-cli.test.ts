@@ -61,6 +61,41 @@ describe('CodexCLIAgent', () => {
     );
   });
 
+  it('uses a read-only sandbox by default', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+    });
+
+    child.emit('close', 0, null);
+
+    await expect(resultPromise).resolves.toStrictEqual({
+      status: 'success',
+      output: 'final answer',
+    });
+    expect(getSpawnSandboxMode()).toBe('read-only');
+  });
+
+  it('uses a writable sandbox when source updates are allowed', async () => {
+    const child = new FakeChildProcess();
+    spawnMock.mockReturnValue(child);
+
+    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
+      logger: createLogger(false),
+      allowSourceUpdate: true,
+    });
+
+    child.emit('close', 0, null);
+
+    await expect(resultPromise).resolves.toStrictEqual({
+      status: 'success',
+      output: 'final answer',
+    });
+    expect(getSpawnSandboxMode()).toBe('workspace-write');
+  });
+
   it('logs Codex JSON events when verbose logging is enabled', async () => {
     const child = new FakeChildProcess();
     const logger = createLogger(true);
@@ -174,4 +209,11 @@ function createLogger(enabled: boolean): Logger {
     state: vi.fn(),
     info: vi.fn(),
   };
+}
+
+function getSpawnSandboxMode(): string | undefined {
+  const [, args] = spawnMock.mock.calls[0] as [string, Array<string>, unknown];
+  const sandboxFlagIndex = args.indexOf('--sandbox');
+  expect(sandboxFlagIndex).toBeGreaterThanOrEqual(0);
+  return args[sandboxFlagIndex + 1];
 }

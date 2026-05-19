@@ -104,7 +104,10 @@ async function loopImpl(config: LoopConfig): Promise<string> {
     logger.state(`Begin: ${prompt.id}`);
     await loopState.begin(prompt.id);
 
-    const result = await agent.invoke(prompt.prompt, { logger });
+    const result = await agent.invoke(prompt.prompt, {
+      logger,
+      allowSourceUpdate,
+    });
     await reporter.append(prompt, result);
     await loopState.end(prompt.id, result);
     logger.state(`End: ${prompt.id} (${result.status})`);

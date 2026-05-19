@@ -42,4 +42,17 @@ describe('splitAllowedTools', () => {
     expect(result.tools).toEqual([]);
     expect(result.allowedTools).toEqual([]);
   });
+
+  it('uses the default permission mode when source updates are not allowed', async () => {
+    const result = await configureQueryOptions({ allowedTools: ['Read'] });
+    expect(result.permissionMode).toBe('default');
+  });
+
+  it('uses acceptEdits when source updates are allowed', async () => {
+    const result = await configureQueryOptions(
+      { allowedTools: ['Read'] },
+      true,
+    );
+    expect(result.permissionMode).toBe('acceptEdits');
+  });
 });

@@ -11,7 +11,6 @@ import type { InvokeResult } from '../types.js';
 
 const CODEX_MODEL = process.env['CODEX_MODEL'];
 
-const sandboxMode = 'read-only'; //'workspace-write'
 const MAX_CODEX_CAPTURED_OUTPUT_BYTES = 10 * 1024 * 1024;
 type JsonObject = Record<string, unknown>;
 
@@ -31,7 +30,7 @@ export class CodexCLIAgent implements Agent {
    */
   async invoke(prompt: string, options?: InvokeOptions): Promise<InvokeResult> {
     const outputPath = createOutputPath();
-    const args = buildCommandArgs(outputPath, prompt);
+    const args = buildCommandArgs(outputPath, prompt, options);
 
     try {
       const codexResult = await runCodex(args, options?.logger);
@@ -98,7 +97,13 @@ function isTokenLimitError(text: string): boolean {
 /**
  * Translate task configuration into `codex exec` arguments.
  */
-function buildCommandArgs(outputPath: string, prompt: string): Array<string> {
+function buildCommandArgs(
+  outputPath: string,
+  prompt: string,
+  options?: InvokeOptions,
+): Array<string> {
+  const sandboxMode =
+    options?.allowSourceUpdate === true ? 'workspace-write' : 'read-only';
   const args: Array<string> = [
     'exec',
     '--json',

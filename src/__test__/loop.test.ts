@@ -5,10 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { loop } from 'loop-the-loop';
-import type { Prompt, PromptGenerator } from 'loop-the-loop';
+import type {
+  Agent,
+  InvokeOptions,
+  Prompt,
+  PromptGenerator,
+} from 'loop-the-loop';
 import { TestAgent } from 'loop-the-loop/agents/test';
 import { YamlReporter } from 'loop-the-loop/reporters/yaml';
-import type { LoopCliConfig } from 'loop-the-loop/types';
+import type { InvokeResult, LoopCliConfig } from 'loop-the-loop/types';
 import { Git } from 'loop-the-loop/util/git';
 import type { LoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,6 +38,23 @@ class FixedPromptGenerator implements PromptGenerator {
         prompt: p.prompt,
       };
     }
+  }
+}
+
+/**
+ * An agent that records invoke options for loop integration tests.
+ */
+class RecordingAgent implements Agent {
+  readonly invokeOptions: Array<InvokeOptions> = [];
+  readonly #result: InvokeResult;
+
+  constructor(result: InvokeResult) {
+    this.#result = result;
+  }
+
+  async invoke(_prompt: string, options: InvokeOptions): Promise<InvokeResult> {
+    this.invokeOptions.push(options);
+    return this.#result;
   }
 }
 
@@ -230,6 +252,24 @@ describe('main', () => {
       promptGenerator,
     });
     expect(result).toBe('Done');
+  });
+
+  it('should pass allowSourceUpdate to agent invocations', async () => {
+    const agent = new RecordingAgent({ status: 'error', reason: 'stop' });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'Review a' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'pass-source-update',
+      agent,
+      promptGenerator,
+      allowSourceUpdate: true,
+    });
+
+    expect(result).toContain('Error on a.ts');
+    expect(agent.invokeOptions).toHaveLength(1);
+    expect(agent.invokeOptions[0]?.allowSourceUpdate).toBe(true);
   });
 
   it('should return "Done" with an empty prompt generator', async () => {
