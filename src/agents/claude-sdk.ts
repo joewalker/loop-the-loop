@@ -135,7 +135,14 @@ export class ClaudeSDKAgent implements Agent {
             if (resultMsg['structured_output'] !== undefined) {
               structuredOutput = resultMsg['structured_output'];
             }
-            return ClaudeSDKAgent.#successResult(textParts, structuredOutput);
+            // Prefer the SDK's final-answer `result` field over the accumulated
+            // intermediate assistant text. The text-block accumulation is kept
+            // only as a fallback when the SDK omits `result`.
+            const finalText =
+              typeof resultMsg['result'] === 'string'
+                ? resultMsg['result']
+                : textParts.join('\n');
+            return ClaudeSDKAgent.#successResult(finalText, structuredOutput);
           }
 
           const resultMsg = message as Record<string, unknown>;
@@ -161,7 +168,7 @@ export class ClaudeSDKAgent implements Agent {
 
       // If we get here without a result message, treat the collected text as the output
       return textParts.length > 0
-        ? ClaudeSDKAgent.#successResult(textParts, structuredOutput)
+        ? ClaudeSDKAgent.#successResult(textParts.join('\n'), structuredOutput)
         : { status: 'error', reason: 'No output received from agent' };
     } catch (err) {
       const reason = this.#buildErrorReason(
@@ -175,12 +182,12 @@ export class ClaudeSDKAgent implements Agent {
   }
 
   static #successResult(
-    textParts: ReadonlyArray<string>,
+    output: string,
     structuredOutput: unknown,
   ): SuccessfulInvocationResult {
     return {
       status: 'success',
-      output: textParts.join('\n'),
+      output,
       ...(structuredOutput !== undefined ? { structuredOutput } : {}),
     };
   }
