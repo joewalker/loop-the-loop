@@ -1,7 +1,22 @@
 {
   "$schema": "../../schema/loop-the-loop.schema.json",
   "name": "dom-workers-retriage",
-  "agent": "claude-sdk",
+  "agent": [
+    "claude-sdk",
+    {
+      "allowedTools": [
+        "Read",
+        "Glob",
+        "Grep",
+        "WebFetch(domain:bugzilla.mozilla.org)",
+        "WebFetch(domain:bugs.chromium.org)",
+        "WebFetch(domain:developer.mozilla.org)",
+        "WebFetch(domain:hg.mozilla.org)",
+        "WebFetch(domain:searchfox.org)",
+        "WebSearch"
+      ]
+    }
+  ],
   "promptGenerator": [
     "bugzilla",
     {
