@@ -46,7 +46,7 @@ CONFIDENCE: HIGH, MEDIUM, or LOW
 REASON: A one-paragraph explanation of your reasoning, citing the evidence you
 gathered (or noting that you could not gather any).`;
 
-loop({
+await loop({
   name: 'dom-workers-retriage',
   agent: [
     'claude-sdk',
@@ -83,4 +83,4 @@ loop({
     },
   ],
   maxPrompts: 50,
-}).catch(console.error);
+});
