@@ -4,6 +4,8 @@ import {
   classifyResultStatus,
   configureQueryOptions,
   describeResultError,
+  formatSystemMessage,
+  formatToolUseSummary,
   isTokenLimitError,
 } from 'loop-the-loop/agents/claude-sdk';
 import { describe, expect, it } from 'vitest';
@@ -274,5 +276,238 @@ describe('configureQueryOptions', () => {
       const result = configureQueryOptions({ allowedTools: ['Read'] }, true);
       expect(result.permissionMode).toBe('acceptEdits');
     });
+  });
+});
+
+describe('formatToolUseSummary', () => {
+  it('uses the SDK-provided summary field and counts preceding tool uses', () => {
+    // Regression for joewalker/loop-the-loop#9: earlier code read
+    // `tool_name` and `status` from this message shape, which the SDK
+    // does not populate, so the log line always read
+    // "Summary: unknown -> ".
+    const line = formatToolUseSummary({
+      type: 'tool_use_summary',
+      summary: 'Inspected three files and ran the linter',
+      preceding_tool_use_ids: ['a', 'b', 'c'],
+      uuid: '00000000-0000-0000-0000-000000000001',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe(
+      'Summary (3 tool uses): Inspected three files and ran the linter',
+    );
+  });
+
+  it('uses the singular noun for a single tool use', () => {
+    const line = formatToolUseSummary({
+      type: 'tool_use_summary',
+      summary: 'Read one file',
+      preceding_tool_use_ids: ['a'],
+      uuid: '00000000-0000-0000-0000-000000000002',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('Summary (1 tool use): Read one file');
+  });
+
+  it('reports zero uses when the list is empty', () => {
+    const line = formatToolUseSummary({
+      type: 'tool_use_summary',
+      summary: 'nothing to do',
+      preceding_tool_use_ids: [],
+      uuid: '00000000-0000-0000-0000-000000000003',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('Summary (0 tool uses): nothing to do');
+  });
+});
+
+describe('formatSystemMessage', () => {
+  // Regression for joewalker/loop-the-loop#9: the previous "[subtype]
+  // <body>" template read `msg.message`, which no SDK system subtype
+  // populates, so every line had an empty body.
+
+  it('summarizes init with model, tool count, mcp count, permission mode', () => {
+    // The SDK's SDKSystemMessage has many fields we don't surface; only
+    // the four operationally useful ones are typed below.
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'init',
+      apiKeySource: 'user',
+      claude_code_version: '1.2.3',
+      cwd: '/tmp',
+      tools: ['Read', 'Grep', 'Bash'],
+      mcp_servers: [{ name: 'one', status: 'connected' }],
+      model: 'claude-opus-4-7',
+      permissionMode: 'acceptEdits',
+      slash_commands: [],
+      output_style: 'default',
+      skills: [],
+      plugins: [],
+      uuid: '00000000-0000-0000-0000-000000000004',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe(
+      '[init] model=claude-opus-4-7, tools=3, mcp_servers=1, permissionMode=acceptEdits',
+    );
+  });
+
+  it('renders a status message with only the status field', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'status',
+      status: 'compacting',
+      uuid: '00000000-0000-0000-0000-000000000005',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[status] status=compacting');
+  });
+
+  it('renders idle when status is null', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      uuid: '00000000-0000-0000-0000-000000000006',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[status] status=idle');
+  });
+
+  it('includes compact_result and compact_error when present', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      compact_result: 'failed',
+      compact_error: 'context too small',
+      uuid: '00000000-0000-0000-0000-000000000007',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe(
+      '[status] status=idle, compact_result=failed, compact_error=context too small',
+    );
+  });
+
+  it('omits an empty compact_error', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      compact_error: '',
+      uuid: '00000000-0000-0000-0000-000000000008',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[status] status=idle');
+  });
+
+  it('renders session_state_changed with the state', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'session_state_changed',
+      state: 'idle',
+      uuid: '00000000-0000-0000-0000-000000000009',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[session_state_changed] state=idle');
+  });
+
+  it('renders task_started with the description', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: 't1',
+      description: 'Run the unit tests',
+      uuid: '00000000-0000-0000-0000-00000000000a',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[task_started] Run the unit tests');
+  });
+
+  it('renders task_progress with description only when no summary', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 't1',
+      description: 'Still working',
+      usage: { total_tokens: 10, tool_uses: 1, duration_ms: 100 },
+      uuid: '00000000-0000-0000-0000-00000000000b',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[task_progress] Still working');
+  });
+
+  it('renders task_progress with a summary suffix when present', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: 't1',
+      description: 'Still working',
+      summary: 'half done',
+      usage: { total_tokens: 10, tool_uses: 1, duration_ms: 100 },
+      uuid: '00000000-0000-0000-0000-00000000000c',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[task_progress] Still working - half done');
+  });
+
+  it('renders task_notification with status and summary', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: 't1',
+      status: 'completed',
+      output_file: '/dev/null',
+      summary: 'All tests passed',
+      uuid: '00000000-0000-0000-0000-00000000000d',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[task_notification] completed: All tests passed');
+  });
+
+  it('renders task_updated with the patch field names', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'task_updated',
+      task_id: 't1',
+      patch: { status: 'running', description: 'now working' },
+      uuid: '00000000-0000-0000-0000-00000000000e',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[task_updated] status, description');
+  });
+
+  it('renders compact_boundary with trigger and pre_tokens', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'compact_boundary',
+      compact_metadata: { trigger: 'auto', pre_tokens: 1234 },
+      uuid: '00000000-0000-0000-0000-00000000000f',
+      session_id: 'sess-1',
+    });
+    expect(line).toBe('[compact_boundary] trigger=auto, pre_tokens=1234');
+  });
+
+  it('falls back to JSON for unknown subtypes', () => {
+    // Forward-compat path: cast through unknown so we can fabricate a
+    // subtype the SDK union does not (yet) include.
+    const line = formatSystemMessage({
+      type: 'system',
+      subtype: 'brand_new_thing',
+      payload: { foo: 'bar' },
+      uuid: '00000000-0000-0000-0000-000000000010',
+      session_id: 'sess-1',
+    } as unknown as Parameters<typeof formatSystemMessage>[0]);
+    expect(line).toBe(
+      '[brand_new_thing] {"subtype":"brand_new_thing","payload":{"foo":"bar"}}',
+    );
+  });
+
+  it('falls back to literal "system" when the subtype is not a string', () => {
+    const line = formatSystemMessage({
+      type: 'system',
+      payload: { foo: 'bar' },
+      uuid: '00000000-0000-0000-0000-000000000011',
+      session_id: 'sess-1',
+    } as unknown as Parameters<typeof formatSystemMessage>[0]);
+    expect(line).toBe('[system] {"payload":{"foo":"bar"}}');
   });
 });

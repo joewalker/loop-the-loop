@@ -144,7 +144,7 @@ Specify an agent in configuration as:
 Uses the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`). This is the primary agent for most tasks.
 
 - Default loaded tools: the SDK's `claude_code` preset (the full default Claude Code tool set)
-- Default max turns: 100
+- Default max-turn budget per prompt: 100 (override via `maxTurns`)
 - Permission mode: `acceptEdits`
 
 Config fields (all optional):

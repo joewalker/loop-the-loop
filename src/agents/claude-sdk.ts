@@ -2,6 +2,8 @@ import {
   query,
   type McpServerConfig,
   type Options,
+  type SDKMessage,
+  type SDKToolUseSummaryMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
 import type { Agent, InvokeOptions } from '../agents.js';
@@ -146,16 +148,11 @@ export class ClaudeSDKAgent implements Agent {
         }
 
         if (message.type === 'tool_use_summary') {
-          const msg = message as Record<string, unknown>;
-          const toolName =
-            'tool_name' in msg ? String(msg['tool_name']) : 'unknown';
-          const status = 'status' in msg ? String(msg['status']) : '';
-          logger.tool(`Summary: ${toolName} -> ${status}`);
+          logger.tool(formatToolUseSummary(message));
         }
 
         if (message.type === 'system') {
-          const msg = message as { subtype?: string; message?: string };
-          logger.system(`[${msg.subtype ?? 'system'}] ${msg.message ?? ''}`);
+          logger.system(formatSystemMessage(message));
         }
 
         if (message.type === 'result') {
@@ -351,6 +348,94 @@ export function isTokenLimitError(text: string): boolean {
     lower.includes('quota') ||
     lower.includes('429')
   );
+}
+
+/**
+ * Render a `tool_use_summary` SDK message as a single line for the
+ * verbose logger.
+ *
+ * The SDK shape is `{ type: 'tool_use_summary', summary, preceding_tool_use_ids,
+ * uuid, session_id }` (see `SDKToolUseSummaryMessage` in the SDK types).
+ * Earlier code read `tool_name` and `status` here, which the SDK does not
+ * populate, so every line read "Summary: unknown -> ". See
+ * joewalker/loop-the-loop#9.
+ */
+export function formatToolUseSummary(
+  message: SDKToolUseSummaryMessage,
+): string {
+  const n = message.preceding_tool_use_ids.length;
+  const noun = n === 1 ? 'use' : 'uses';
+  return `Summary (${n} tool ${noun}): ${message.summary}`;
+}
+
+/**
+ * Render a `type: 'system'` SDK message as a single line for the verbose
+ * logger.
+ *
+ * The `type: 'system'` union has many subtypes and none of them carry a
+ * top-level `message: string` field, so the previous "[subtype] message"
+ * format always printed an empty body. This helper narrows on the known
+ * subtypes and picks a descriptive field per shape, with a JSON-stringify
+ * fallback so newly-added subtypes still surface something useful. See
+ * joewalker/loop-the-loop#9.
+ */
+export function formatSystemMessage(
+  message: Extract<SDKMessage, { type: 'system' }>,
+): string {
+  switch (message.subtype) {
+    case 'init': {
+      const mcpCount = message.mcp_servers.length;
+      return `[init] model=${message.model}, tools=${message.tools.length}, mcp_servers=${mcpCount}, permissionMode=${message.permissionMode}`;
+    }
+    case 'status': {
+      const parts = [`status=${message.status ?? 'idle'}`];
+      if (message.compact_result !== undefined) {
+        parts.push(`compact_result=${message.compact_result}`);
+      }
+      if (
+        message.compact_error !== undefined &&
+        message.compact_error.length > 0
+      ) {
+        parts.push(`compact_error=${message.compact_error}`);
+      }
+      return `[status] ${parts.join(', ')}`;
+    }
+    case 'session_state_changed':
+      return `[session_state_changed] state=${message.state}`;
+    case 'task_started':
+      return `[task_started] ${message.description}`;
+    case 'task_progress': {
+      const summary =
+        message.summary !== undefined ? ` - ${message.summary}` : '';
+      return `[task_progress] ${message.description}${summary}`;
+    }
+    case 'task_notification':
+      return `[task_notification] ${message.status}: ${message.summary}`;
+    case 'task_updated': {
+      const patchKeys = Object.keys(message.patch);
+      return `[task_updated] ${patchKeys.join(', ')}`;
+    }
+    case 'compact_boundary':
+      return `[compact_boundary] trigger=${message.compact_metadata.trigger}, pre_tokens=${message.compact_metadata.pre_tokens}`;
+    default: {
+      // Forward-compat fallback: serialize the message minus bookkeeping
+      // fields so any subtype we haven't enumerated still surfaces useful
+      // detail in the verbose log.
+      const {
+        type: _type,
+        uuid: _uuid,
+        session_id: _sid,
+        ...rest
+      } = message as Record<string, unknown> & {
+        type: unknown;
+        uuid: unknown;
+        session_id: unknown;
+      };
+      const subtype =
+        typeof rest['subtype'] === 'string' ? rest['subtype'] : 'system';
+      return `[${subtype}] ${JSON.stringify(rest)}`;
+    }
+  }
 }
 
 /**
