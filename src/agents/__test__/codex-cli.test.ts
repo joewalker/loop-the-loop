@@ -171,30 +171,6 @@ describe('CodexCLIAgent', () => {
     }
   });
 
-  it('aborts a hung invocation when the caller signals abort', async () => {
-    const child = new FakeChildProcess();
-    spawnMock.mockReturnValue(child);
-    readFileMock.mockResolvedValue('');
-
-    const controller = new AbortController();
-
-    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
-      logger: createLogger(false),
-      signal: controller.signal,
-    });
-
-    controller.abort();
-    // Simulate the child process terminating in response to SIGTERM.
-    child.emit('close', null, 'SIGTERM');
-
-    const result = await resultPromise;
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-    expect(result.status).toBe('glitch');
-    if (result.status !== 'success') {
-      expect(result.reason).toMatch(/aborted/i);
-    }
-  });
-
   it('returns a glitch when codex exceeds the configured timeout', async () => {
     vi.useFakeTimers();
     try {
@@ -220,6 +196,35 @@ describe('CodexCLIAgent', () => {
       if (result.status !== 'success') {
         expect(result.reason).toMatch(/timed out/i);
         expect(result.reason).toContain('1000');
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('settles after timeout when the process exits but stdio stays open', async () => {
+    vi.useFakeTimers();
+    try {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+      readFileMock.mockResolvedValue('');
+
+      const agent = new CodexCLIAgent({ timeoutMs: 1_000 });
+      const resultPromise = agent.invoke('do the thing', {
+        logger: createLogger(false),
+      });
+
+      await vi.advanceTimersByTimeAsync(1_001);
+      expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+
+      // If a descendant keeps stdout/stderr open, Node may emit `exit` for the
+      // Codex process without ever emitting `close`.
+      child.emit('exit', null, 'SIGTERM');
+
+      const result = await resultPromise;
+      expect(result.status).toBe('glitch');
+      if (result.status !== 'success') {
+        expect(result.reason).toMatch(/timed out/i);
       }
     } finally {
       vi.useRealTimers();
@@ -277,28 +282,6 @@ describe('CodexCLIAgent', () => {
       expect(child.kill).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
-    }
-  });
-
-  it('returns a glitch when the abort signal is already aborted', async () => {
-    const child = new FakeChildProcess();
-    spawnMock.mockReturnValue(child);
-    readFileMock.mockResolvedValue('');
-
-    const controller = new AbortController();
-    controller.abort();
-
-    const resultPromise = new CodexCLIAgent().invoke('do the thing', {
-      logger: createLogger(false),
-      signal: controller.signal,
-    });
-
-    child.emit('close', null, 'SIGTERM');
-    const result = await resultPromise;
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-    expect(result.status).toBe('glitch');
-    if (result.status !== 'success') {
-      expect(result.reason).toMatch(/aborted/i);
     }
   });
 

@@ -178,12 +178,18 @@ Invokes the Codex CLI (`codex exec`) as an external process.
 - The `codex` binary must be installed, authenticated, and available on `PATH`
 - Sandbox mode: read-only by default; workspace-write when `allowSourceUpdate` is true
 - Custom model via `CODEX_MODEL` environment variable
-- Takes no configuration
+- Optional `timeoutMs` config aborts an invocation after the given number of milliseconds
 
 Config example:
 
 ```json
 "codex-cli"
+```
+
+With a timeout:
+
+```json
+["codex-cli", { "timeoutMs": 600000 }]
 ```
 
 Source: `src/agents/codex-cli.ts`

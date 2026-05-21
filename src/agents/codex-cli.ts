@@ -28,8 +28,7 @@ export interface CodexCLIAgentConfig {
   /**
    * Maximum time in milliseconds to wait for a single Codex invocation to
    * complete before sending SIGTERM (and SIGKILL after a short grace
-   * period). When omitted no timeout is applied. Callers can still cancel
-   * a run via `InvokeOptions.signal`.
+   * period). When omitted no timeout is applied.
    */
   readonly timeoutMs?: number;
 }
@@ -62,19 +61,12 @@ export class CodexCLIAgent implements Agent {
       const timeoutMs = this.#config.timeoutMs;
       const codexResult = await runCodex(args, options?.logger, {
         timeoutMs,
-        signal: options?.signal,
       });
 
       if (codexResult.timedOut) {
         return {
           status: 'glitch',
           reason: `Codex timed out after ${String(timeoutMs)}ms`,
-        };
-      }
-      if (codexResult.aborted) {
-        return {
-          status: 'glitch',
-          reason: 'Codex invocation aborted by caller',
         };
       }
 
@@ -126,12 +118,10 @@ interface CodexProcessResult {
   readonly maxCapturedOutputBytes: number;
   readonly error?: Error | undefined;
   readonly timedOut?: boolean;
-  readonly aborted?: boolean;
 }
 
 interface RunCodexOptions {
   readonly timeoutMs?: number | undefined;
-  readonly signal?: AbortSignal | undefined;
 }
 
 /**
@@ -190,9 +180,8 @@ function buildCommandArgs(
  *
  * When `runOptions.timeoutMs` is set, the child is sent SIGTERM if it does
  * not exit in time and then escalated to SIGKILL after a short grace
- * period. When `runOptions.signal` is provided, aborting the signal does
- * the same. In both cases the returned result has `timedOut` or `aborted`
- * set so the caller can classify the outcome.
+ * period, and the returned result has `timedOut` set so the caller can
+ * classify the outcome.
  */
 function runCodex(
   args: ReadonlyArray<string>,
@@ -218,7 +207,6 @@ function runCodex(
     const output = new CappedProcessOutput(MAX_CODEX_CAPTURED_OUTPUT_BYTES);
     let settled = false;
     let timedOut = false;
-    let aborted = false;
     let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     let killHandle: ReturnType<typeof setTimeout> | undefined;
 
@@ -251,51 +239,17 @@ function runCodex(
       }
     };
 
-    const onAbort = (): void => {
-      if (settled) {
-        return;
-      }
-      aborted = true;
-      safeKill('SIGTERM');
-      escalateToSigkill();
-    };
-
-    const signal = runOptions.signal;
-    if (signal !== undefined) {
-      if (signal.aborted) {
-        onAbort();
-      } else {
-        signal.addEventListener('abort', onAbort, { once: true });
-      }
-    }
-
-    if (runOptions.timeoutMs !== undefined && runOptions.timeoutMs > 0) {
-      timeoutHandle = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        timedOut = true;
-        safeKill('SIGTERM');
-        escalateToSigkill();
-      }, runOptions.timeoutMs);
-      timeoutHandle.unref?.();
-    }
-
     const finish = (result: CodexProcessResult): void => {
       if (settled) {
         return;
       }
       settled = true;
       cleanupTimers();
-      if (signal !== undefined) {
-        signal.removeEventListener('abort', onAbort);
-      }
       stdoutLogger?.flush();
       stderrLogger?.flush();
       const annotated: CodexProcessResult = {
         ...result,
         ...(timedOut ? { timedOut: true } : {}),
-        ...(aborted ? { aborted: true } : {}),
       };
       resolve(annotated);
     };
@@ -316,9 +270,31 @@ function runCodex(
       finish(output.toResult(null, null, error));
     });
 
+    child.on('exit', (code, exitSignal) => {
+      // `close` waits for stdio streams to close. After a timeout, a
+      // descendant process can keep those streams open even though the Codex
+      // process itself has exited. In that case settle on `exit` so the
+      // timeout actually unblocks the caller.
+      if (timedOut) {
+        finish(output.toResult(code, exitSignal));
+      }
+    });
+
     child.on('close', (code, closeSignal) => {
       finish(output.toResult(code, closeSignal));
     });
+
+    if (runOptions.timeoutMs !== undefined && runOptions.timeoutMs > 0) {
+      timeoutHandle = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        timedOut = true;
+        safeKill('SIGTERM');
+        escalateToSigkill();
+      }, runOptions.timeoutMs);
+      timeoutHandle.unref?.();
+    }
   });
 }
 
