@@ -196,6 +196,98 @@ describe('parseArgs', () => {
       'Option --dry-run does not take a value',
     );
   });
+
+  // #region Strict --max-prompts value validation (#23)
+
+  it('throws on --max-prompts with a trailing non-digit (#23)', () => {
+    expect(() => parseArgs(['--max-prompts=5abc', 'config.json'])).toThrow(
+      'Invalid --max-prompts value: 5abc',
+    );
+  });
+
+  it('throws on --max-prompts with a fractional value (#23)', () => {
+    expect(() => parseArgs(['--max-prompts=5.7', 'config.json'])).toThrow(
+      'Invalid --max-prompts value: 5.7',
+    );
+  });
+
+  it('throws on space-separated --max-prompts with leading whitespace (#23)', () => {
+    expect(() => parseArgs(['--max-prompts', ' 5', 'config.json'])).toThrow(
+      'Invalid --max-prompts value:  5',
+    );
+  });
+
+  // #endregion
+
+  // #region Unknown bare long flags (#24)
+
+  it('throws on bare unknown long flags (#24)', () => {
+    expect(() => parseArgs(['--help-me', 'config.json'])).toThrow(
+      'Unknown option: --help-me',
+    );
+  });
+
+  // #endregion
+
+  // #region Extra positional arguments (#33)
+
+  it('throws on an extra positional argument after the config path (#33)', () => {
+    expect(() => parseArgs(['a.json', 'b.json'])).toThrow(
+      'Unexpected extra arguments: b.json',
+    );
+  });
+
+  it('lists all extra positional arguments in the error (#33)', () => {
+    expect(() => parseArgs(['a.json', 'b.json', 'c.json'])).toThrow(
+      'Unexpected extra arguments: b.json c.json',
+    );
+  });
+
+  // #endregion
+
+  // #region --help and --version
+
+  it('parses --help without requiring a config path', () => {
+    const result = parseArgs(['--help']);
+    expect(result.help).toBe(true);
+    expect(result.configPath).toBeUndefined();
+  });
+
+  it('parses --HELP in upper case', () => {
+    expect(parseArgs(['--HELP']).help).toBe(true);
+  });
+
+  it('help defaults to false', () => {
+    expect(parseArgs(['config.json']).help).toBe(false);
+  });
+
+  it('throws when --help is given a value', () => {
+    expect(() => parseArgs(['--help=true'])).toThrow(
+      'Option --help does not take a value',
+    );
+  });
+
+  it('parses --version without requiring a config path', () => {
+    const result = parseArgs(['--version']);
+    expect(result.version).toBe(true);
+    expect(result.configPath).toBeUndefined();
+  });
+
+  it('parses --VERSION in upper case', () => {
+    expect(parseArgs(['--VERSION']).version).toBe(true);
+  });
+
+  it('version defaults to false', () => {
+    expect(parseArgs(['config.json']).version).toBe(false);
+  });
+
+  it('throws when --version is given a value', () => {
+    expect(() => parseArgs(['--version=true'])).toThrow(
+      'Option --version does not take a value',
+    );
+  });
+
+  // #endregion
 });
 
 describe('loadCliConfig', () => {

@@ -8,23 +8,37 @@ import type { LoopCliConfig } from '../types.js';
 import { expandIncludes } from './expand-prompt.js';
 
 /**
- * These are the properties that parseArgs understands
+ * These are the properties that parseArgs understands. `configPath` is
+ * optional because `--help` and `--version` are allowed without one.
  */
 export interface ParsedArgs {
-  readonly configPath: string;
+  readonly configPath?: string | undefined;
+  readonly help?: boolean | undefined;
+  readonly version?: boolean | undefined;
   readonly verbose?: boolean | undefined;
   readonly dryRun?: boolean | undefined;
   readonly maxPrompts?: number | undefined;
 }
 
 /**
+ * Single-line usage string shared by the parser's "missing config path" error
+ * and the `--help` output in cli.ts.
+ */
+export const USAGE =
+  'Usage: loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] <config.json>';
+
+type BooleanField = 'verbose' | 'dryRun' | 'help' | 'version';
+
+/**
  * Canonical name for each supported flag. Lookups are done after
  * `normalizeFlagName`, so the keys here are the normalized (lower-case,
  * alphanumeric-only) form.
  */
-const BOOLEAN_FLAGS: ReadonlyMap<string, 'verbose' | 'dryRun'> = new Map([
+const BOOLEAN_FLAGS: ReadonlyMap<string, BooleanField> = new Map([
   ['verbose', 'verbose'],
   ['dryrun', 'dryRun'],
+  ['help', 'help'],
+  ['version', 'version'],
 ]);
 
 const VALUE_FLAGS: ReadonlyMap<string, 'maxPrompts'> = new Map([
@@ -51,8 +65,12 @@ function normalizeFlagName(name: string): string {
  */
 export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
   const positional: Array<string> = [];
-  let verbose = false;
-  let dryRun = false;
+  const booleans: Record<BooleanField, boolean> = {
+    verbose: false,
+    dryRun: false,
+    help: false,
+    version: false,
+  };
   let maxPrompts: number | undefined;
 
   for (let i = 0; i < args.length; i += 1) {
@@ -73,11 +91,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
       if (inlineValue !== undefined) {
         throw new Error(`Option --${rawKey} does not take a value`);
       }
-      if (booleanField === 'verbose') {
-        verbose = true;
-      } else {
-        dryRun = true;
-      }
+      booleans[booleanField] = true;
       continue;
     }
 
@@ -101,25 +115,43 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
     /* istanbul ignore else -- forward-compat: VALUE_FLAGS currently has only
        the `maxPrompts` entry, so the else branch is unreachable today. */
     if (valueField === 'maxPrompts') {
-      const n = parseInt(value, 10);
-      if (isNaN(n) || n < 0) {
+      const n = /^\d+$/u.test(value) ? Number(value) : NaN;
+      if (!Number.isInteger(n) || n < 0) {
         throw new Error(`Invalid --${rawKey} value: ${value}`);
       }
       maxPrompts = n;
     }
   }
 
+  // --help and --version are short-circuit flags: they don't need a config
+  // path and the caller (cli.ts) handles them before any other work.
+  if (booleans.help || booleans.version) {
+    return {
+      help: booleans.help,
+      version: booleans.version,
+      verbose: booleans.verbose,
+      dryRun: booleans.dryRun,
+      maxPrompts,
+    };
+  }
+
+  if (positional.length > 1) {
+    throw new Error(
+      `Unexpected extra arguments: ${positional.slice(1).join(' ')}`,
+    );
+  }
+
   const configPath = positional[0];
   if (!configPath) {
-    throw new Error(
-      'Usage: loop-the-loop [--verbose] [--dry-run] [--max-prompts N] <config.json>',
-    );
+    throw new Error(USAGE);
   }
 
   return {
     configPath,
-    verbose,
-    dryRun,
+    help: false,
+    version: false,
+    verbose: booleans.verbose,
+    dryRun: booleans.dryRun,
     maxPrompts,
   };
 }
@@ -132,6 +164,11 @@ export async function loadCliConfig(
   parsedArgs: ParsedArgs,
 ): Promise<LoopCliConfig> {
   const { configPath, maxPrompts, verbose } = parsedArgs;
+  /* istanbul ignore next -- cli.ts handles --help/--version before reaching
+     here, so configPath is always defined for real callers. */
+  if (configPath === undefined) {
+    throw new Error(USAGE);
+  }
   const resolvedPath = resolve(configPath);
   const raw = await readFile(resolvedPath, 'utf-8');
 
