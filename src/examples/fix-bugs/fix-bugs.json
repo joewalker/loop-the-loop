@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "fix-bugs",
+  "agent": [
+    "claude-sdk",
+    {
+      "allowedTools": [
+        "Edit",
+        "Glob",
+        "Grep",
+        "Read",
+        "Write",
+        "Bash(codex --help)",
+        "Bash(codex help *)",
+        "Bash(jq *)",
+        "Bash(git *)",
+        "Bash(gh issue *)",
+        "Bash(gh label list *)",
+        "Bash(ls *)",
+        "Bash(node --version *)",
+        "Bash(pnpm config *)",
+        "Bash(pnpm format *)",
+        "Bash(pnpm lint *)",
+        "Bash(pnpm list *)",
+        "Bash(pnpm ls *)",
+        "Bash(pnpm pack *)",
+        "Bash(pnpm test *)",
+        "Bash(pnpm tsc *)",
+        "Bash(pnpm view *)",
+        "Bash(pnpm whoami *)",
+        "Bash(pnpm why *)",
+        "mcp__ide__*",
+        "mcp__mdn__*",
+        "WebFetch(domain:api.github.com)",
+        "WebFetch(domain:developer.mozilla.org)",
+        "WebFetch(domain:developers.openai.com)",
+        "WebFetch(domain:docs.anthropic.com)",
+        "WebFetch(domain:docs.github.com)",
+        "WebSearch"
+      ]
+    }
+  ],
+  "promptGenerator": [
+    "github",
+    {
+      "promptTemplate": "{{include:prompt.md}}",
+      "search": {
+        "repository": "joewalker/loop-the-loop",
+        "query": "is:issue state:open label:S3"
+      }
+    }
+  ]
+}

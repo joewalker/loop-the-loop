@@ -1,0 +1,10 @@
+{
+  "completed": [
+    "src/agents.ts",
+    "src/agents/claude-sdk.ts",
+    "src/agents/codex-cli.ts",
+    "src/agents/test.ts",
+    "src/cli.ts"
+  ],
+  "failed": []
+}
