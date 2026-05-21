@@ -2,7 +2,7 @@
 
 import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import { Ajv, type ValidateFunction } from 'ajv';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -13,9 +13,32 @@ const SCHEMA_PATH = join(
 );
 const EXAMPLES_DIR = join(import.meta.dirname, '../examples');
 
-const exampleFiles = readdirSync(EXAMPLES_DIR)
-  .filter(f => f.endsWith('.json'))
-  .sort();
+/**
+ * Collect every `*.json` example beneath `src/examples`, recursing into
+ * subdirectories. The set is ignored when no examples are present so that
+ * vitest does not fail with "No test found in suite" before the schema
+ * compiles cleanly.
+ */
+function collectExampleFiles(dir: string): ReadonlyArray<string> {
+  const out: Array<string> = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...collectExampleFiles(full));
+    } else if (
+      entry.isFile() &&
+      entry.name.endsWith('.json') &&
+      !entry.name.endsWith('-loop-state.json')
+    ) {
+      out.push(full);
+    }
+  }
+  return out.sort();
+}
+
+const exampleFiles = collectExampleFiles(EXAMPLES_DIR).map(p =>
+  relative(EXAMPLES_DIR, p),
+);
 
 describe('CLI config schema', () => {
   let validate: ValidateFunction;

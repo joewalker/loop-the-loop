@@ -31,6 +31,11 @@ describe('createAgent', () => {
     expect(result).toBe(agent);
   });
 
+  it('should create an agent from a bare name string', async () => {
+    const agent = await createAgent('claude-sdk');
+    expect(agent).toBeInstanceOf(ClaudeSDKAgent);
+  });
+
   it('should create an agent from a [name, ...args] tuple', async () => {
     const agent = await createAgent(['claude-sdk', { maxTurns: 1 }]);
     expect(agent).toBeInstanceOf(ClaudeSDKAgent);

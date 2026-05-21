@@ -98,6 +98,8 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
       i += 1;
     }
 
+    /* istanbul ignore else -- forward-compat: VALUE_FLAGS currently has only
+       the `maxPrompts` entry, so the else branch is unreachable today. */
     if (valueField === 'maxPrompts') {
       const n = parseInt(value, 10);
       if (isNaN(n) || n < 0) {
@@ -137,7 +139,10 @@ export async function loadCliConfig(
   try {
     config = JSON.parse(raw) as LoopCliConfig;
   } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
+    const detail =
+      err instanceof Error
+        ? err.message
+        : /* istanbul ignore next */ String(err);
     throw new Error(`Failed to parse config file: ${resolvedPath}: ${detail}`, {
       cause: err,
     });

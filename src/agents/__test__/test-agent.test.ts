@@ -5,6 +5,11 @@ import type { InvokeResult } from 'loop-the-loop/types';
 import { describe, expect, it } from 'vitest';
 
 describe('TestAgent', () => {
+  it('should expose a static `create` factory returning a TestAgent', async () => {
+    const agent = await TestAgent.create();
+    expect(agent).toBeInstanceOf(TestAgent);
+  });
+
   it('should return an error when no results have been set', async () => {
     const agent = new TestAgent();
     const result = await agent.invoke('anything');
