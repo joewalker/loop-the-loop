@@ -6,8 +6,22 @@ import { describe, expect, it } from 'vitest';
 
 describe('TestAgent', () => {
   it('should expose a static `create` factory returning a TestAgent', async () => {
-    const agent = await TestAgent.create();
+    const agent = await TestAgent.create({ responses: [] });
     expect(agent).toBeInstanceOf(TestAgent);
+  });
+
+  it('create() should reject a missing config', async () => {
+    await expect(
+      (TestAgent.create as (config?: unknown) => Promise<TestAgent>)(),
+    ).rejects.toThrow(/responses/);
+  });
+
+  it('create() should reject a config without a responses array', async () => {
+    await expect(
+      (TestAgent.create as (config: unknown) => Promise<TestAgent>)({
+        repeat: 'cycle',
+      }),
+    ).rejects.toThrow(/responses/);
   });
 
   it('should return an error when no results have been set', async () => {
@@ -66,4 +80,70 @@ describe('TestAgent', () => {
     const result = await agent.invoke('prompt');
     expect(result).toStrictEqual({ status: 'success', output: 'new' });
   });
+
+  // #region create({ responses, repeat })
+
+  it('create() should accept a responses array and return them FIFO', async () => {
+    const agent = await TestAgent.create({
+      responses: [
+        { status: 'success', output: 'a' },
+        { status: 'success', output: 'b' },
+      ],
+    });
+    expect(await agent.invoke('p1')).toStrictEqual({
+      status: 'success',
+      output: 'a',
+    });
+    expect(await agent.invoke('p2')).toStrictEqual({
+      status: 'success',
+      output: 'b',
+    });
+  });
+
+  it('create() should error after exhausting responses when repeat is "none"', async () => {
+    const agent = await TestAgent.create({
+      responses: [{ status: 'success', output: 'only' }],
+      repeat: 'none',
+    });
+    await agent.invoke('p1');
+    const second = await agent.invoke('p2');
+    expect(second.status).toBe('error');
+  });
+
+  it('create() should cycle responses when repeat is "cycle"', async () => {
+    const agent = await TestAgent.create({
+      responses: [
+        { status: 'success', output: 'a' },
+        { status: 'success', output: 'b' },
+      ],
+      repeat: 'cycle',
+    });
+    expect((await agent.invoke('p1')) as { output: string }).toMatchObject({
+      output: 'a',
+    });
+    expect((await agent.invoke('p2')) as { output: string }).toMatchObject({
+      output: 'b',
+    });
+    expect((await agent.invoke('p3')) as { output: string }).toMatchObject({
+      output: 'a',
+    });
+    expect((await agent.invoke('p4')) as { output: string }).toMatchObject({
+      output: 'b',
+    });
+  });
+
+  it('create() with a single response and repeat:cycle should reuse it forever', async () => {
+    const agent = await TestAgent.create({
+      responses: [{ status: 'success', output: 'dry run' }],
+      repeat: 'cycle',
+    });
+    for (let i = 0; i < 5; i += 1) {
+      expect(await agent.invoke(`prompt-${i}`)).toStrictEqual({
+        status: 'success',
+        output: 'dry run',
+      });
+    }
+  });
+
+  // #endregion
 });

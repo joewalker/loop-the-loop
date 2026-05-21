@@ -189,6 +189,37 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'test agent with cycling responses',
+        {
+          name: 'test',
+          agent: [
+            'test',
+            {
+              responses: [{ status: 'success', output: 'dry run' }],
+              repeat: 'cycle',
+            },
+          ],
+          promptGenerator: ['test', { prompts: ['a', 'b'] }],
+        },
+      ],
+      [
+        'test agent with mixed response statuses and default repeat',
+        {
+          name: 'test',
+          agent: [
+            'test',
+            {
+              responses: [
+                { status: 'success', output: 'ok' },
+                { status: 'glitch', reason: 'rate limit' },
+                { status: 'error', reason: 'bad prompt' },
+              ],
+            },
+          ],
+          promptGenerator: ['test', { prompts: ['only'] }],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {
@@ -290,6 +321,41 @@ describe('CLI config schema', () => {
               prompts: ['First prompt'],
             },
           ],
+        },
+      ],
+      [
+        'rejects test agent without a responses array',
+        {
+          name: 'x',
+          agent: ['test', { repeat: 'cycle' }],
+          promptGenerator: ['test', { prompts: ['only'] }],
+        },
+      ],
+      [
+        'rejects test agent with an unknown repeat value',
+        {
+          name: 'x',
+          agent: [
+            'test',
+            {
+              responses: [{ status: 'success', output: 'ok' }],
+              repeat: 'forever',
+            },
+          ],
+          promptGenerator: ['test', { prompts: ['only'] }],
+        },
+      ],
+      [
+        'rejects test agent with a malformed response (success missing output)',
+        {
+          name: 'x',
+          agent: [
+            'test',
+            {
+              responses: [{ status: 'success' }],
+            },
+          ],
+          promptGenerator: ['test', { prompts: ['only'] }],
         },
       ],
     ];

@@ -360,4 +360,37 @@ describe('main', () => {
       inProgress: 'a.ts',
     });
   });
+
+  it('should emit each prompt on the verbose logger so --dry-run can inspect it', async () => {
+    const agent = new TestAgent();
+    agent.setNextInvokeResult({ status: 'success', output: 'ok' });
+
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'one', prompt: 'Please review file X' },
+    ]);
+
+    const systemMessages: Array<string> = [];
+    const recordingLogger = {
+      enabled: true,
+      agent: () => {},
+      tool: () => {},
+      success: () => {},
+      error: () => {},
+      system: (m: string) => systemMessages.push(m),
+      state: () => {},
+      info: () => {},
+    };
+
+    await runMainWithFakeTimers({
+      name: 'verbose-prompts',
+      agent,
+      promptGenerator,
+      logger: recordingLogger,
+      maxPrompts: 1,
+    });
+
+    expect(systemMessages.some(m => m.includes('Please review file X'))).toBe(
+      true,
+    );
+  });
 });

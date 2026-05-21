@@ -163,7 +163,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
 export async function loadCliConfig(
   parsedArgs: ParsedArgs,
 ): Promise<LoopCliConfig> {
-  const { configPath, maxPrompts, verbose } = parsedArgs;
+  const { configPath, maxPrompts, verbose, dryRun } = parsedArgs;
   /* istanbul ignore next -- cli.ts handles --help/--version before reaching
      here, so configPath is always defined for real callers. */
   if (configPath === undefined) {
@@ -190,11 +190,26 @@ export async function loadCliConfig(
     ...(maxPrompts !== undefined
       ? /* istanbul ignore next */ { maxPrompts }
       : {}),
-    ...(verbose
-      ? /* istanbul ignore next */ { logger: 'verbose' as const }
+    // --dry-run forces verbose so the prompts being skipped are visible.
+    ...(verbose === true || dryRun === true
+      ? { logger: 'verbose' as const }
       : {}),
+    ...(dryRun === true ? { agent: DRY_RUN_AGENT_SPEC } : {}),
   };
 }
+
+/**
+ * The synthesised `TestAgent` spec used to back `--dry-run`. Replaces the
+ * configured agent at runtime so prompts pass through the loop (and through
+ * the verbose logger) without being sent to a real backend.
+ */
+const DRY_RUN_AGENT_SPEC: AgentSpec = [
+  'test',
+  {
+    responses: [{ status: 'success', output: 'dry run' }],
+    repeat: 'cycle',
+  },
+];
 
 /**
  * Normalize a parsed CLI config so includes in JSON-defined prompt templates

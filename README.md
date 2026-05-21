@@ -41,6 +41,16 @@ deno compile --allow-read --allow-write --allow-run --allow-env --allow-net --ou
 ./dist/loop-the-loop config.json
 ```
 
+CLI flags:
+
+Flag             | Description
+-----------------|------------
+`--help`         | Print usage and exit
+`--version`      | Print version and exit
+`--verbose`      | Stream diagnostic events to stderr
+`--max-prompts N`| Stop after N prompts (overrides `maxPrompts` in the config)
+`--dry-run`      | Swap the configured agent for a `test` agent that returns "dry run" for every prompt, and force verbose logging so the prompts that would have been sent are visible. Useful for inspecting prompt generation without invoking a real backend.
+
 The config file is a JSON object matching the `LoopCliConfig` type. For example:
 
 ```json
@@ -193,6 +203,30 @@ With a timeout:
 ```
 
 Source: `src/agents/codex-cli.ts`
+
+### `test`
+
+A stub agent that returns a configured list of canned responses instead of calling a real backend. Useful for exercising a loop config end-to-end (prompt generator, reporter, state file, git wiring) without spending tokens, and as the backing agent for `--dry-run`.
+
+The `test` agent must be configured via the `[name, config]` tuple form; the bare `"test"` name is rejected.
+
+Config fields:
+
+Field       | Required | Description
+------------|----------|------------
+`responses` | yes      | Canned `InvokeResult` values returned in order. Each entry is `{ "status": "success", "output": "..." }`, `{ "status": "glitch", "reason": "..." }`, or `{ "status": "error", "reason": "..." }`.
+`repeat`    | no       | `"none"` (default) returns an error result after the list is exhausted; `"cycle"` wraps back to the first response and keeps going.
+
+Config example (used internally by `--dry-run`):
+
+```json
+["test", {
+  "responses": [{ "status": "success", "output": "dry run" }],
+  "repeat": "cycle"
+}]
+```
+
+Source: `src/agents/test.ts`
 
 ## Prompt Generators
 

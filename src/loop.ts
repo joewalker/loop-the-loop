@@ -107,6 +107,7 @@ async function loopImpl(config: LoopConfig): Promise<string> {
   for await (const prompt of promptGenerator.generate(loopState)) {
     console.log(`Processing: ${prompt.id}`);
     logger.state(`Begin: ${prompt.id}`);
+    logger.system(`Prompt:\n${prompt.prompt}`);
     await loopState.begin(prompt.id);
 
     const result = await agent.invoke(prompt.prompt, {

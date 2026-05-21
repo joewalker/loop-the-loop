@@ -7,22 +7,27 @@ import { TestAgent } from 'loop-the-loop/agents/test';
 import { describe, expect, it } from 'vitest';
 
 describe('agentTypes', () => {
-  it('should include claude-sdk and codex-cli', () => {
+  it('should include claude-sdk, codex-cli, and test', () => {
     expect(agentTypes).toContain(ClaudeSDKAgent.agentName);
     expect(agentTypes).toContain(CodexCLIAgent.agentName);
-  });
-
-  it('should not expose TestAgent as a CLI-selectable agent', () => {
-    expect(agentTypes).not.toContain(TestAgent.agentName);
+    expect(agentTypes).toContain(TestAgent.agentName);
   });
 });
 
 describe('createAgent', () => {
-  it('should reject the bare "test" agent name', async () => {
+  it('should reject the bare "test" agent name (config is required)', async () => {
     const spec = TestAgent.agentName as unknown as Parameters<
       typeof createAgent
     >[0];
-    await expect(createAgent(spec)).rejects.toThrow(/test/);
+    await expect(createAgent(spec)).rejects.toThrow(/responses/);
+  });
+
+  it('should construct a TestAgent from a ["test", { responses }] tuple', async () => {
+    const agent = await createAgent([
+      'test',
+      { responses: [{ status: 'success', output: 'hi' }] },
+    ]);
+    expect(agent).toBeInstanceOf(TestAgent);
   });
 
   it('should return a pre-constructed Agent instance as-is', async () => {
@@ -43,6 +48,15 @@ describe('createAgent', () => {
 
   it('should throw a descriptive error for an unknown agent name in a tuple', async () => {
     const spec = ['does-not-exist'] as unknown as Parameters<
+      typeof createAgent
+    >[0];
+    await expect(createAgent(spec)).rejects.toThrow(
+      /Unknown agent 'does-not-exist'/,
+    );
+  });
+
+  it('should throw a descriptive error for an unknown bare agent name string', async () => {
+    const spec = 'does-not-exist' as unknown as Parameters<
       typeof createAgent
     >[0];
     await expect(createAgent(spec)).rejects.toThrow(

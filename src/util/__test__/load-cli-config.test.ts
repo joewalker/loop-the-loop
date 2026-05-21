@@ -1533,6 +1533,85 @@ describe('loadCliConfig', () => {
     ).rejects.toThrow('batch.batchSize must be a positive integer');
   });
 
+  // #region --dry-run overrides
+
+  it('should replace the configured agent with a cycling TestAgent spec when dryRun is true', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'dryrun',
+        agent: ['claude-sdk', { maxTurns: 5 }],
+        promptGenerator: ['test', { prompts: ['hello'] }],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({
+      configPath,
+      verbose: false,
+      dryRun: true,
+      maxPrompts: undefined,
+    });
+
+    expect(config.agent).toEqual([
+      'test',
+      {
+        responses: [{ status: 'success', output: 'dry run' }],
+        repeat: 'cycle',
+      },
+    ]);
+  });
+
+  it('should force verbose logging when dryRun is true', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'dryrun',
+        agent: 'claude-sdk',
+        promptGenerator: ['test', { prompts: ['hello'] }],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({
+      configPath,
+      verbose: false,
+      dryRun: true,
+      maxPrompts: undefined,
+    });
+
+    expect(config.logger).toBe('verbose');
+  });
+
+  it('should not touch the agent when dryRun is false', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'not-dryrun',
+        agent: 'claude-sdk',
+        promptGenerator: ['test', { prompts: ['hello'] }],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({
+      configPath,
+      verbose: false,
+      dryRun: false,
+      maxPrompts: undefined,
+    });
+
+    expect(config.agent).toBe('claude-sdk');
+  });
+
+  // #endregion
+
   it('should reject batch task config with a non-positive batchSize', async () => {
     const configDir = join(tempDir, 'config');
 
