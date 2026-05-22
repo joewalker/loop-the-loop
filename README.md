@@ -181,6 +181,38 @@ Config example:
 
 Source: `src/agents/claude-sdk.ts`
 
+### `openai-sdk`
+
+Uses the OpenAI Agents SDK (`@openai/agents`) with a `SandboxAgent` and the
+local Unix sandbox client.
+
+- Default model: the OpenAI Agents SDK default (override via `model`)
+- Default max-turn budget per prompt: 100 (override via `maxTurns`)
+- Repository mount: the current working directory is available at `/workspace/repo`
+- Source updates: when `allowSourceUpdate` is true, the sandbox can edit the mounted repository. When false, the wrapper removes the direct `apply_patch` tool and instructs the agent not to modify files.
+
+Config fields (all optional):
+
+Field           | Description
+----------------|------------
+`systemPrompt`  | System prompt appended to the built-in workspace guidance. Supports `{{include:path}}` macros.
+`outputSchema`  | JSON Schema describing the expected shape of structured output.
+`model`         | OpenAI model name. When omitted, the Agents SDK default is used.
+`modelSettings` | Model-specific settings forwarded to the Agents SDK.
+`maxTurns`      | Maximum tool-use/response rounds per prompt.
+
+Config example:
+
+```json
+["openai-sdk", {
+  "model": "gpt-5.5",
+  "maxTurns": 100,
+  "systemPrompt": "{{include:prompts/openai-system.md}}"
+}]
+```
+
+Source: `src/agents/openai-sdk.ts`
+
 ### `codex-cli`
 
 Invokes the Codex CLI (`codex exec`) as an external process.

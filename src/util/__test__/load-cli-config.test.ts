@@ -373,6 +373,34 @@ describe('loadCliConfig', () => {
     );
   });
 
+  it('should resolve openai-sdk systemPrompt includes relative to the config file', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(join(configDir, 'prompts'), { recursive: true });
+    await writeFile(
+      join(configDir, 'prompts', 'system.md'),
+      'Shared OpenAI guidance.',
+    );
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: [
+          'openai-sdk',
+          { systemPrompt: 'Header\n{{include:prompts/system.md}}\nFooter' },
+        ],
+        promptGenerator: ['test', { prompts: ['noop'] }],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    if (!Array.isArray(config.agent) || config.agent[0] !== 'openai-sdk') {
+      throw new TypeError('Expected an openai-sdk agent tuple');
+    }
+    expect(config.agent[1]?.systemPrompt).toBe(
+      'Header\nShared OpenAI guidance.\nFooter',
+    );
+  });
+
   it('should pass through a claude-sdk agent spec with no systemPrompt', async () => {
     const configDir = join(tempDir, 'config');
     await mkdir(configDir, { recursive: true });

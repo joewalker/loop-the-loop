@@ -3,13 +3,15 @@
 import { agentTypes, createAgent } from 'loop-the-loop/agents';
 import { ClaudeSDKAgent } from 'loop-the-loop/agents/claude-sdk';
 import { CodexCLIAgent } from 'loop-the-loop/agents/codex-cli';
+import { OpenAISDKAgent } from 'loop-the-loop/agents/openai-sdk';
 import { TestAgent } from 'loop-the-loop/agents/test';
 import { describe, expect, it } from 'vitest';
 
 describe('agentTypes', () => {
-  it('should include claude-sdk, codex-cli, and test', () => {
+  it('should include claude-sdk, codex-cli, openai-sdk, and test', () => {
     expect(agentTypes).toContain(ClaudeSDKAgent.agentName);
     expect(agentTypes).toContain(CodexCLIAgent.agentName);
+    expect(agentTypes).toContain(OpenAISDKAgent.agentName);
     expect(agentTypes).toContain(TestAgent.agentName);
   });
 });
@@ -44,6 +46,16 @@ describe('createAgent', () => {
   it('should create an agent from a [name, ...args] tuple', async () => {
     const agent = await createAgent(['claude-sdk', { maxTurns: 1 }]);
     expect(agent).toBeInstanceOf(ClaudeSDKAgent);
+  });
+
+  it('should create an OpenAI SDK agent from a bare name string', async () => {
+    const agent = await createAgent('openai-sdk');
+    expect(agent).toBeInstanceOf(OpenAISDKAgent);
+  });
+
+  it('should create an OpenAI SDK agent from a [name, config] tuple', async () => {
+    const agent = await createAgent(['openai-sdk', { maxTurns: 1 }]);
+    expect(agent).toBeInstanceOf(OpenAISDKAgent);
   });
 
   it('should throw a descriptive error for an unknown agent name in a tuple', async () => {

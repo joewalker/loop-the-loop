@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 
 import type { AgentSpec } from '../agents.js';
 import { ClaudeSDKAgent } from '../agents/claude-sdk.js';
+import { OpenAISDKAgent } from '../agents/openai-sdk.js';
 import { normalizePromptGeneratorSpec } from '../prompt-generators.js';
 import type { LoopCliConfig } from '../types.js';
 import { expandIncludes } from './expand-prompt.js';
@@ -239,15 +240,18 @@ export async function normalizeCliConfig(
 
 /**
  * Resolve any `{{include:...}}` macros in agent-specific config fields that
- * accept file references (currently just `claude-sdk`'s `systemPrompt`).
- * Includes are resolved relative to the config file directory; non-claude-sdk
- * specs are passed through unchanged.
+ * accept file references. Includes are resolved relative to the config file
+ * directory; specs without include-aware fields are passed through unchanged.
  */
 async function normalizeAgentSpec(
   agent: AgentSpec,
   configDir: string,
 ): Promise<AgentSpec> {
-  if (!Array.isArray(agent) || agent[0] !== ClaudeSDKAgent.agentName) {
+  if (
+    !Array.isArray(agent) ||
+    (agent[0] !== ClaudeSDKAgent.agentName &&
+      agent[0] !== OpenAISDKAgent.agentName)
+  ) {
     return agent;
   }
 

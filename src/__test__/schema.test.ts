@@ -136,6 +136,36 @@ describe('CLI config schema', () => {
         },
       ],
       [
+        'openai-sdk bare agent',
+        {
+          name: 'openai',
+          agent: 'openai-sdk',
+          promptGenerator: ['test', { prompts: ['noop'] }],
+        },
+      ],
+      [
+        'openai-sdk configured agent',
+        {
+          name: 'openai',
+          agent: [
+            'openai-sdk',
+            {
+              model: 'gpt-5.5',
+              modelSettings: { temperature: 0 },
+              maxTurns: 20,
+              systemPrompt: 'Use concise output.',
+              outputSchema: {
+                type: 'object',
+                properties: { ok: { type: 'boolean' } },
+                required: ['ok'],
+                additionalProperties: false,
+              },
+            },
+          ],
+          promptGenerator: ['test', { prompts: ['noop'] }],
+        },
+      ],
+      [
         'github issue search',
         {
           name: 'github',

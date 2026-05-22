@@ -57,7 +57,7 @@
       "oneOf": [
         {
           "type": "string",
-          "enum": ["claude-sdk", "codex-cli"]
+          "enum": ["claude-sdk", "codex-cli", "openai-sdk"]
         },
         {
           "type": "array",
@@ -77,6 +77,16 @@
           "items": [
             { "const": "codex-cli" },
             { "$ref": "#/definitions/codexCliAgentConfig" }
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
+          "items": [
+            { "const": "openai-sdk" },
+            { "$ref": "#/definitions/openaiSdkAgentConfig" }
           ]
         },
         {
@@ -140,6 +150,35 @@
           "type": "integer",
           "minimum": 1,
           "description": "Maximum time in milliseconds to wait for a single Codex invocation before sending SIGTERM (then SIGKILL after a short grace period). When omitted, no timeout is applied."
+        }
+      }
+    },
+    "openaiSdkAgentConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "systemPrompt": {
+          "type": "string",
+          "description": "Optional system prompt appended to the built-in workspace guidance. Supports {{include:path}} macros (resolved relative to the config file directory)."
+        },
+        "outputSchema": {
+          "type": "object",
+          "description": "JSON Schema describing the expected shape of structured output. When provided, the SDK returns structured data conforming to the schema."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional OpenAI model name. When omitted, the Agents SDK default is used."
+        },
+        "modelSettings": {
+          "type": "object",
+          "description": "Optional model-specific settings forwarded to the OpenAI Agents SDK."
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100,
+          "description": "Maximum number of agent turns per prompt invocation."
         }
       }
     },

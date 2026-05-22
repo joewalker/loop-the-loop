@@ -35,6 +35,10 @@ export default defineConfig({
         description: 'Tests that call live Codex CLI services.',
       },
       {
+        name: 'openai-sdk',
+        description: 'Tests that call live OpenAI Agents SDK services.',
+      },
+      {
         name: 'github',
         description: 'Tests that call live GitHub services.',
       },
@@ -61,6 +65,7 @@ export default defineConfig({
         // would require live network or a real `codex` binary.
         'src/agents/claude-sdk.ts',
         'src/agents/codex-cli.ts',
+        'src/agents/openai-sdk.ts',
       ],
       thresholds: {
         statements: 100,

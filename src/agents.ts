@@ -1,5 +1,6 @@
 import { ClaudeSDKAgent } from './agents/claude-sdk.js';
 import { CodexCLIAgent } from './agents/codex-cli.js';
+import { OpenAISDKAgent } from './agents/openai-sdk.js';
 import { TestAgent } from './agents/test.js';
 import type { Logger } from './loggers.js';
 import type { InvokeResult } from './types.js';
@@ -61,6 +62,7 @@ export type AgentCreator = (...args: Array<any>) => Promise<Agent>;
 const agentCreators = {
   [ClaudeSDKAgent.agentName]: ClaudeSDKAgent.create,
   [CodexCLIAgent.agentName]: CodexCLIAgent.create,
+  [OpenAISDKAgent.agentName]: OpenAISDKAgent.create,
   [TestAgent.agentName]: TestAgent.create,
 } satisfies Record<string, AgentCreator>;
 
