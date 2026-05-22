@@ -58,6 +58,7 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
 - If pnpm responds to a command with `[ERR_PNPM_VERIFY_DEPS_BEFORE_RUN] Cannot check whether dependencies are outdated`, ALWAYS tell the user what happened and ask for help.
 - The JSON Schema at `schema/loop-the-loop.schema.json` documents the shape of `LoopCliConfig` and the task types accepted by the prompt generators. When you add, remove, or rename any field that is loadable from a CLI JSON config (the top-level `LoopCliConfig`, agent or generator task types, search parameters, and so on), update the schema in the same change so it stays in step with the runtime types.
 - Maintain 100% test coverage. If the `/coverage-to-100` skill is available, that can help adding missing tests and ignores.
+- Package upgrade incompatibilities are stored in the `pnpm-workspace.yaml`, `overrides` block.
 
 ## Completing Work
 
