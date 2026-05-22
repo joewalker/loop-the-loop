@@ -234,6 +234,54 @@
           "minimum": 1,
           "default": 100,
           "description": "Maximum number of agent turns per prompt invocation."
+        },
+        "model": {
+          "type": "string",
+          "description": "Claude model to use. Accepts an alias ('sonnet', 'opus', 'haiku') or a full model id (e.g. 'claude-opus-4-7', 'claude-sonnet-4-6'). When omitted the SDK falls back to its CLI default."
+        },
+        "fallbackModel": {
+          "type": "string",
+          "description": "Fallback model used when the primary model is unavailable (e.g. rate limited or temporarily down). Forwarded to the SDK's `fallbackModel`."
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "xhigh", "max"],
+          "description": "Reasoning effort applied per turn. The SDK silently downgrades unsupported levels per model."
+        },
+        "thinking": {
+          "description": "Extended-thinking configuration. `adaptive` lets the model decide (default on Opus 4.6+); `enabled` fixes a token budget; `disabled` turns thinking off.",
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": { "const": "adaptive" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "budgetTokens"],
+              "properties": {
+                "type": { "const": "enabled" },
+                "budgetTokens": { "type": "integer", "minimum": 1 }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": { "const": "disabled" }
+              }
+            }
+          ]
+        },
+        "additionalDirectories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional absolute directories the agent may read/write. Forwarded unchanged to the SDK's `additionalDirectories`."
         }
       }
     },

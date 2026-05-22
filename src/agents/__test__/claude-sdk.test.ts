@@ -97,6 +97,92 @@ describe('configureQueryOptions', () => {
     });
   });
 
+  describe('model', () => {
+    it('omits the SDK model option when not configured', () => {
+      const result = configureQueryOptions({});
+      expect(result.model).toBeUndefined();
+    });
+
+    it('forwards the configured model verbatim', () => {
+      const result = configureQueryOptions({ model: 'claude-opus-4-7' });
+      expect(result.model).toBe('claude-opus-4-7');
+    });
+
+    it('accepts an alias (e.g. "sonnet") and forwards it verbatim', () => {
+      const result = configureQueryOptions({ model: 'sonnet' });
+      expect(result.model).toBe('sonnet');
+    });
+  });
+
+  describe('fallbackModel', () => {
+    it('omits the SDK fallbackModel option when not configured', () => {
+      const result = configureQueryOptions({});
+      expect(result.fallbackModel).toBeUndefined();
+    });
+
+    it('forwards the configured fallbackModel verbatim', () => {
+      const result = configureQueryOptions({
+        fallbackModel: 'claude-haiku-4-5',
+      });
+      expect(result.fallbackModel).toBe('claude-haiku-4-5');
+    });
+  });
+
+  describe('effort', () => {
+    it('omits the SDK effort option when not configured', () => {
+      const result = configureQueryOptions({});
+      expect(result.effort).toBeUndefined();
+    });
+
+    it('forwards the configured effort level verbatim', () => {
+      const result = configureQueryOptions({ effort: 'low' });
+      expect(result.effort).toBe('low');
+    });
+  });
+
+  describe('thinking', () => {
+    it('omits the SDK thinking option when not configured', () => {
+      const result = configureQueryOptions({});
+      expect(result.thinking).toBeUndefined();
+    });
+
+    it('forwards an adaptive thinking config', () => {
+      const result = configureQueryOptions({ thinking: { type: 'adaptive' } });
+      expect(result.thinking).toEqual({ type: 'adaptive' });
+    });
+
+    it('forwards an enabled thinking config with a budget', () => {
+      const result = configureQueryOptions({
+        thinking: { type: 'enabled', budgetTokens: 2048 },
+      });
+      expect(result.thinking).toEqual({ type: 'enabled', budgetTokens: 2048 });
+    });
+
+    it('forwards a disabled thinking config', () => {
+      const result = configureQueryOptions({ thinking: { type: 'disabled' } });
+      expect(result.thinking).toEqual({ type: 'disabled' });
+    });
+  });
+
+  describe('additionalDirectories', () => {
+    it('omits the SDK additionalDirectories option when not configured', () => {
+      const result = configureQueryOptions({});
+      expect(result.additionalDirectories).toBeUndefined();
+    });
+
+    it('forwards the configured directories as a mutable array', () => {
+      const result = configureQueryOptions({
+        additionalDirectories: ['/tmp/work', '/var/data'],
+      });
+      expect(result.additionalDirectories).toEqual(['/tmp/work', '/var/data']);
+    });
+
+    it('passes an empty additionalDirectories list straight through', () => {
+      const result = configureQueryOptions({ additionalDirectories: [] });
+      expect(result.additionalDirectories).toEqual([]);
+    });
+  });
+
   describe('isTokenLimitError', () => {
     it('matches a rate-limit phrase regardless of letter case', () => {
       // Regression for joewalker/loop-the-loop#8: prior to the fix the

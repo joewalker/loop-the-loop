@@ -84,6 +84,42 @@ export interface ClaudeSDKAgentConfig {
    * prompt invocation. Defaults to `DEFAULT_MAX_TURNS` when omitted.
    */
   readonly maxTurns?: number;
+
+  /**
+   * Claude model to use. Accepts an alias (`sonnet`, `opus`, `haiku`) or a
+   * full model id (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`). When
+   * omitted the SDK falls back to its CLI default.
+   */
+  readonly model?: string;
+
+  /**
+   * Fallback model used when the primary model is unavailable (e.g. rate
+   * limited or temporarily down). Forwarded to the SDK's `fallbackModel`.
+   */
+  readonly fallbackModel?: string;
+
+  /**
+   * Reasoning effort applied per turn. The SDK silently downgrades
+   * unsupported levels per model; see the SDK docs for which models
+   * support which level.
+   */
+  readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+  /**
+   * Extended-thinking configuration. `{ type: 'adaptive' }` lets the
+   * model decide (default on Opus 4.6+); `{ type: 'enabled', budgetTokens: N }`
+   * fixes a budget; `{ type: 'disabled' }` turns thinking off.
+   */
+  readonly thinking?:
+    | { readonly type: 'adaptive' }
+    | { readonly type: 'enabled'; readonly budgetTokens: number }
+    | { readonly type: 'disabled' };
+
+  /**
+   * Additional absolute directories the agent may read/write. Forwarded
+   * unchanged to the SDK's `additionalDirectories`.
+   */
+  readonly additionalDirectories?: ReadonlyArray<string>;
 }
 
 /**
@@ -497,6 +533,23 @@ export function configureQueryOptions(
   const mcpServers =
     config?.mcpServers !== undefined ? { mcpServers: config.mcpServers } : {};
 
+  const model = config.model !== undefined ? { model: config.model } : {};
+
+  const fallbackModel =
+    config.fallbackModel !== undefined
+      ? { fallbackModel: config.fallbackModel }
+      : {};
+
+  const effort = config.effort !== undefined ? { effort: config.effort } : {};
+
+  const thinking =
+    config.thinking !== undefined ? { thinking: { ...config.thinking } } : {};
+
+  const additionalDirectories =
+    config.additionalDirectories !== undefined
+      ? { additionalDirectories: [...config.additionalDirectories] }
+      : {};
+
   return {
     ...loadedTools,
     ...allowedTools,
@@ -504,6 +557,11 @@ export function configureQueryOptions(
     ...outputSchema,
     ...disallowedTools,
     ...mcpServers,
+    ...model,
+    ...fallbackModel,
+    ...effort,
+    ...thinking,
+    ...additionalDirectories,
     permissionMode: allowSourceUpdate ? 'acceptEdits' : 'default',
     maxTurns: config.maxTurns ?? DEFAULT_MAX_TURNS,
   };
