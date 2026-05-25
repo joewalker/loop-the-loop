@@ -7,6 +7,8 @@ dist/
 
 /.claude/worktrees
 /.claude/settings.local.json
+/src/examples/**/*.yaml
+/src/examples/**/*loop-state.json
 
 /ignore/
 /IGNORE.md
