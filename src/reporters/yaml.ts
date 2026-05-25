@@ -35,10 +35,10 @@ export class YamlReporter implements Reporter {
     const lines: Array<string> = ['---'];
     lines.push(`id: "${prompt.id}"`);
     lines.push(`status: ${result.status}`);
-    lines.push('prompt: |');
-    for (const line of formatBlockScalar(prompt.prompt).split('\n')) {
-      lines.push(line === '' ? '' : `  ${line}`);
-    }
+    // lines.push('prompt: |');
+    // for (const line of formatBlockScalar(prompt.prompt).split('\n')) {
+    //   lines.push(line === '' ? '' : `  ${line}`);
+    // }
 
     if (result.status === 'success') {
       lines.push('output: |');
