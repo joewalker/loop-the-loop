@@ -91,10 +91,19 @@ export class JsonPromptGenerator implements PromptGenerator {
       ? navigatePath(rawData, this.#task.path)
       : rawData;
     const entries = toEntries(data);
+    const seenIds = new Map<string, number>();
 
     for (let index = 0; index < entries.length; index++) {
       const [key, element] = entries[index];
       const id = resolveId(element, key, this.#task.idField);
+
+      const previousIndex = seenIds.get(id);
+      if (previousIndex !== undefined) {
+        throw new Error(
+          `JsonTask: duplicate id "${id}" at index ${index} (already used at index ${previousIndex})`,
+        );
+      }
+      seenIds.set(id, index);
 
       if (loopState.isOutstanding(id)) {
         const variables = buildVariables(element, id, index);

@@ -164,6 +164,47 @@ describe('JsonPromptGenerator', () => {
     expect(prompts[0].id).toBe('1');
   });
 
+  describe('duplicate id detection', () => {
+    it('should throw when two elements share the same idField value', async () => {
+      await expect(
+        collect({
+          data: [
+            { id: 'ABC', title: 'first' },
+            { id: 'ABC', title: 'second' },
+          ],
+          idField: 'id',
+          promptTemplate: '{{title}}',
+        }),
+      ).rejects.toThrow(
+        'JsonTask: duplicate id "ABC" at index 1 (already used at index 0)',
+      );
+    });
+
+    it('should throw when an idField value collides with an index fallback', async () => {
+      await expect(
+        collect({
+          data: [{ id: '1', title: 'first' }, { title: 'no id' }],
+          idField: 'id',
+          promptTemplate: '{{title}}',
+        }),
+      ).rejects.toThrow(
+        'JsonTask: duplicate id "1" at index 1 (already used at index 0)',
+      );
+    });
+
+    it('should throw when a numeric idField collides with a later index fallback for a non-object element', async () => {
+      await expect(
+        collect({
+          data: [{ id: 1, title: 'first' }, 'no idField applies'],
+          idField: 'id',
+          promptTemplate: '{{title}}',
+        }),
+      ).rejects.toThrow(
+        'JsonTask: duplicate id "1" at index 1 (already used at index 0)',
+      );
+    });
+  });
+
   it('should throw when both data and dataFile are specified', async () => {
     await expect(
       collect({ data: [], dataFile: 'some.json', promptTemplate: '' }),
