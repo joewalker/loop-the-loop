@@ -30,6 +30,14 @@ export class YamlReporter implements Reporter {
   /**
    * Serialize a single ReportEntry as a YAML document (including the
    * leading `---` separator).
+   *
+   * Block scalars use the explicit indentation indicator `|2` so the
+   * parser anchors content indent at 2 columns regardless of the first
+   * non-empty line. Without it, an `output` or `reason` value that starts
+   * with leading whitespace would push the auto-detected content indent
+   * past 2, and any subsequent line whose total indent is less than the
+   * detected base would terminate the block early - either corrupting the
+   * YAML or silently truncating the captured text.
    */
   async append(prompt: Prompt, result: InvokeResult): Promise<void> {
     const lines: Array<string> = ['---'];
@@ -41,19 +49,19 @@ export class YamlReporter implements Reporter {
     // }
 
     if (result.status === 'success') {
-      lines.push('output: |');
+      lines.push('output: |2');
       for (const line of formatBlockScalar(result.output).split('\n')) {
         lines.push(line === '' ? '' : `  ${line}`);
       }
       if (result.structuredOutput !== undefined) {
-        lines.push('structuredOutput: |');
+        lines.push('structuredOutput: |2');
         const json = JSON.stringify(result.structuredOutput, null, 2);
         for (const line of formatBlockScalar(json).split('\n')) {
           lines.push(line === '' ? /* istanbul ignore next */ '' : `  ${line}`);
         }
       }
     } else {
-      lines.push('reason: |');
+      lines.push('reason: |2');
       for (const line of formatBlockScalar(result.reason).split('\n')) {
         lines.push(line === '' ? '' : `  ${line}`);
       }

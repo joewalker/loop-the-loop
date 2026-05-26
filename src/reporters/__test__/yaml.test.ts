@@ -7,6 +7,64 @@ import { join } from 'node:path';
 import { YamlReporter } from 'loop-the-loop/reporters/yaml';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+/**
+ * Minimal YAML literal block scalar reader. Locates `key: |` (optionally
+ * followed by an indentation indicator, e.g. `|2`) inside `content` and
+ * returns the decoded scalar value. Sufficient for the round-trip checks
+ * in this test file; it intentionally does not try to be a full YAML
+ * parser.
+ */
+function parseFirstBlockScalar(content: string, key: string): string {
+  const lines = content.split('\n');
+  let i = 0;
+  let baseIndent: number | undefined;
+  while (i < lines.length) {
+    const header = lines[i].match(new RegExp(`^${key}: \\|(\\d*)\\s*$`));
+    if (header !== null) {
+      baseIndent = header[1] === '' ? undefined : Number(header[1]);
+      i += 1;
+      break;
+    }
+    i += 1;
+  }
+  if (i === lines.length) {
+    throw new Error(`block scalar for ${key} not found`);
+  }
+  const body: Array<string> = [];
+  // Auto-detect indent from the first non-empty line if not explicit.
+  if (baseIndent === undefined) {
+    for (let j = i; j < lines.length; j += 1) {
+      const m = lines[j].match(/^( +)\S/);
+      if (m !== null) {
+        baseIndent = m[1].length;
+        break;
+      }
+    }
+  }
+  const indent = baseIndent ?? 2;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line === '') {
+      body.push('');
+      i += 1;
+      continue;
+    }
+    const leadMatch = line.match(/^( *)/);
+    const lead = leadMatch === null ? 0 : leadMatch[1].length;
+    if (lead < indent) {
+      break;
+    }
+    body.push(line.slice(indent));
+    i += 1;
+  }
+  // Drop the trailing empty separator line that always follows the block
+  // in our serializer.
+  while (body.length > 0 && body[body.length - 1] === '') {
+    body.pop();
+  }
+  return `${body.join('\n')}\n`;
+}
+
 describe('Report', () => {
   let tempDir: string;
 
@@ -219,6 +277,72 @@ describe('Report', () => {
       'utf-8',
     );
     expect(content).not.toContain('structuredOutput');
+  });
+
+  it('should preserve leading whitespace and dedented continuation lines on output', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'leading-ws-output',
+    });
+    const original = '  function foo() {\n    return 1;\n  }\ntop';
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      { status: 'success', output: original },
+    );
+
+    const content = await readFile(
+      join(tempDir, 'leading-ws-output-report.yaml'),
+      'utf-8',
+    );
+    // The block scalar must use an explicit indentation indicator so the
+    // parser anchors content indent at 2 regardless of the first non-empty
+    // line. Without this, the leading two-space indent on `function foo()`
+    // would be eaten and the dedented `top` line would terminate the scalar.
+    expect(content).toContain('output: |2');
+    expect(parseFirstBlockScalar(content, 'output')).toBe(`${original}\n`);
+  });
+
+  it('should preserve leading whitespace and dedented continuation lines on reason', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'leading-ws-reason',
+    });
+    const original = '  indented start\n    deeper\n  back\nflush';
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      { status: 'error', reason: original },
+    );
+
+    const content = await readFile(
+      join(tempDir, 'leading-ws-reason-report.yaml'),
+      'utf-8',
+    );
+    expect(content).toContain('reason: |2');
+    expect(parseFirstBlockScalar(content, 'reason')).toBe(`${original}\n`);
+  });
+
+  it('should preserve leading whitespace on structuredOutput JSON when present', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'leading-ws-structured',
+    });
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      {
+        status: 'success',
+        output: 'ok',
+        structuredOutput: { nested: { key: 'value' } },
+      },
+    );
+
+    const content = await readFile(
+      join(tempDir, 'leading-ws-structured-report.yaml'),
+      'utf-8',
+    );
+    // Pretty-printed JSON always starts with `{` at column 0, so leading
+    // whitespace is not a concern here today; still, use |2 so the
+    // serializer behaves uniformly.
+    expect(content).toContain('structuredOutput: |2');
   });
 
   it('should quote the id field for YAML safety', async () => {
