@@ -46,7 +46,7 @@
       "promptTemplate": "{{include:prompt.md}}",
       "search": {
         "repository": "joewalker/loop-the-loop",
-        "query": "is:issue state:open label:S3"
+        "query": "is:issue state:open label:S2"
       }
     }
   ]
