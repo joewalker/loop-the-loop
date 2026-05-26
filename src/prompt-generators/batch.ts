@@ -70,10 +70,21 @@ export function normalizeBatchTaskConfig(
  * A PromptGenerator that wraps a source generator and processes its items
  * in fixed-size batches, injecting a summary prompt after each batch.
  * A final summary is also yielded for any leftover items at the end of the
- * source.
+ * source, including on resumed runs where every source item already
+ * completed in an earlier run.
  *
  * Summary prompt IDs take the form `batch-summary-after-{lastItemId}`,
- * making them stable and trackable in LoopState across runs.
+ * where `lastItemId` is the source's logical last item in the batch (i.e.
+ * the Nth source item independent of whether earlier items completed).
+ * That makes summary IDs stable and trackable in LoopState across runs.
+ *
+ * To achieve that stability, the batch generator passes the source a
+ * LoopState whose `isOutstanding` always returns true. The source therefore
+ * yields every item every run, and the batch generator does its own
+ * outstanding-item filtering using the real loopState. This avoids the
+ * earlier behavior where summary IDs (and the trailing summary itself)
+ * shifted whenever inner items had already been completed in a previous
+ * run.
  *
  * `basePath` is used to resolve `{{include:...}}` macros in
  * `summaryPromptTemplate` and defaults to `process.cwd()`. CLI config loading
@@ -113,11 +124,16 @@ export class BatchPromptGenerator implements PromptGenerator {
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
     const batchSize = this.#task.batchSize ?? DEFAULT_BATCH_SIZE;
+    // The source iterates every item every run (see class doc); the batch
+    // generator does the outstanding-item filtering itself.
+    const sourceLoopState = makePassthroughLoopState(loopState);
     let batch: Array<Prompt> = [];
 
-    for await (const item of this.#source.generate(loopState)) {
+    for await (const item of this.#source.generate(sourceLoopState)) {
       batch.push(item);
-      yield item;
+      if (loopState.isOutstanding(item.id)) {
+        yield item;
+      }
 
       if (batch.length >= batchSize) {
         const summary = await this.#buildSummary(batch, loopState);
@@ -163,6 +179,20 @@ export class BatchPromptGenerator implements PromptGenerator {
 
     return { id: summaryId, prompt };
   }
+}
+
+/**
+ * Wrap a LoopState so that `isOutstanding` always returns true while every
+ * other method delegates to the original. This is used to expose the
+ * source's logical position to the batch generator: the source filters
+ * items via `isOutstanding`, so by short-circuiting that filter we make the
+ * source yield every item on every run, giving the batch generator a
+ * stable view of the source's iteration order.
+ */
+function makePassthroughLoopState(original: LoopState): LoopState {
+  return Object.create(original, {
+    isOutstanding: { value: () => true },
+  }) as LoopState;
 }
 
 /**

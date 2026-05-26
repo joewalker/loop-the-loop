@@ -102,7 +102,7 @@ describe('BatchPromptGenerator', () => {
     expect(prompts).toStrictEqual([]);
   });
 
-  it('skips source items that are already completed', async () => {
+  it('skips source items that are already completed but keeps stable summary IDs', async () => {
     const source = makeSource(['a', 'b', 'c']);
     const generator = new BatchPromptGenerator(
       { ...BASE_TASK, batchSize: 10 },
@@ -112,9 +112,72 @@ describe('BatchPromptGenerator', () => {
 
     const prompts = await collect(generator, loopState);
 
-    expect(prompts).toHaveLength(2); // only 'b' + summary
+    // Only 'b' is outstanding so it is the only source item yielded, but
+    // the summary ID is still derived from the source's logical last item
+    // ('c') so it stays stable across resumes.
+    expect(prompts).toHaveLength(2);
     expect(prompts[0].id).toBe('b');
-    expect(prompts[1].id).toBe('batch-summary-after-b');
+    expect(prompts[1].id).toBe('batch-summary-after-c');
+  });
+
+  it('re-emits a trailing summary when every source item is already completed', async () => {
+    // Failure mode #1 from issue #47: a previous run completed every source
+    // item but was interrupted before the trailing summary completed. On
+    // resume the summary must still fire under its original ID.
+    const source = makeSource(['a', 'b']);
+    const generator = new BatchPromptGenerator(
+      { ...BASE_TASK, batchSize: 10 },
+      source,
+    );
+    const loopState = new LoopState('', ['a', 'b'], []);
+
+    const prompts = await collect(generator, loopState);
+
+    expect(prompts.map(p => p.id)).toStrictEqual(['batch-summary-after-b']);
+  });
+
+  it('keeps batch boundaries stable across resumes when inner items are completed', async () => {
+    // Failure mode #2 from issue #47: with batchSize=2 and source a,b,c, a
+    // fresh run yields summaries `after-b` and `after-c`. If 'a' completed
+    // in a prior run, the resume must still yield those same summary IDs
+    // (not shift to `after-c` only).
+    const source = makeSource(['a', 'b', 'c']);
+    const generator = new BatchPromptGenerator(
+      { ...BASE_TASK, batchSize: 2 },
+      source,
+    );
+    const loopState = new LoopState('', ['a'], []);
+
+    const prompts = await collect(generator, loopState);
+
+    expect(prompts.map(p => p.id)).toStrictEqual([
+      'b',
+      'batch-summary-after-b',
+      'c',
+      'batch-summary-after-c',
+    ]);
+  });
+
+  it('summary batchIds include items completed in previous runs', async () => {
+    // The summary describes the whole batch, including items that completed
+    // in earlier runs, so the agent can read consistent results from the
+    // report file.
+    const source = makeSource(['a', 'b', 'c']);
+    const generator = new BatchPromptGenerator(
+      {
+        ...BASE_TASK,
+        batchSize: 10,
+        summaryPromptTemplate: 'ids={{batchIds}} count={{batchSize}}',
+      },
+      source,
+    );
+    const loopState = new LoopState('', ['a', 'c'], []);
+
+    const prompts = await collect(generator, loopState);
+    const summary = prompts[prompts.length - 1];
+
+    expect(summary.id).toBe('batch-summary-after-c');
+    expect(summary.prompt).toBe('ids=a\nb\nc count=3');
   });
 
   it('skips a summary that is already completed', async () => {
