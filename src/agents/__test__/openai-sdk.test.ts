@@ -12,8 +12,10 @@ import {
   buildSandboxManifest,
   classifyOpenAIError,
   describeOpenAIError,
+  isDestructiveShellCommand,
   normalizeFinalOutput,
   toOpenAIOutputType,
+  wrapShellToolsForReadOnly,
 } from 'loop-the-loop/agents/openai-sdk';
 import { describe, expect, it } from 'vitest';
 
@@ -59,14 +61,28 @@ describe('buildSandboxAgentOptions', () => {
 });
 
 describe('buildSandboxManifest', () => {
-  it('mounts the working tree at /workspace/repo using a local bind mount', () => {
-    expect(buildSandboxManifest('/repo')).toStrictEqual({
+  it('mounts the working tree writable when source updates are allowed', () => {
+    expect(buildSandboxManifest('/repo', true)).toStrictEqual({
       root: '/workspace',
       entries: {
         repo: {
           type: 'mount',
           source: '/repo',
           readOnly: false,
+          mountStrategy: { type: 'local_bind' },
+        },
+      },
+    });
+  });
+
+  it('mounts the working tree read-only when source updates are blocked', () => {
+    expect(buildSandboxManifest('/repo', false)).toStrictEqual({
+      root: '/workspace',
+      entries: {
+        repo: {
+          type: 'mount',
+          source: '/repo',
+          readOnly: true,
           mountStrategy: { type: 'local_bind' },
         },
       },
@@ -87,6 +103,151 @@ describe('buildCapabilities', () => {
     expect(buildCapabilities(false).map(capability => capability.type)).toEqual(
       ['filesystem', 'shell', 'compaction'],
     );
+  });
+});
+
+describe('wrapShellToolsForReadOnly', () => {
+  /**
+   * Build a minimal FunctionTool double good enough for the wrapper to
+   * inspect and re-invoke. Real shell tools share this shape; we only need
+   * `type`, `name`, and `invoke` for the wrapping logic.
+   */
+  function functionToolDouble(
+    name: string,
+    invoke: (input: string) => Promise<string>,
+  ) {
+    return {
+      type: 'function' as const,
+      name,
+      description: '',
+      parameters: { type: 'object' as const, properties: {} },
+      strict: true,
+      needsApproval: async () => false,
+      isEnabled: async () => true,
+      invoke: async (_runContext: unknown, input: string, _details?: unknown) =>
+        invoke(input),
+    };
+  }
+
+  it('drops write_stdin so interactive bypasses are not exposed', () => {
+    const tools = [
+      functionToolDouble('exec_command', async () => 'ok'),
+      functionToolDouble('write_stdin', async () => 'ok'),
+    ];
+    const wrapped = wrapShellToolsForReadOnly(
+      tools as unknown as ReadonlyArray<
+        Parameters<typeof wrapShellToolsForReadOnly>[0][number]
+      >,
+    );
+    expect(wrapped.map(tool => tool.name)).toEqual(['exec_command']);
+  });
+
+  it('rejects destructive exec_command invocations before they reach the shell', async () => {
+    let underlyingCalls = 0;
+    const tools = [
+      functionToolDouble('exec_command', async () => {
+        underlyingCalls += 1;
+        return 'ran';
+      }),
+    ];
+    const [wrapped] = wrapShellToolsForReadOnly(
+      tools as unknown as ReadonlyArray<
+        Parameters<typeof wrapShellToolsForReadOnly>[0][number]
+      >,
+    );
+    const result = await (
+      wrapped as { invoke: (typeof tools)[0]['invoke'] }
+    ).invoke(
+      {},
+      JSON.stringify({ cmd: 'echo pwned > /workspace/repo/AGENTS.md' }),
+    );
+    expect(underlyingCalls).toBe(0);
+    expect(String(result)).toContain('rejected');
+  });
+
+  it('forwards read-only exec_command invocations to the underlying tool', async () => {
+    let lastInput: string | undefined;
+    const tools = [
+      functionToolDouble('exec_command', async input => {
+        lastInput = input;
+        return 'output';
+      }),
+    ];
+    const [wrapped] = wrapShellToolsForReadOnly(
+      tools as unknown as ReadonlyArray<
+        Parameters<typeof wrapShellToolsForReadOnly>[0][number]
+      >,
+    );
+    const input = JSON.stringify({ cmd: 'rg --files -g "*.ts"' });
+    const result = await (
+      wrapped as { invoke: (typeof tools)[0]['invoke'] }
+    ).invoke({}, input);
+    expect(lastInput).toBe(input);
+    expect(result).toBe('output');
+  });
+
+  it('passes non-function tools through unchanged', () => {
+    const passthrough = {
+      type: 'hosted_tool',
+      name: 'something_else',
+    } as unknown as Parameters<typeof wrapShellToolsForReadOnly>[0][number];
+    const [forwarded] = wrapShellToolsForReadOnly([passthrough]);
+    expect(forwarded).toBe(passthrough);
+  });
+});
+
+describe('isDestructiveShellCommand', () => {
+  it('flags output redirection examples from the bug', () => {
+    expect(
+      isDestructiveShellCommand('echo pwned > /workspace/repo/AGENTS.md'),
+    ).toBe(true);
+    expect(isDestructiveShellCommand('cat src/foo >> dest')).toBe(true);
+  });
+
+  it('flags sed -i and other in-place editors', () => {
+    expect(isDestructiveShellCommand("sed -i 's/foo/bar/' file")).toBe(true);
+    expect(isDestructiveShellCommand('perl -i -pe "s/x/y/" file')).toBe(true);
+  });
+
+  it('flags the destructive command tokens listed in the bug', () => {
+    expect(isDestructiveShellCommand('rm -rf src')).toBe(true);
+    expect(isDestructiveShellCommand('mv a b')).toBe(true);
+    expect(isDestructiveShellCommand('tee out < in')).toBe(true);
+    expect(isDestructiveShellCommand('touch new-file')).toBe(true);
+  });
+
+  it('flags destructive commands appearing after shell separators', () => {
+    expect(isDestructiveShellCommand('cat foo && rm bar')).toBe(true);
+    expect(isDestructiveShellCommand('echo hi ; mv old new')).toBe(true);
+    expect(isDestructiveShellCommand('printf x | tee file')).toBe(true);
+  });
+
+  it('flags mutating git and package-manager subcommands', () => {
+    expect(isDestructiveShellCommand('git commit -m foo')).toBe(true);
+    expect(isDestructiveShellCommand('git checkout main')).toBe(true);
+    expect(isDestructiveShellCommand('pnpm install')).toBe(true);
+    expect(isDestructiveShellCommand('npm i react')).toBe(true);
+  });
+
+  it('does not flag common read-only commands', () => {
+    expect(isDestructiveShellCommand('ls -la')).toBe(false);
+    expect(isDestructiveShellCommand('cat src/foo.ts')).toBe(false);
+    expect(isDestructiveShellCommand('rg --files -g "*.ts"')).toBe(false);
+    expect(isDestructiveShellCommand('find . -name "*.ts"')).toBe(false);
+    expect(isDestructiveShellCommand('git log --oneline -10')).toBe(false);
+    expect(isDestructiveShellCommand('git status')).toBe(false);
+    expect(isDestructiveShellCommand('git diff')).toBe(false);
+    expect(isDestructiveShellCommand('pnpm test')).toBe(false);
+    expect(isDestructiveShellCommand('pnpm tsc')).toBe(false);
+  });
+
+  it('allows numeric file-descriptor redirects like 2>&1', () => {
+    expect(isDestructiveShellCommand('rg pattern 2>&1')).toBe(false);
+  });
+
+  it('treats whitespace-only commands as benign', () => {
+    expect(isDestructiveShellCommand('')).toBe(false);
+    expect(isDestructiveShellCommand('   ')).toBe(false);
   });
 });
 

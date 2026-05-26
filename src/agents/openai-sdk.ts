@@ -10,6 +10,7 @@ import {
   type JsonSchemaDefinition,
   type ModelSettings,
   type RunItem,
+  type Tool,
 } from '@openai/agents';
 import {
   Capabilities,
@@ -138,7 +139,7 @@ export function buildSandboxAgentOptions(
   const options: OpenAISandboxAgentOptions = {
     name: 'Loop the Loop OpenAI SDK Agent',
     instructions: buildInstructions(config.systemPrompt, allowSourceUpdate),
-    defaultManifest: buildSandboxManifest(cwd),
+    defaultManifest: buildSandboxManifest(cwd, allowSourceUpdate),
     capabilities: buildCapabilities(allowSourceUpdate),
   };
 
@@ -159,14 +160,22 @@ export function buildSandboxAgentOptions(
 
 /**
  * Build the sandbox manifest that exposes the current checkout to the agent.
+ *
+ * When `allowSourceUpdate` is false the repo mount is marked read-only so the
+ * SDK editor tools (apply_patch, createFile, updateFile, deleteFile) refuse to
+ * touch the host repo. Shell-level writes are filtered separately - see
+ * `buildCapabilities` and `isDestructiveShellCommand` for that layer.
  */
-export function buildSandboxManifest(cwd: string): ManifestInput {
+export function buildSandboxManifest(
+  cwd: string,
+  allowSourceUpdate: boolean,
+): ManifestInput {
   return {
     root: SANDBOX_ROOT,
     entries: {
       repo: mount({
         source: cwd,
-        readOnly: false,
+        readOnly: !allowSourceUpdate,
         mountStrategy: localBindMountStrategy(),
       }),
     },
@@ -175,6 +184,13 @@ export function buildSandboxManifest(cwd: string): ManifestInput {
 
 /**
  * Choose sandbox capabilities for the current invocation mode.
+ *
+ * When `allowSourceUpdate` is false the shell capability is wrapped so that
+ * `write_stdin` is dropped (it would let the agent feed mutating commands to a
+ * long-running interactive shell, bypassing per-call inspection) and
+ * `exec_command` is intercepted to reject commands that match the destructive
+ * heuristic in `isDestructiveShellCommand`. The shell filter is best-effort -
+ * see `isDestructiveShellCommand` for the security caveat.
  */
 export function buildCapabilities(
   allowSourceUpdate: boolean,
@@ -188,9 +204,157 @@ export function buildCapabilities(
       configureTools: tools =>
         tools.filter(tool => tool.name !== 'apply_patch'),
     }),
-    shell(),
+    shell({
+      configureTools: tools => wrapShellToolsForReadOnly(tools),
+    }),
     compaction(),
   ];
+}
+
+/**
+ * Wrap shell-capability tools for read-only mode.
+ *
+ * Drops `write_stdin` entirely (no interactive feed bypass) and overrides
+ * `exec_command`'s `invoke` so commands matching `isDestructiveShellCommand`
+ * are rejected before the shell ever runs.
+ */
+export function wrapShellToolsForReadOnly(
+  tools: ReadonlyArray<Tool<unknown>>,
+): Array<Tool<unknown>> {
+  const result: Array<Tool<unknown>> = [];
+  for (const tool of tools) {
+    if (tool.type !== 'function') {
+      result.push(tool);
+      continue;
+    }
+    if (tool.name === 'write_stdin') {
+      continue;
+    }
+    if (tool.name === 'exec_command') {
+      result.push(readOnlyExecCommand(tool));
+      continue;
+    }
+    result.push(tool);
+  }
+  return result;
+}
+
+/**
+ * Build a read-only-mode replacement for an exec_command FunctionTool whose
+ * `invoke` rejects destructive commands before the shell sees them.
+ */
+function readOnlyExecCommand(
+  original: Tool<unknown> & { readonly type: 'function' },
+): Tool<unknown> {
+  const guardedInvoke: typeof original.invoke = async (
+    runContext,
+    input,
+    details,
+  ) => {
+    const cmd = extractExecCommandCmd(input);
+    if (cmd !== undefined && isDestructiveShellCommand(cmd)) {
+      return [
+        'exec_command rejected: source updates are disabled for this invocation.',
+        'The repository is mounted read-only and destructive shell commands',
+        '(rm, mv, sed -i, output redirection, package installs, mutating git',
+        'subcommands, etc.) are blocked. Use only read-only commands like rg,',
+        'cat, ls, find.',
+      ].join(' ');
+    }
+    return original.invoke(runContext, input, details);
+  };
+  return { ...original, invoke: guardedInvoke };
+}
+
+/**
+ * Extract the `cmd` field from an exec_command tool input payload. Returns
+ * undefined when the payload is not valid JSON or has no string `cmd` field;
+ * callers fall through to the underlying tool which already handles invalid
+ * input.
+ */
+function extractExecCommandCmd(input: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  const cmd = parsed['cmd'];
+  return typeof cmd === 'string' ? cmd : undefined;
+}
+
+/**
+ * Heuristic detector for shell commands that would mutate the host file
+ * system.
+ *
+ * Best-effort. This catches the obvious bypasses listed in issue #35
+ * (output redirection, sed -i, rm, mv, tee, ...) but the space of shell
+ * command shapes is unbounded and a determined model can craft new
+ * bypasses. This is not a security boundary - for hard isolation use a
+ * sandbox client that enforces filesystem permissions at the OS level (for
+ * example the Docker sandbox).
+ */
+export function isDestructiveShellCommand(cmd: string): boolean {
+  const trimmed = cmd.trim();
+  if (trimmed.length === 0) {
+    return false;
+  }
+  // Output redirection: > or >>. Allow numeric FD-redirects like 2>&1 and
+  // pure stderr-merge "&>" but otherwise treat redirection as a write.
+  if (/(?:^|[^0-9&])>>?(?!&)/u.test(trimmed)) {
+    return true;
+  }
+  // In-place editor flags.
+  if (/\b(?:sed|perl|ruby|awk|gawk)\b[^\n;|&]*\s-i(?:\b|$)/u.test(trimmed)) {
+    return true;
+  }
+  // Destructive command tokens at the start of a sub-command.
+  const destructive = [
+    'rm',
+    'mv',
+    'cp',
+    'tee',
+    'dd',
+    'truncate',
+    'chmod',
+    'chown',
+    'chgrp',
+    'ln',
+    'touch',
+    'mkdir',
+    'rmdir',
+    'install',
+    'patch',
+    'shred',
+  ];
+  const tokenStart = String.raw`(?:^|[;&|\x60"'$(])`;
+  const tokenRe = new RegExp(
+    `${tokenStart}\\s*(?:sudo(?:\\s+-\\S+)*\\s+)?(?:env(?:\\s+\\S+=\\S+)+\\s+)?(?:${destructive.join('|')})\\b`,
+    'iu',
+  );
+  if (tokenRe.test(trimmed)) {
+    return true;
+  }
+  // Mutating git subcommands.
+  if (
+    /\bgit\b[^\n;|&]*\s(?:add|rm|mv|commit|checkout|switch|reset|restore|stash|apply|am|merge|rebase|pull|fetch|clone|init|tag|push|clean|gc|prune|worktree)\b/u.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+  // Mutating package-manager invocations.
+  if (
+    /\b(?:pnpm|npm|yarn|pnpx|npx|pip|pip3|cargo|brew|apt|apt-get|dnf|yum)\b\s+(?:i\b|install|add|remove|rm\b|update|upgrade|patch|publish)/iu.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -339,7 +503,7 @@ function buildInstructions(
     : [
         'Source updates are disabled for this invocation.',
         'Do not edit, create, move, or delete files in the mounted repository.',
-        'The apply_patch tool is not available in this mode.',
+        'The apply_patch tool is not available, the repo is mounted read-only, and destructive shell commands (rm, mv, sed -i, output redirection, etc.) will be rejected.',
       ].join(' ');
   const baseInstructions = [
     `The project checkout is mounted at ${SANDBOX_REPO_PATH}.`,
