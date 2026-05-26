@@ -173,9 +173,9 @@ export async function loadCliConfig(
   const resolvedPath = resolve(configPath);
   const raw = await readFile(resolvedPath, 'utf-8');
 
-  let config: LoopCliConfig;
+  let config: unknown;
   try {
-    config = JSON.parse(raw) as LoopCliConfig;
+    config = JSON.parse(raw);
   } catch (err) {
     const detail =
       err instanceof Error
@@ -186,8 +186,12 @@ export async function loadCliConfig(
     });
   }
 
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    throw new Error(`Config file must contain a JSON object: ${resolvedPath}`);
+  }
+
   return {
-    ...(await normalizeCliConfig(config, resolvedPath)),
+    ...(await normalizeCliConfig(config as LoopCliConfig, resolvedPath)),
     ...(maxPrompts !== undefined
       ? /* istanbul ignore next */ { maxPrompts }
       : {}),

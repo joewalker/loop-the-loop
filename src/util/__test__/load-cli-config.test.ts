@@ -874,6 +874,36 @@ describe('loadCliConfig', () => {
     expect(error.message).toContain((error.cause as Error).message);
   });
 
+  // #region Non-object top-level JSON values (#87)
+
+  it.each([
+    { label: 'null', raw: 'null' },
+    { label: 'a number', raw: '42' },
+    { label: 'a string', raw: '"hi"' },
+    { label: 'an array', raw: '[]' },
+    { label: 'a boolean', raw: 'true' },
+  ])(
+    'should reject a config file whose top-level JSON value is $label (#87)',
+    async ({ raw }) => {
+      const configDir = join(tempDir, 'config');
+      await mkdir(configDir, { recursive: true });
+      const configPath = join(configDir, 'config.json');
+      await writeFile(configPath, raw);
+
+      await expect(
+        loadCliConfig({
+          configPath,
+          verbose: false,
+          maxPrompts: undefined,
+        }),
+      ).rejects.toThrow(
+        `Config file must contain a JSON object: ${configPath}`,
+      );
+    },
+  );
+
+  // #endregion
+
   it('should preserve a pre-constructed promptGenerator instance', async () => {
     const generator = { generate: async function* () {} };
     const config = await normalizeCliConfig(
