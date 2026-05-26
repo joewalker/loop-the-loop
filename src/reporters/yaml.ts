@@ -41,7 +41,13 @@ export class YamlReporter implements Reporter {
    */
   async append(prompt: Prompt, result: InvokeResult): Promise<void> {
     const lines: Array<string> = ['---'];
-    lines.push(`id: "${prompt.id}"`);
+    // `JSON.stringify` produces a double-quoted string that escapes `"`,
+    // `\`, and control characters using `\"`, `\\`, `\n`, `\uXXXX`, etc.
+    // These are all valid escapes inside a YAML flow-style double-quoted
+    // scalar, so the result round-trips through any YAML parser even
+    // when the id contains characters that would otherwise break the
+    // document (quotes, backslashes, newlines, ...).
+    lines.push(`id: ${JSON.stringify(prompt.id)}`);
     lines.push(`status: ${result.status}`);
     // lines.push('prompt: |');
     // for (const line of formatBlockScalar(prompt.prompt).split('\n')) {

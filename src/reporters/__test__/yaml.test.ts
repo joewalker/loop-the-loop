@@ -361,4 +361,81 @@ describe('Report', () => {
     );
     expect(content).toContain('id: "file: with #special chars"');
   });
+
+  /**
+   * Extract the raw text on the right-hand side of the first `id:` line in
+   * `content` and decode it as a JSON-encoded string. JSON's escape rules
+   * for `"`, `\`, and control characters are a subset of YAML's
+   * flow-style double-quoted scalar escape rules, so a value serialized
+   * via `JSON.stringify` round-trips losslessly through `JSON.parse`.
+   */
+  function parseIdField(content: string): string {
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const m = line.match(/^id: (.*)$/);
+      if (m !== null) {
+        return JSON.parse(m[1]) as string;
+      }
+    }
+    throw new Error('id field not found');
+  }
+
+  it('should escape double quotes in the id field', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'quote-id',
+    });
+    const id = 'has"a"quote';
+    await report.append(
+      { id, prompt: 'Test' },
+      { status: 'success', output: 'ok' },
+    );
+
+    const content = await readFile(
+      join(tempDir, 'quote-id-report.yaml'),
+      'utf-8',
+    );
+    expect(parseIdField(content)).toBe(id);
+  });
+
+  it('should escape backslashes in the id field', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'backslash-id',
+    });
+    const id = 'path\\name';
+    await report.append(
+      { id, prompt: 'Test' },
+      { status: 'success', output: 'ok' },
+    );
+
+    const content = await readFile(
+      join(tempDir, 'backslash-id-report.yaml'),
+      'utf-8',
+    );
+    expect(parseIdField(content)).toBe(id);
+  });
+
+  it('should escape embedded newlines in the id field', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'newline-id',
+    });
+    const id = 'first\nsecond';
+    await report.append(
+      { id, prompt: 'Test' },
+      { status: 'success', output: 'ok' },
+    );
+
+    const content = await readFile(
+      join(tempDir, 'newline-id-report.yaml'),
+      'utf-8',
+    );
+    // The serialized id must occupy exactly one physical line - an
+    // unescaped newline would split the id value across two YAML lines
+    // and corrupt the document structure.
+    const idLines = content.split('\n').filter(line => line.startsWith('id:'));
+    expect(idLines).toHaveLength(1);
+    expect(parseIdField(content)).toBe(id);
+  });
 });
