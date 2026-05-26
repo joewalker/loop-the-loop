@@ -75,6 +75,16 @@ describe('Git', () => {
       });
       expect(await git.isClean()).toBe(true);
     });
+
+    it('should treat file names starting with - as paths, not flags', async () => {
+      await writeFile(join(repoPath, '-foo.txt'), 'foo');
+      await git.add('-foo.txt');
+
+      await git.commit('Add dash-prefixed file', {
+        committer: { name: 'Test', email: 'test@test.com' },
+      });
+      expect(await git.isClean()).toBe(true);
+    });
   });
 
   describe('commit', () => {

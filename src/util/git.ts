@@ -51,7 +51,7 @@ export class Git {
     if (files.length === 0) {
       args.push('--all');
     } else {
-      args.push(...files);
+      args.push('--', ...files);
     }
     return exec('git', args);
   }
