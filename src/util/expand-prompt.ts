@@ -22,7 +22,7 @@ export async function expandPrompt(
   let result = await expandIncludes(template, basePath);
 
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replaceAll(`{{${key}}}`, value);
+    result = result.replaceAll(`{{${key}}}`, () => value);
   }
 
   return result;
