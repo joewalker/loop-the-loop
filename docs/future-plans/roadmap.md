@@ -1,6 +1,6 @@
 # Roadmap
 
-We have a number of large-ish improvements planned. Before we begin on these we should close out all existing S3 bugs, and review S4 bugs to see if there are any any that have been mis-triaged.
+We have a number of large-ish improvements planned.
 
 - [Add a `--doctor` CLI option](doctor-flag.md)
 - [Add optional parallel prompt execution](concurrency.md)
