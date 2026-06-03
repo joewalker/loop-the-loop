@@ -9,11 +9,27 @@ import type { ReporterSpec } from './reporters.js';
 export type OutputSchema = Record<string, unknown>;
 
 /**
+ * Cost and token usage metadata for an agent invocation. `costSource:
+ * 'unavailable'` means usage may be known but no USD figure was produced.
+ */
+export interface CostInfo {
+  readonly usd: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheCreationTokens?: number;
+  readonly reasoningTokens?: number;
+  readonly model?: string;
+  readonly costSource: 'provider' | 'estimated' | 'unavailable';
+}
+
+/**
  * We ran a prompt through an Agent and it worked out okay
  */
 export interface SuccessfulInvocationResult {
   readonly status: 'success';
   readonly output: string;
+  readonly cost?: CostInfo;
   /**
    * When an `outputSchema` was provided, the SDK returns the parsed object
    * that conforms to the schema. Present only when structured output was
@@ -32,6 +48,7 @@ export interface SuccessfulInvocationResult {
 export interface GlitchedInvocationResult {
   readonly status: 'glitch';
   readonly reason: string;
+  readonly cost?: CostInfo;
 }
 
 /**
@@ -42,6 +59,7 @@ export interface GlitchedInvocationResult {
 export interface ErrorInvocationResult {
   readonly status: 'error';
   readonly reason: string;
+  readonly cost?: CostInfo;
 }
 
 /**

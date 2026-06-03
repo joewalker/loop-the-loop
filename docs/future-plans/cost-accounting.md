@@ -22,7 +22,9 @@ Design decisions:
 
 ## Design
 
-### 1. Result shape - [src/types.ts](../../src/types.ts)
+### 1. Result shape baseline - [src/types.ts](../../src/types.ts)
+
+The shared result shape already carries optional cost metadata:
 
 ```ts
 export interface CostInfo {
@@ -44,7 +46,7 @@ export interface CostInfo {
 }
 ```
 
-Add `readonly cost?: CostInfo` to `SuccessfulInvocationResult`, `GlitchedInvocationResult`, and `ErrorInvocationResult`. When `costSource: 'unavailable'`, `usd` is 0. Consumers should branch on `costSource`, not on whether `usd > 0`.
+`SuccessfulInvocationResult`, `GlitchedInvocationResult`, and `ErrorInvocationResult` all include `readonly cost?: CostInfo`. Provider-specific pricing work should populate that field rather than defining a loop-state-specific cost type. When `costSource: 'unavailable'`, `usd` is 0. Consumers should branch on `costSource`, not on whether `usd > 0`.
 
 ### 2. Pricing helper - new `src/util/pricing.ts`
 
@@ -320,7 +322,7 @@ Tests to update:
 
 ## Files to modify
 
-- [src/types.ts](../../src/types.ts) - `CostInfo`, `cost?` on result variants, `maxBudgetUsd` on `LoopCliConfig` / `LoopConfig`.
+- [src/types.ts](../../src/types.ts) - `maxBudgetUsd` on `LoopCliConfig` / `LoopConfig`; `CostInfo` and `cost?` on result variants are already baseline.
 - [src/util/pricing.ts](../../src/util/pricing.ts) - new; pure data plus `estimateCost`.
 - [src/util/loop-state.ts](../../src/util/loop-state.ts) - ensure `complete()` persists `cost` in `results`, accumulates `totalUsd`, preserves `claims`, and keeps old-format migration.
 - [src/agents/claude-sdk.ts](../../src/agents/claude-sdk.ts) - capture provider cost; thread through all return paths.

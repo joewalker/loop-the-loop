@@ -1,20 +1,9 @@
-import type { InvokeResult } from './types.js';
+import type { CostInfo, InvokeResult } from './types.js';
 import { FileLoopState } from './util/loop-state.js';
 
-export interface CostInfo {
-  readonly usd: number;
-  readonly inputTokens?: number;
-  readonly outputTokens?: number;
-  readonly cacheReadTokens?: number;
-  readonly cacheCreationTokens?: number;
-  readonly reasoningTokens?: number;
-  readonly model?: string;
-  readonly costSource: 'provider' | 'estimated' | 'unavailable';
-}
+export type { CostInfo } from './types.js';
 
-export type LoopStateResult = InvokeResult & {
-  readonly cost?: CostInfo;
-};
+export type LoopStateResult = InvokeResult;
 
 export interface PromptOutcome {
   readonly status: 'success' | 'error';

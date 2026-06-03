@@ -1,7 +1,6 @@
 export type { Agent, AgentSpec, InvokeOptions } from './agents.js';
 export type { Logger, LoggerSpec } from './loggers.js';
 export type {
-  CostInfo,
   LoopStateSnapshot,
   LoopStateResult,
   LoopState,
@@ -22,6 +21,7 @@ export type {
 } from './prompt-generators.js';
 export type { Reporter, ReporterConfig, ReporterSpec } from './reporters.js';
 export type {
+  CostInfo,
   ErrorInvocationResult,
   GlitchedInvocationResult,
   InvokeResult,
