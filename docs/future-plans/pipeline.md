@@ -73,7 +73,7 @@ A pipeline lives in the `promptGenerator` slot. Steps are named entries; the nam
             "loop-state",
             {
               "stateFile": "fix-bugs-verify-loop-state.json",
-              "select": "completed",
+              "select": "success",
               "promptTemplate": "{{include:commit.md}}"
             }
           ]
@@ -165,17 +165,17 @@ Each line's top-level fields become template variables, plus `{{id}}` and `{{ind
 
 ### The loop-state generator
 
-A new generator named `loop-state` (file `src/prompt-generators/loop-state.ts`). It reads a `*-loop-state.json` file and yields prompts derived from per-id outcomes. It is for status-based routing without needing the full report, for example "emit one prompt per succeeded id" or "re-run every failed id."
+A new generator named `loop-state` (file `src/prompt-generators/loop-state.ts`). It reads a `*-loop-state.json` file and yields prompts derived from per-id outcomes. It is for status-based routing without needing the full report, for example "emit one prompt per successful id" or "re-run every error id."
 
 Config (`LoopStateTask`):
 
 - `stateFile` (required): path to the loop-state JSON, config-relative.
 - `promptTemplate` (required).
-- `select` (optional): `completed`, `failed`, or `all`. Default `completed`, the safe choice for forward progress.
+- `select` (optional): `success`, `error`, or `all`. Default `success`, the safe choice for forward progress.
 
-Template variables per entry are `{{id}}`, `{{status}}`, and `{{reason}}` when failed. It cannot provide `output` or `structuredOutput`, because the loop-state file deliberately does not store them (cost-accounting.md keeps outcomes slim for size; the reporter already holds the full result). Use `loop-state` for status and routing, and `jsonl` when the upstream output text is needed.
+Template variables per entry are `{{id}}`, `{{status}}`, and `{{reason}}` when the outcome status is `error`. It cannot provide `output` or `structuredOutput`, because the loop-state file deliberately does not store them (cost-accounting.md keeps outcomes slim for size; the reporter already holds the full result). Use `loop-state` for status and routing, and `jsonl` when the upstream output text is needed.
 
-The reader must tolerate both loop-state shapes, because this plan and cost-accounting.md can land in either order. The current shape ([src/util/loop-state.ts](../../src/util/loop-state.ts)) is `{ completed: [], failed: [], inProgress? }`; the cost-accounting.md shape is `{ results: Record<id, {status, reason?, cost?}>, inProgress?, totalUsd? }`. If `results` is present, derive completed and failed from it; otherwise read the arrays. The reader parses the file independently rather than going through `LoopState`, so it is not coupled to whichever shape the class currently writes. It ignores `inProgress`, so the array-versus-map change in [remote-loop-state.md](./remote-loop-state.md) does not affect it.
+The reader consumes the canonical v2 loop-state shape: `{ version, results, claims, totalUsd }`. It derives yielded entries from `results` and ignores `claims`, because active claims are not terminal routing decisions. For compatibility with pre-v2 local files, it may also read old `completed` / `failed` arrays when `results` is absent, but new files and tests should assert the canonical shape.
 
 Both readers gate yielded ids through `loopState.isOutstanding(id)` so the consuming step is itself resumable. Note that the consuming step's own state file is a different file from the upstream state file it reads as data; there is no conflict, but the two-files distinction is worth keeping in mind.
 
@@ -205,11 +205,11 @@ Phases 1 and 2 are the deliverable. Phase 3 is a freebie after concurrency lands
 
 ## Interaction with other planned work
 
-[concurrency.md](./concurrency.md): soft, becoming a hard dependency only for Phases 3 and 4. Sequential pipelines need nothing from it. Within-step concurrency is a pass-through that inherits concurrency.md's refusal of `allowSourceUpdate` plus concurrency and of the `batch` generator plus concurrency. Cross-branch parallelism must extend that reasoning to serialize source-mutating steps. Its change of `inProgress` from a string to an array does not affect the `loop-state` reader, which ignores `inProgress`.
+[concurrency.md](./concurrency.md): soft, becoming a hard dependency only for Phases 3 and 4. Sequential pipelines need nothing from it. Within-step concurrency is a pass-through that inherits concurrency.md's refusal of `allowSourceUpdate` plus concurrency and of the `batch` generator plus concurrency. Cross-branch parallelism must extend that reasoning to serialize source-mutating steps. The `loop-state` reader ignores `claims`, so active in-flight prompts do not become downstream work.
 
-[cost-accounting.md](./cost-accounting.md): soft, with one mandatory integration point. The `jsonl` reader surfaces `cost` for free, because report lines spread the result and cost-accounting adds `cost` to that spread. The `loop-state` reader must tolerate cost-accounting's `results` record shape; that dual-shape parse is required regardless of land order. A pipeline-wide budget is the real gap, since cost-accounting persists `totalUsd` per step state file, so per-step budgets work by inheritance but a pipeline-wide cap needs aggregation across step files; deferred.
+[cost-accounting.md](./cost-accounting.md): soft. The `jsonl` reader surfaces `cost` for free, because report lines spread the result and cost-accounting adds `cost` to that spread. The `loop-state` reader already reads the canonical `results` record and may expose `cost` as a stringified template variable when present. A pipeline-wide budget is the real gap, since cost-accounting persists `totalUsd` per step state file, so per-step budgets work by inheritance but a pipeline-wide cap needs aggregation across step files; deferred.
 
-[remote-loop-state.md](./remote-loop-state.md): mostly independent. It changes the loop-state backend and the `inProgress` shape, neither of which affects the readers (they ignore `inProgress` and keep reading `completed` and `failed`). One caveat: the readers read a local file with `readFile`, so a step whose state lives in S3 cannot be read this way. The first version documents that readers require local files (the common case where all steps share a local `outputDir`); S3-backed handoff is future work and would route the reader through the pluggable state loader.
+[remote-loop-state.md](./remote-loop-state.md): mostly independent. It changes the loop-state backend, not the canonical snapshot shape. One caveat: the readers read a local file with `readFile`, so a step whose state lives in S3 cannot be read this way. The first version documents that readers require local files (the common case where all steps share a local `outputDir`); S3-backed handoff is future work and would route the reader through the pluggable state loader or `getSnapshot()`.
 
 [doctor-flag.md](./doctor-flag.md): independent, with an easy bonus. When doctor lands, the two readers implement its optional `check()` to verify their `dataFile` or `stateFile` exists, mirroring the `json` generator's check. A natural later extension of `--doctor` is validating the DAG and running each step's component checks, but that is additive.
 
@@ -233,7 +233,7 @@ New:
 
 - `src/pipeline.ts`: `isPipelineSpec`, `runPipeline`, DAG validation and topological sort, per-step config synthesis, abort and resume policy.
 - `src/prompt-generators/jsonl.ts`: `JsonlTask`, `normalizeJsonlTaskConfig`, `JsonlPromptGenerator`.
-- `src/prompt-generators/loop-state.ts`: `LoopStateTask`, `normalizeLoopStateTaskConfig`, `LoopStatePromptGenerator` with the dual-shape parse.
+- `src/prompt-generators/loop-state.ts`: `LoopStateTask`, `normalizeLoopStateTaskConfig`, `LoopStatePromptGenerator` over the canonical `results` snapshot with legacy read compatibility.
 - Tests: `src/__test__/pipeline.test.ts`, `src/prompt-generators/__test__/jsonl.test.ts`, `src/prompt-generators/__test__/loop-state.test.ts`.
 - Example configs under `src/examples/`.
 
@@ -250,7 +250,7 @@ Modified:
 Reader generators (mirroring the `json` generator tests):
 
 - `jsonl`: reads multiple lines into prompts; `idField` default of `id` and an override; the `status` filter; object fields stringified with `JSON.stringify`; duplicate id throws; `isOutstanding` skip on resume; malformed line throws with its line number; trailing blank lines ignored; missing file behavior (the chosen empty-versus-throw policy).
-- `loop-state`: reads the old shape (`completed`, `failed`); reads the cost-accounting `results` shape; `select` of `completed`, `failed`, and `all`; `{{reason}}` present only for failed; `isOutstanding` skip on resume.
+- `loop-state`: reads the canonical `results` shape; keeps legacy compatibility for old `completed` / `failed` arrays; `select` of `success`, `error`, and `all`; `{{reason}}` present only for error outcomes; `isOutstanding` skip on resume.
 
 Orchestrator (`runPipeline`, with the `test` agent so no real backend is hit):
 
@@ -282,7 +282,7 @@ Schema:
 ## Verification
 
 1. `pnpm tsc && pnpm test` pass; `pnpm lint` clean; `pnpm format` no diff.
-2. Reader generators in isolation: an ordinary loop config whose generator is `jsonl` pointed at a hand-written JSONL file yields the expected prompts under `--dry-run`; the same for `loop-state` against a hand-written state file in both the old and the `results` shapes.
+2. Reader generators in isolation: an ordinary loop config whose generator is `jsonl` pointed at a hand-written JSONL file yields the expected prompts under `--dry-run`; the same for `loop-state` against a hand-written canonical v2 state file, plus one legacy compatibility case.
 3. A two-step pipeline (`review` then `output`) with the `test` agent and `jsonl-report`: confirm `fix-bugs-review-report.jsonl` is written, that `output` reads it, and that `fix-bugs-output-report.jsonl` is the final artifact.
 4. Per-step override: a `verify` step with a different agent uses that agent; a `commit` step with `allowSourceUpdate: true` requires a clean tree and commits, while earlier steps do not.
 5. Validation: configs with a missing `output`, an unknown `dependsOn`, and a cycle each fail at startup with a clear message before any step runs.

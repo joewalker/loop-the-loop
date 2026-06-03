@@ -142,53 +142,50 @@ output: |2
 
 Numeric scalars unquoted; `model` and `costSource` through `JSON.stringify` for the same reasons `id` is. Undefined fields omitted.
 
-### 7. LoopState - [src/util/loop-state.ts](../../src/util/loop-state.ts)
+### 7. LoopState baseline - [src/loop-states.ts](../../src/loop-states.ts)
 
-Restructure persistence so the per-prompt outcome (status, optional error reason, optional cost) is keyed by id in a single record. Replaces the parallel `completed: string[]` + `failed: FailedState[]` shape.
+Cost accounting uses the canonical v2 loop-state shape. It does not introduce another persisted format.
 
 ```ts
 interface PromptOutcome {
   readonly status: 'success' | 'error';
-  readonly reason?: string;        // present when status === 'error'
-  readonly cost?: CostInfo;        // cost of the final attempt, if known
+  readonly reason?: string;
+  readonly cost?: CostInfo;
 }
 
 interface PersistedLoopState {
-  readonly results?: Record<string, PromptOutcome>;
-  readonly inProgress?: string;
-  readonly totalUsd?: number;      // cached running total; includes glitch retry costs
+  readonly version: 2;
+  readonly results: Record<string, PromptOutcome>;
+  readonly claims: Record<string, PromptClaim>;
+  readonly totalUsd: number;
 }
 ```
 
-Why not full `InvokeResult` per id: `output` / `structuredOutput` can be multi-KB, the file is rewritten on every `begin()` and `end()` (twice per prompt), and the reporter already persists the full result. Slim outcomes keep the state file as a fast index.
+Why not full `InvokeResult` per id: `output` / `structuredOutput` can be multi-KB, the file is rewritten often, and the reporter already persists the full result. Slim outcomes keep the state file as a fast index.
 
-Why a separate cached `totalUsd`: glitches don't go into `results` (they retry, `isOutstanding` must keep returning true), but glitch attempts still cost real money. `totalUsd` is incremented for every `end()` whose result has a cost with `costSource !== 'unavailable'`, including glitches.
+Why a separate cached `totalUsd`: glitches do not go into `results` because they retry and `isOutstanding()` must keep returning true, but glitch attempts still cost real money. `totalUsd` is incremented for every `complete()` whose result has a cost with `costSource !== 'unavailable'`, including glitches.
 
 Implementation:
 
-- Private fields: `#results: Map<string, PromptOutcome>`, `#inProgress?: string`, `#totalUsd: number`.
-- `create()`: parse new shape; if `results` is absent but `completed` / `failed` are present (old format), migrate inline by building `results` from them with `cost` undefined. Old state files resume cleanly.
+- `create()`: keep the existing migration from old `completed` / `failed` arrays into `results`. Old `inProgress` values remain ignored legacy input and are not written.
 - `isOutstanding(id)`: returns `!#results.has(id)`. Glitches don't get stored, so they remain outstanding by construction.
-- `begin(id)`: unchanged contract; sets `#inProgress`, saves.
-- `end(id, result)`:
+- `claim(runId, id)`: records active ownership in `claims[id]`.
+- `complete(runId, id, result)`:
   - If `result.status === 'success'` or `'error'`: set `#results.set(id, { status, reason: result.status === 'error' ? result.reason : undefined, cost: result.cost })`.
   - If `result.status === 'glitch'`: don't touch `#results` (id stays outstanding for retry).
   - In all three cases: if `result.cost?.costSource === 'provider'` or `'estimated'`, add `result.cost.usd` to `#totalUsd`.
-  - Clear `#inProgress`, save.
-- Public getters for callers that still want the lists:
-  - `get completed(): ReadonlyArray<string>` - ids with `status === 'success'`.
-  - `get failed(): ReadonlyArray<{ id: string; reason: string }>` - entries with `status === 'error'`.
-  - `get totalUsd(): number`.
-  - `get outcomes(): ReadonlyMap<string, PromptOutcome>` for the budget check / future reporting.
-- `save()` writes `{ results, inProgress, totalUsd }`. Negative or non-finite `totalUsd` is clamped to no-op on the increment, never written.
+  - Remove `claims[id]`, save, and leave other active claims untouched.
+- `getSnapshot()`: returns `{ version: 2, results, claims, totalUsd }` for budget checks, readers, and diagnostics.
+- `save()` writes `{ version: 2, results, claims, totalUsd }`. Negative or non-finite cost values are clamped to no-op on the increment, never written.
 
 ### 8. Loop runtime - [src/loop.ts](../../src/loop.ts)
 
-`loopState.end(id, result)` now handles the cost accounting internally (sets the outcome and accumulates `totalUsd`). The loop just needs the verbose log and the budget check.
+`loopState.complete(runId, id, result)` handles the cost accounting internally (sets the outcome and accumulates `totalUsd`). The loop just needs the verbose log and the budget check.
 
-After `await reporter.append(prompt, result)` and after `await loopState.end(id, result)`:
+After `await reporter.append(prompt, result)` and after `await loopState.complete(runId, id, result)`:
 
 ```ts
+const snapshot = await loopState.getSnapshot();
 if (result.cost !== undefined) {
   const tag =
     result.cost.costSource === 'provider'
@@ -198,7 +195,7 @@ if (result.cost !== undefined) {
         : ' (no price)';
   logger.state(
     `Cost: ${result.cost.usd.toFixed(4)} USD${tag}, ` +
-    `total: ${loopState.totalUsd.toFixed(4)} USD`,
+    `total: ${snapshot.totalUsd.toFixed(4)} USD`,
   );
 }
 ```
@@ -207,17 +204,19 @@ if (result.cost !== undefined) {
 
 - `LoopCliConfig`: `readonly maxBudgetUsd?: number;`.
 - `LoopConfig`: `readonly maxBudgetUsd: number;` defaulting to `Infinity`.
-- After the `completed >= maxPrompts` check, a budget check using the same return-string contract:
+- At startup, read `await loopState.getSnapshot()` and stop immediately if `totalUsd >= maxBudgetUsd` from a previous run.
+- After the `completed >= maxPrompts` check, read a fresh snapshot and run the budget check using the same return-string contract:
 
 ```ts
-if (loopState.totalUsd >= maxBudgetUsd) {
-  const msg = `Reached budget of ${maxBudgetUsd} USD (total ${loopState.totalUsd.toFixed(4)} USD)`;
+const snapshot = await loopState.getSnapshot();
+if (snapshot.totalUsd >= maxBudgetUsd) {
+  const msg = `Reached budget of ${maxBudgetUsd} USD (total ${snapshot.totalUsd.toFixed(4)} USD)`;
   logger.state(msg);
   return `Done (${msg.toLowerCase()})`;
 }
 ```
 
-Check after `reporter.append` and `loopState.end` so the prompt that pushes us over is fully recorded, then stop before pulling the next one. When [concurrency.md](./concurrency.md) lands, the budget check becomes "stop on first completion that crosses the cap" with in-flight prompts allowed to drain. Same shape `runPool` will need for `maxPrompts`.
+Check after `reporter.append` and `loopState.complete` so the prompt that pushes us over is fully recorded, then stop before pulling the next one. When [concurrency.md](./concurrency.md) lands, the budget check becomes "stop on first completion that crosses the cap" with in-flight prompts allowed to drain. Same shape `runPool` will need for `maxPrompts`.
 
 ### 9. CLI plumbing - [src/util/load-cli-config.ts](../../src/util/load-cli-config.ts)
 
@@ -280,14 +279,14 @@ New files:
 Existing files, additions:
 
 - `src/util/__test__/loop-state.test.ts`:
-  - `end()` with success stores the outcome under `results[id]`; `completed` getter returns it.
-  - `end()` with error stores `{ status: 'error', reason }`; `failed` getter returns `{ id, reason }`.
-  - `end()` with glitch leaves `results` untouched; `isOutstanding(id)` stays true.
-  - `end()` with any status whose cost has `costSource === 'provider'` or `'estimated'` adds to `totalUsd`; `'unavailable'` does not.
+  - `complete()` with success stores the outcome under `results[id]`.
+  - `complete()` with error stores `{ status: 'error', reason }`.
+  - `complete()` with glitch leaves `results` untouched; `isOutstanding(id)` stays true.
+  - `complete()` with any status whose cost has `costSource === 'provider'` or `'estimated'` adds to `totalUsd`; `'unavailable'` does not.
   - Glitch attempts contribute to `totalUsd` even though they don't appear in `results`.
   - Non-finite or negative cost values are clamped to no-op on the increment.
   - Old-format state file (`completed: string[]` + `failed: FailedState[]`, no `results`) migrates on load: `results` populated with `cost: undefined`, `totalUsd: 0`.
-  - New-format round-trip: save then reload preserves `results`, `totalUsd`, `inProgress`.
+  - Canonical round-trip: save then reload preserves `results`, `claims`, and `totalUsd`.
 - `src/agents/__test__/claude-sdk.test.ts`: `extractClaudeCost` covering success result, error result with cost, `error_max_budget_usd` subtype carrying cost, missing-cost result. `CostInfo` attached on glitch (e.g. `terminal_reason=blocking_limit`) and error returns.
 - `src/agents/__test__/openai-sdk.test.ts`: `extractOpenAIUsage` summing across multiple `rawResponses`; `resolveOpenAIModel` precedence; missing-pricing emits the logger line and produces `costSource: 'unavailable'`; pricing hit produces `costSource: 'estimated'`.
 - `src/agents/__test__/codex-cli.test.ts`: synthetic JSONL with `token_count` events feeds the accumulator; both event shapes recognised; cumulative totals semantics; no events yields no `cost`.
@@ -307,7 +306,7 @@ Existing files, additions:
 Tests to update:
 
 - `src/__test__/loop.test.ts`: any snapshots or full-content assertions over YAML or JSONL entries get the optional `cost` block treated as present-or-absent.
-- `src/util/__test__/loop-state.test.ts`: state-shape assertions accept the new `results` and `totalUsd` fields, and add a migration test from the old format.
+- `src/util/__test__/loop-state.test.ts`: state-shape assertions use the canonical `results`, `claims`, and `totalUsd` snapshot, and keep the migration test from the old format.
 
 ## Out of scope
 
@@ -323,7 +322,7 @@ Tests to update:
 
 - [src/types.ts](../../src/types.ts) - `CostInfo`, `cost?` on result variants, `maxBudgetUsd` on `LoopCliConfig` / `LoopConfig`.
 - [src/util/pricing.ts](../../src/util/pricing.ts) - new; pure data plus `estimateCost`.
-- [src/util/loop-state.ts](../../src/util/loop-state.ts) - new `results` record, `totalUsd`, derived `completed` / `failed` getters, old-format migration.
+- [src/util/loop-state.ts](../../src/util/loop-state.ts) - ensure `complete()` persists `cost` in `results`, accumulates `totalUsd`, preserves `claims`, and keeps old-format migration.
 - [src/agents/claude-sdk.ts](../../src/agents/claude-sdk.ts) - capture provider cost; thread through all return paths.
 - [src/agents/openai-sdk.ts](../../src/agents/openai-sdk.ts) - `prices` config, token sum, model resolution, estimation.
 - [src/agents/codex-cli.ts](../../src/agents/codex-cli.ts) - `prices` config, model config, `TokenAccumulator`, estimation.
@@ -362,4 +361,4 @@ Files to delete once this plan lands:
 - Provider usage shapes shift. The type allows missing usage and missing cost without treating that as failure.
 - Without built-in prices, OpenAI and Codex users see `costSource: 'unavailable'` until they configure pricing. The warning log and the recorded token counts make this discoverable rather than silent.
 - Codex CLI JSON event shapes are not part of this repo. The parser is tolerant and acts only on fields it can confidently recognise.
-- Concurrency and remote loop state plans may later want a shared persisted total. Persisting via `LoopState` keeps this consistent with the existing pluggable-state direction in [remote-loop-state.md](./remote-loop-state.md).
+- Concurrency and remote loop state share the same persisted `totalUsd`. Budget checks should read it through `getSnapshot()` so they work with both filesystem and future remote backends.

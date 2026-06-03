@@ -6,7 +6,7 @@ Today `loopImpl` in [src/loop.ts](../../src/loop.ts) runs prompts strictly seria
 
 We add a single new top-level config field, `concurrency` (default `1`, matching today's behavior byte-for-byte), with a matching `--concurrency N` CLI flag. When `concurrency > 1`, up to N prompts may be in flight at once. We explicitly refuse the combination with `allowSourceUpdate` (git commits cannot safely interleave) and with the `batch` prompt generator (summary prompts read the report file and would race with in-flight batch items). All other generators yield each id exactly once per run, so they are safe with concurrent consumption.
 
-The reporter file (`yaml-report` / `jsonl-report`) is append-only via `fs/promises.appendFile`, which is not safe under concurrent writes from the same process. We serialize reporter writes with a small wrapper that the runner applies only when `concurrency > 1`, so custom user-supplied reporters get the same protection automatically. `LoopState` already saves on every `begin`/`end`, so it gets a small internal save-serialization mutex and `inProgress` changes from a single string to an array (with a backwards-compat load path for old state files).
+The reporter file (`yaml-report` / `jsonl-report`) is append-only via `fs/promises.appendFile`, which is not safe under concurrent writes from the same process. We serialize reporter writes with a small wrapper that the runner applies only when `concurrency > 1`, so custom user-supplied reporters get the same protection automatically. `LoopState` already uses the canonical v2 shape from [src/loop-states.ts](../../src/loop-states.ts): terminal outcomes live in `results`, active ownership lives in `claims`, and the accumulated run cost lives in `totalUsd`. Concurrency does not introduce a new persisted shape; workers share one `runId` and claim multiple prompt ids under that run.
 
 User-confirmed design decisions:
 
@@ -98,15 +98,13 @@ function serializeReporter(inner: Reporter): Reporter {
 
 Applied only when `concurrency > 1`. Works for custom user reporters too (the existing test in [src/__test__/loop.test.ts](../../src/__test__/loop.test.ts) passes a bare `{ append: vi.fn() }`).
 
-### 6. LoopState — [src/util/loop-state.ts](../../src/util/loop-state.ts)
+### 6. LoopState interaction
 
-- Change `#inProgress?: string | undefined` → `#inProgress: Array<string>` (initialized to `[]`).
-- Persist as `inProgress: Array<string>` (the JSON shape changes from string to array - there is no published version of this tool yet, but we still handle older local state files for users who upgrade mid-run).
-- `PersistedLoopState`: change `inProgress?: string` to `inProgress?: string | Array<string>`.
-- `create()` migration on load: if `data.inProgress` is a string, treat as `[data.inProgress]`; if absent, `[]`.
-- `begin(id)`: push id, save.
-- `end(id, result)`: remove id from `#inProgress`, then push to `#completed` or `#failed` per result, save.
-- Internal save serialization: add a `#saveChain: Promise<void> = Promise.resolve()` and route `save()` through it so concurrent `begin`/`end` calls do not race on `writeFile`. Keep `save()` public signature unchanged.
+- Keep the canonical v2 persisted state shape unchanged: `{ version: 2, results, claims, totalUsd }`.
+- Do not add `inProgress`, array-shaped or otherwise. Old `inProgress` values are legacy migration input only and are not written by this plan.
+- Each worker calls `loopState.claim(runId, prompt.id)` before invoking the agent. All workers in one process share the same `runId`, so multiple prompt ids can be claimed by the same run concurrently.
+- Each worker calls `loopState.complete(runId, prompt.id, result)` after the reporter append succeeds. The state implementation removes that id from `claims`, records terminal `success` / `error` outcomes in `results`, and leaves glitched ids outstanding.
+- The filesystem backend's serialized save chain is part of the baseline state implementation. This plan relies on it rather than changing the state format.
 
 ### 7. CLI plumbing — [src/util/load-cli-config.ts](../../src/util/load-cli-config.ts)
 
@@ -127,17 +125,12 @@ Update the JSDoc usage block to include `[--concurrency N]`. No other changes (t
 
 ## Tests
 
-Existing tests that must be updated:
-
-- [src/__test__/loop.test.ts](../../src/__test__/loop.test.ts) at lines ~332-362 (the "keep the prompt outstanding if writing the report fails" test asserts `inProgress: 'a.ts'` as a string - change to `['a.ts']`).
-- [src/util/__test__/loop-state.test.ts](../../src/util/__test__/loop-state.test.ts) at lines ~115-124 (`data.inProgress === 'active-item'` → `['active-item']`) and any other tests asserting the string shape.
-
 New tests to add:
 
 - `loop-state.test.ts`:
-  - Backwards-compat: load a state file with `inProgress: "old-id"` (string) and verify it round-trips as `["old-id"]`.
-  - Multiple in-flight: `begin('a')` + `begin('b')` then `end('a', success)` leaves `inProgress: ['b']` and `completed: ['a']`.
-  - Concurrent save: launch many `begin`/`end` calls in parallel and verify the final file matches the in-memory state (no lost writes).
+  - Backwards-compat: load old state files with `completed` / `failed` / `inProgress` and verify they migrate to `results` with no persisted `inProgress`.
+  - Multiple in-flight: `claim('run-1', 'a')` + `claim('run-1', 'b')` then `complete('run-1', 'a', success)` leaves `claims.b` present and `results.a.status === 'success'`.
+  - Concurrent save: launch many `claim` / `complete` calls in parallel and verify the final file matches the in-memory snapshot (no lost writes).
 
 - `loop.test.ts`:
   - `concurrency: 3` with a test agent that records timestamps → assert overlap (>1 invocation in flight at some point).
@@ -172,5 +165,5 @@ After implementing:
    - `--concurrency 4` → wall-clock ~1/4 (with `interPromptPause: 0`), report file is a valid YAML multi-document stream with one document per prompt and no corruption.
    - `--concurrency 4` with `allowSourceUpdate: true` in the config → fails at startup with the rejection error.
    - `--concurrency 4` against a batch generator config → fails at startup with the rejection error.
-   - Kill the run mid-flight (Ctrl-C) at `--concurrency 4`, then re-run → state file shows the killed prompts back in `inProgress`/outstanding, and the rerun completes them without duplicating already-completed work.
+   - Interrupt the run mid-flight with Ctrl-C at `--concurrency 4`, then re-run. Graceful cleanup releases the interrupted run's entries from `claims`, and the rerun completes unfinished prompts without duplicating already-completed work. A hard crash can leave stale claims; those require manual cleanup until a later lease or pruning feature lands.
 5. Confirm the JSON schema validates the new field by running `schema.test.ts` and by opening a config that sets `concurrency` in an editor with schema validation enabled.

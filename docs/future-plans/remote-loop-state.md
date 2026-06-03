@@ -2,60 +2,67 @@
 
 ## Context
 
-Today loop state (`completed`, `failed`, `inProgress`) is persisted to a single JSON file in `outputDir` via [src/util/loop-state.ts](../../src/util/loop-state.ts). The file is read on startup and fully rewritten on every `begin`/`end`. There is no abstraction layer, no atomicity beyond a single-host write, and no way for multiple concurrent runs to share progress.
+Today loop state is persisted to a single JSON file in `outputDir` via [src/util/loop-state.ts](../../src/util/loop-state.ts). The current canonical shape is version 2: terminal outcomes live in `results`, active ownership lives in `claims`, and accumulated cost lives in `totalUsd`. The file is read on startup and fully rewritten on every state change. There is a `LoopState` interface in [src/loop-states.ts](../../src/loop-states.ts), but only the filesystem implementation exists today.
 
-The goal is to let several CI runs, possibly concurrent across hosts, collaborate on the same in-progress and completed state. The first remote backend is S3-compatible object storage (AWS S3, Cloudflare R2, MinIO), using ETag-based optimistic concurrency. The filesystem backend stays as the default with identical observable behavior to today's code.
+The goal is to let several CI runs, possibly concurrent across hosts, collaborate on the same claim and result state. The first remote backend is S3-compatible object storage (AWS S3, Cloudflare R2, MinIO), using ETag-based optimistic concurrency. The filesystem backend stays as the default with identical observable behavior to today's code.
 
-Related plan: [concurrency.md](concurrency.md) covers in-process parallelism (N prompts in flight from a single process). The two are complementary. To keep both lines of work landable in either order, this plan adopts an `inProgress` shape of `Record<runId, Array<itemId>>`: the outer map covers the cross-process collaboration case, and the inner array covers the in-process pool case. The concurrency plan's `inProgress: Array<string>` becomes a single key in this richer map.
+Related plan: [concurrency.md](concurrency.md) covers in-process parallelism (N prompts in flight from a single process). The two are complementary and share the same state model. In-process workers and cross-process runners both call `claim(runId, id)` before doing work and `complete(runId, id, result)` afterwards. The only difference is where optimistic concurrency is enforced: the filesystem backend serializes writes inside one process, while the S3 backend uses object ETags across processes and hosts.
 
 User-confirmed design decisions:
 
 - First remote backend: S3-compatible (S3, R2, MinIO). No GCS or Azure in this iteration.
-- Concurrency model: `inProgress` becomes a map keyed by a per-run UUID.
+- Concurrency model: `claims` is the active ownership map, keyed by prompt id with a `runId` value.
 - Config surface: a new top-level `loopState` block on `LoopCliConfig`, defaulting to filesystem.
 - AWS SDK: use `@aws-sdk/client-s3` rather than hand-rolling SigV4 or pulling a tiny dep.
 - Method naming on the new interface: `claim` / `complete` / `release`.
 - Live tests against MinIO behind env-var gating, mirroring the project's `*-live.test.ts` pattern.
-- Include a SIGINT/SIGTERM cleanup handler that calls `release(runId)` on graceful exit. No stale-claim pruning. No formal version migration for older state files (single-field permissive parse only).
+- Include a SIGINT/SIGTERM cleanup handler that calls `release(runId)` on graceful exit. No automatic stale-claim pruning in this iteration. No formal version migration beyond permissive loading of old local state files.
 
 ## Design
 
 ### `LoopState` interface
 
-A new module [src/loop-states.ts](../../src/loop-states.ts) mirrors the structure of [src/reporters.ts](../../src/reporters.ts):
+The existing module [src/loop-states.ts](../../src/loop-states.ts) mirrors the structure of [src/reporters.ts](../../src/reporters.ts):
 
 ```ts
 export interface LoopState {
   isOutstanding(id: string): boolean;
   claim(runId: string, id: string): Promise<boolean>;
-  complete(runId: string, id: string, result: InvokeResult): Promise<void>;
+  complete(runId: string, id: string, result: LoopStateResult): Promise<void>;
   release(runId: string): Promise<void>;
+  getSnapshot(): Promise<LoopStateSnapshot>;
 }
 ```
 
 Semantics:
 
-- `isOutstanding(id)` returns true unless `id` is in `completed` or `failed`. It does not consult the in-progress map; race arbitration is `claim()`'s job. Without this rule, prompt generators would spuriously skip items that another run might release.
-- `claim(runId, id)` is the atomic race-arbiter. Returns `false` when another run has already completed or failed the item, or when the underlying optimistic-concurrency write loses too many retries. Returns `true` after recording the new claim.
-- `complete(runId, id, result)` pushes to `completed` or `failed` per the `InvokeResult` status (glitch leaves the item outstanding, matching today), then removes the entry from `inProgress[runId]`.
-- `release(runId)` clears `inProgress[runId]` entirely. Idempotent. Called from the loop's `finally` and from SIGINT/SIGTERM handlers.
+- `isOutstanding(id)` returns true unless `id` exists in `results`. It does not consult `claims`; prompt generators should only use it to skip terminal outcomes.
+- `claim(runId, id)` is the atomic race-arbiter. Returns `false` when the id already has a terminal outcome in `results`, when another run owns `claims[id]`, or when the underlying optimistic-concurrency write loses too many retries. Returns `true` after recording or confirming the claim for this run.
+- `complete(runId, id, result)` records terminal `success` / `error` outcomes in `results`, adds priced cost to `totalUsd`, and removes `claims[id]`. Glitches add priced cost but do not create a terminal outcome, so the id remains outstanding.
+- `release(runId)` clears every claim whose value has that `runId`. Idempotent. Called from the loop's `finally` and from SIGINT/SIGTERM handlers.
+- `getSnapshot()` returns the canonical persisted shape for readers, budget checks, and diagnostics without exposing backend-specific storage.
 
 ### Persisted shape
 
 ```json
 {
   "version": 2,
-  "completed": ["id-a", "id-b"],
-  "failed": [{ "id": "id-c", "reason": "..." }],
-  "inProgress": { "<runId>": ["<itemId>", "<itemId>"] }
+  "results": {
+    "id-a": { "status": "success" },
+    "id-c": { "status": "error", "reason": "..." }
+  },
+  "claims": {
+    "id-b": { "runId": "<runId>", "claimedAt": "2026-06-03T12:00:00.000Z" }
+  },
+  "totalUsd": 0
 }
 ```
 
-Loader is permissive on a single point: if `inProgress` is a string (v1, single-process serial) or an array (the shape proposed in [concurrency.md](concurrency.md) before this plan lands), it is dropped on load. `completed` and `failed` shapes are unchanged so older files load cleanly aside from that one field. No formal migration system.
+Loader compatibility is one-way. If old `completed` / `failed` arrays are present and `results` is absent, build `results` from them. If old `inProgress` values are present, ignore them; they were resume hints, not cross-process claims. New writes always use `results`, `claims`, and `totalUsd`.
 
 ### Filesystem backend
 
-New file [src/loop-states/file.ts](../../src/loop-states/file.ts), class `FileLoopState`. Same JSON file as today. Writes go to `${path}.tmp` then `rename` to `${path}` so a crashed write never leaves a half-written file. Internal save serialization (`#saveChain: Promise<void>`) so concurrent in-process `claim`/`complete` calls do not race on `writeFile`. Documented as single-host; multi-host filesystem sharing is out of scope.
+Move the current filesystem implementation to [src/loop-states/file.ts](../../src/loop-states/file.ts), class `FileLoopState`. Same JSON file as today and same canonical v2 shape. Writes go to `${path}.tmp` then `rename` to `${path}` so a crashed write never leaves a half-written file. Internal save serialization (`#saveChain: Promise<void>`) so concurrent in-process `claim`/`complete` calls do not race on `writeFile`. Documented as single-host; multi-host filesystem sharing is out of scope.
 
 ### S3 backend
 
@@ -122,7 +129,7 @@ try {
 }
 ```
 
-Signal-handler cleanup is best-effort. Stale in-progress entries are cosmetic only because race arbitration is at `claim` time, not based on in-progress presence.
+Signal-handler cleanup is best-effort. A stale `claims` entry can block a later run from claiming that prompt id, so this plan relies on graceful `release(runId)` for normal interruption cleanup and documents manual state cleanup for hard crashes. Lease expiry and stale-claim pruning are deferred.
 
 ### PromptGenerator interface
 
@@ -138,13 +145,13 @@ Add `LoopStateSpec`, `S3LoopStateConfig`, and `readonly loopState?: LoopStateSpe
 
 Add `loopStateSpec`, `fileLoopStateConfig`, `s3LoopStateConfig` definitions. Reference `loopStateSpec` from the top-level `properties`.
 
-### 3. Factory module - new [src/loop-states.ts](../../src/loop-states.ts)
+### 3. Factory module - [src/loop-states.ts](../../src/loop-states.ts)
 
-`LoopState` interface, `createLoopState` factory, internal `loopStateConstructors` map (`'file'` and `'s3'` keys), `LoopStateSpec` re-export. Same shape as [src/reporters.ts](../../src/reporters.ts).
+Extend the existing `LoopState` interface and `createLoopState` factory with an internal `loopStateConstructors` map (`'file'` and `'s3'` keys), plus a `LoopStateSpec` re-export. Same shape as [src/reporters.ts](../../src/reporters.ts).
 
 ### 4. Filesystem backend - new [src/loop-states/file.ts](../../src/loop-states/file.ts)
 
-`FileLoopState` with `#path`, `#completed`, `#failed`, `#inProgress: Map<string, Array<string>>`, `#saveChain`. Static async `create({ path })`. tmp-file rename for atomicity. Permissive load that drops a non-object `inProgress`.
+`FileLoopState` with `#path`, `#results: Map<string, PromptOutcome>`, `#claims: Map<string, PromptClaim>`, `#totalUsd`, and `#saveChain`. Static async `create({ path })`. Tmp-file rename for atomicity. Permissive load migrates old `completed` / `failed` arrays into `results` and ignores old `inProgress`.
 
 ### 5. S3 backend - new [src/loop-states/s3.ts](../../src/loop-states/s3.ts)
 
@@ -156,11 +163,11 @@ Add `loopStateSpec`, `fileLoopStateConfig`, `s3LoopStateConfig` definitions. Ref
 - Generate `runId` via `crypto.randomUUID()`.
 - Install one-shot SIGINT and SIGTERM listeners that call `loopState.release(runId)`.
 - Wrap the main `for await` in `try { ... } finally { off; await loopState.release(runId); }`.
-- Replace `await loopState.begin(prompt.id)` with the claim-or-skip pattern shown above, and `await loopState.end(prompt.id, result)` with `await loopState.complete(runId, prompt.id, result)`.
+- Keep the existing claim-or-skip pattern, and route all state reads needed by diagnostics or budget checks through `getSnapshot()`.
 
 ### 7. PromptGenerator interface - [src/prompt-generators.ts](../../src/prompt-generators.ts)
 
-Change the `LoopState` import to the interface exported by [src/loop-states.ts](../../src/loop-states.ts). Refresh the JSDoc to note that under cross-process collaboration, `isOutstanding(id)` reflects completed and failed items only; generators must not assume that another runner has not already claimed an outstanding id.
+Refresh the JSDoc to note that under cross-process collaboration, `isOutstanding(id)` reflects terminal outcomes only; generators must not assume that another runner has not already claimed an outstanding id.
 
 ### 8. Prompt generators
 
@@ -185,7 +192,7 @@ Add `@aws-sdk/client-s3` to `dependencies`. Per AGENTS.md the user runs `pnpm ad
 
 New tests to add:
 
-- `src/loop-states/__test__/file.test.ts`: port the existing `loop-state.test.ts` cases (load empty, load failed, load completed, glitch leaves outstanding, malformed JSON throws, nested directory creation). Add: two runs with different runIds both call `claim` on the same id, second returns `false`; `release(runId)` is idempotent; `complete` after `release` is a no-op; tmp-file rename leaves the original intact when the rename step is intercepted.
+- `src/loop-states/__test__/file.test.ts`: port the existing `loop-state.test.ts` cases (load empty, migrate old completed / failed arrays, glitch leaves outstanding, malformed JSON throws, nested directory creation). Add: two runs with different runIds both call `claim` on the same id, second returns `false`; `release(runId)` is idempotent; old `inProgress` is ignored on load; tmp-file rename leaves the original intact when the rename step is intercepted.
 
 - `src/loop-states/__test__/s3.test.ts`: unit tests with an injected mock `S3Client`. Cases: GET 404 then PUT with `IfNoneMatch: '*'` succeeds; GET returns body and ETag then PUT with `IfMatch: <etag>` succeeds; PUT returns 412 once then succeeds on retry (assert backoff timing with fake timers); PUT returns 412 ten times and the operation throws `LoopStateConflictError`; auth error on GET is rethrown unchanged.
 
@@ -195,7 +202,7 @@ New tests to add:
 
 Existing tests that must be updated:
 
-- [src/util/__test__/loop-state.test.ts](../../src/util/__test__/loop-state.test.ts) is being removed; assertions referencing the v1 `inProgress: 'active-item'` string in `loop.test.ts` (around lines ~332-362, the "keep the prompt outstanding if writing the report fails" case) need updating to the new map shape.
+- [src/util/__test__/loop-state.test.ts](../../src/util/__test__/loop-state.test.ts) is being moved; any tests that still assert old `completed` / `failed` / `inProgress` writes should instead assert the canonical `results` / `claims` / `totalUsd` snapshot.
 
 - `schema.test.ts`: validate a config that sets `loopState: ['s3', { bucket: 'b', key: 'k' }]` and a config that sets `loopState: 'file'` and one that sets `loopState: ['file', { path: 'state.json' }]`. Reject `loopState: ['s3', {}]` (missing required fields).
 
@@ -205,7 +212,7 @@ The existing tests use a default `loopState`, so most do not need changes beyond
 
 - GCS and Azure Blob backends. They use the same optimistic-concurrency model, so adding them later is mechanical.
 - Sharded state for very large jobs. The whole state blob is rewritten on every operation; this is fine up to a few tens of thousands of completed items. A follow-up could introduce per-item keys with a manifest.
-- Stale-claim pruning with leases or TTLs. Stale `inProgress` entries are cosmetic because race arbitration is at `claim` time.
+- Automatic stale-claim pruning with leases or TTLs. A stale `claims` entry can block work; manual cleanup is acceptable for this iteration.
 - Cross-process locking for the filesystem backend. Single-host only; users who need multi-host should use S3.
 - Schema versioning beyond the single permissive load described above.
 
@@ -218,15 +225,15 @@ After implementing:
 3. `pnpm format` - no diff.
 4. Coverage stays at 100%; istanbul ignores only on `S3Client` construction paths that cannot be hit without an injected client.
 5. Manual smoke:
-   - Run an existing JSON config that omits `loopState` and confirm the on-disk file is identical in `completed`/`failed` to today's shape, with `inProgress` now an object keyed by a UUID while a prompt is mid-flight.
+   - Run an existing JSON config that omits `loopState` and confirm the on-disk file uses `results`, `claims`, and `totalUsd`. While a prompt is mid-flight, `claims` contains an entry for that prompt id with the current `runId`.
    - Run a config with `loopState: ['s3', { bucket: '<b>', key: '<k>', endpoint: '<minio>', forcePathStyle: true }]` against a local MinIO and verify the bucket object updates after each prompt.
    - Start two `loop-the-loop` processes concurrently against the same MinIO bucket and key with overlapping work. Confirm completed items are not duplicated, and one process logs `Skip (claimed elsewhere)` for items the other claims first.
-   - Kill a running process mid-prompt (Ctrl-C) and verify the SIGINT handler removes that runId from `inProgress`. A subsequent run picks up the unfinished item.
+   - Interrupt a running process mid-prompt with Ctrl-C and verify the SIGINT handler removes that runId from `claims`. A subsequent run picks up the unfinished item.
 
 ## Notes and risks
 
 - `@aws-sdk/client-s3` adds roughly 1MB to installed size. Real cost for a project with four production deps today, accepted per the user choice. The alternative was a hand-rolled SigV4 (about 120 lines) or `aws4fetch` (3KB).
 - R2 historically had occasional ETag quirks on cross-region replication. We treat any non-precondition error as fatal and surface it. R2 live tests would be useful but are out of scope.
-- The full state blob is rewritten on every operation. A 10k-item completed array is around 200KB, still cheap. Beyond 50k items, consider sharded keys.
-- Signal-handler cleanup uses `process.once('SIGINT' | 'SIGTERM', ...)` and is best-effort. Async cleanup inside a signal handler is unreliable in Node; correctness does not depend on it because `claim` resolves races on its own.
-- The interaction with [concurrency.md](concurrency.md) is intentional: that plan's `inProgress: Array<string>` becomes the single inner array for one runId in this plan's map. Either plan can land first; the second lander updates the loader's permissive parse to drop the prior shape and writes the new shape.
+- The full state blob is rewritten on every operation. A 10k-item `results` object is around a few hundred KB, still cheap. Beyond 50k items, consider sharded keys.
+- Signal-handler cleanup uses `process.once('SIGINT' | 'SIGTERM', ...)` and is best-effort. Async cleanup inside a signal handler is unreliable in Node. Hard crashes can leave stale claims, which this plan treats as an operator cleanup problem rather than adding leases in the first S3 backend.
+- The interaction with [concurrency.md](concurrency.md) is intentional: both plans share the `claims` map. In-process concurrency stores multiple prompt ids claimed by the same runId; cross-process concurrency stores prompt ids claimed by different runIds.
