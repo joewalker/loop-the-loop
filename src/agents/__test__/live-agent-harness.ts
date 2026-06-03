@@ -3,7 +3,7 @@ import type { Logger } from 'loop-the-loop/loggers';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { TestPromptGenerator } from 'loop-the-loop/prompt-generators/test';
 import type { InvokeResult } from 'loop-the-loop/types';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 
 export const CHEAP_TEST_PROMPT =
   'Compute 19 + 23. Reply with exactly the digits of the integer answer, with no words, no punctuation, and no Markdown.';
@@ -27,7 +27,7 @@ export async function invokeLiveTestPrompt(
   options: LiveAgentInvokeOptions = {},
 ): Promise<LiveAgentPromptResult> {
   const generator = new TestPromptGenerator({ prompts: [prompt] });
-  const loopState = new LoopState('ignored.json');
+  const loopState = new FileLoopState('ignored.json');
   const logger = options.logger ?? createSilentLogger();
 
   for await (const generatedPrompt of generator.generate(loopState)) {

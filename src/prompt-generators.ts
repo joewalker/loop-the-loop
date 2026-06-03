@@ -1,3 +1,4 @@
+import type { LoopState } from './loop-states.js';
 import {
   BatchPromptGenerator,
   type BatchTask,
@@ -20,7 +21,6 @@ import {
   TestPromptGenerator,
 } from './prompt-generators/test.js';
 import type { PromptGeneratorConfigContext } from './prompt-generators/util/config.js';
-import type { LoopState } from './util/loop-state.js';
 
 /**
  * A prompt is basically just a string that we pass to an agent to kick off
@@ -50,7 +50,8 @@ export interface Prompt {
  * The loop calls `generate()` once per run, iterating over the yielded
  * prompts sequentially. Generators should check `loopState.isOutstanding(id)`
  * before yielding a prompt so that already-completed or failed items are
- * skipped on resume.
+ * skipped on resume. `isOutstanding()` reflects terminal results only; active
+ * claim arbitration happens in the loop runner.
  *
  * To create a custom prompt generator:
  *

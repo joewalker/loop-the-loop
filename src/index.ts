@@ -1,5 +1,13 @@
 export type { Agent, AgentSpec, InvokeOptions } from './agents.js';
 export type { Logger, LoggerSpec } from './loggers.js';
+export type {
+  CostInfo,
+  LoopStateSnapshot,
+  LoopStateResult,
+  LoopState,
+  PromptClaim,
+  PromptOutcome,
+} from './loop-states.js';
 export type { BatchTask } from './prompt-generators/batch.js';
 export type { BugzillaTask } from './prompt-generators/bugzilla.js';
 export type { GitHubTask } from './prompt-generators/github.js';

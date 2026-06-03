@@ -1,8 +1,10 @@
 /* eslint-disable no-console */
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
 import { createAgent, type Agent } from './agents.js';
 import { createLogger, type Logger } from './loggers.js';
+import { createLoopState } from './loop-states.js';
 import {
   createPromptGenerator,
   type PromptGenerator,
@@ -14,7 +16,6 @@ import {
 } from './reporters.js';
 import type { LoopCliConfig } from './types.js';
 import { Git } from './util/git.js';
-import { LoopState } from './util/loop-state.js';
 
 /**
  * We pause in between processing files
@@ -94,7 +95,8 @@ async function loopImpl(config: LoopConfig): Promise<string> {
   }
 
   const path = join(outputDir, `${name}-loop-state.json`);
-  const loopState = await LoopState.create(path);
+  const loopState = await createLoopState(path);
+  const runId = randomUUID();
   logger.state(`Loaded loop state from ${path}`);
 
   if (maxPrompts <= 0) {
@@ -104,61 +106,69 @@ async function loopImpl(config: LoopConfig): Promise<string> {
 
   let completed = 0;
   let glitchCount = 0;
-  for await (const prompt of promptGenerator.generate(loopState)) {
-    console.log(`Processing: ${prompt.id}`);
-    logger.state(`Begin: ${prompt.id}`);
-    logger.system(`Prompt:\n${prompt.prompt}`);
-    await loopState.begin(prompt.id);
-
-    const result = await agent.invoke(prompt.prompt, {
-      logger,
-      allowSourceUpdate,
-    });
-    await reporter.append(prompt, result);
-    await loopState.end(prompt.id, result);
-    logger.state(`End: ${prompt.id} (${result.status})`);
-
-    if (result.status === 'success') {
-      const message = `Loop: ${config.name} / ${prompt.id}\n\n${result.output}`;
-      // istanbul ignore if
-      if (git) {
-        logger.info(`Committing changes for ${prompt.id}`);
-        await git.maybeCommitAll(message);
+  try {
+    for await (const prompt of promptGenerator.generate(loopState)) {
+      if (!(await loopState.claim(runId, prompt.id))) {
+        logger.state(`Skip (claimed elsewhere): ${prompt.id}`);
+        continue;
       }
-      console.log(message);
-      logger.success(`${prompt.id}: ${result.output.slice(0, 120)}`);
-      glitchCount = 0;
-    } else if (result.status === 'glitch') {
-      glitchCount++;
-      if (glitchCount >= MAX_CONSECUTIVE_GLITCHES) {
-        logger.error(
-          `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches`,
-        );
-        return `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches. Last: ${result.reason}`;
-      }
-      console.log(
-        `Glitch ${glitchCount}/${MAX_CONSECUTIVE_GLITCHES} on ${prompt.id}: ${result.reason}`,
-      );
-      logger.error(`Glitch on ${prompt.id}: ${result.reason}`);
-    } else {
-      logger.error(`Error on ${prompt.id}: ${result.reason}`);
-      return `Error on ${prompt.id}: ${result.reason}`;
-    }
 
-    completed++;
-    if (completed >= maxPrompts) {
-      logger.state(`Reached limit of ${maxPrompts} prompts`);
-      return `Done (reached limit of ${maxPrompts} prompts)`;
-    }
+      console.log(`Processing: ${prompt.id}`);
+      logger.state(`Begin: ${prompt.id}`);
+      logger.system(`Prompt:\n${prompt.prompt}`);
 
-    // istanbul ignore else
-    if (interPromptPause !== 0) {
-      logger.info(`Pausing ${interPromptPause}s before next prompt`);
-      console.log(`Pause (${interPromptPause}s) before starting next prompt`);
-      await new Promise(resolve => {
-        setTimeout(resolve, interPromptPause * 1_000);
+      const result = await agent.invoke(prompt.prompt, {
+        logger,
+        allowSourceUpdate,
       });
+      await reporter.append(prompt, result);
+      await loopState.complete(runId, prompt.id, result);
+      logger.state(`End: ${prompt.id} (${result.status})`);
+
+      if (result.status === 'success') {
+        const message = `Loop: ${config.name} / ${prompt.id}\n\n${result.output}`;
+        // istanbul ignore if
+        if (git) {
+          logger.info(`Committing changes for ${prompt.id}`);
+          await git.maybeCommitAll(message);
+        }
+        console.log(message);
+        logger.success(`${prompt.id}: ${result.output.slice(0, 120)}`);
+        glitchCount = 0;
+      } else if (result.status === 'glitch') {
+        glitchCount++;
+        if (glitchCount >= MAX_CONSECUTIVE_GLITCHES) {
+          logger.error(
+            `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches`,
+          );
+          return `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches. Last: ${result.reason}`;
+        }
+        console.log(
+          `Glitch ${glitchCount}/${MAX_CONSECUTIVE_GLITCHES} on ${prompt.id}: ${result.reason}`,
+        );
+        logger.error(`Glitch on ${prompt.id}: ${result.reason}`);
+      } else {
+        logger.error(`Error on ${prompt.id}: ${result.reason}`);
+        return `Error on ${prompt.id}: ${result.reason}`;
+      }
+
+      completed++;
+      if (completed >= maxPrompts) {
+        logger.state(`Reached limit of ${maxPrompts} prompts`);
+        return `Done (reached limit of ${maxPrompts} prompts)`;
+      }
+
+      // istanbul ignore else
+      if (interPromptPause !== 0) {
+        logger.info(`Pausing ${interPromptPause}s before next prompt`);
+        console.log(`Pause (${interPromptPause}s) before starting next prompt`);
+        await new Promise(resolve => {
+          setTimeout(resolve, interPromptPause * 1_000);
+        });
+      }
     }
+  } finally {
+    await loopState.release(runId);
   }
 
   return 'Done';

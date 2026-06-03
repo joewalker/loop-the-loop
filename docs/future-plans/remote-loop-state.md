@@ -20,12 +20,12 @@ User-confirmed design decisions:
 
 ## Design
 
-### `LoopStateStore` interface
+### `LoopState` interface
 
 A new module [src/loop-states.ts](../../src/loop-states.ts) mirrors the structure of [src/reporters.ts](../../src/reporters.ts):
 
 ```ts
-export interface LoopStateStore {
+export interface LoopState {
   isOutstanding(id: string): boolean;
   claim(runId: string, id: string): Promise<boolean>;
   complete(runId: string, id: string, result: InvokeResult): Promise<void>;
@@ -55,11 +55,11 @@ Loader is permissive on a single point: if `inProgress` is a string (v1, single-
 
 ### Filesystem backend
 
-New file [src/loop-states/file.ts](../../src/loop-states/file.ts), class `FileLoopStateStore`. Same JSON file as today. Writes go to `${path}.tmp` then `rename` to `${path}` so a crashed write never leaves a half-written file. Internal save serialization (`#saveChain: Promise<void>`) so concurrent in-process `claim`/`complete` calls do not race on `writeFile`. Documented as single-host; multi-host filesystem sharing is out of scope.
+New file [src/loop-states/file.ts](../../src/loop-states/file.ts), class `FileLoopState`. Same JSON file as today. Writes go to `${path}.tmp` then `rename` to `${path}` so a crashed write never leaves a half-written file. Internal save serialization (`#saveChain: Promise<void>`) so concurrent in-process `claim`/`complete` calls do not race on `writeFile`. Documented as single-host; multi-host filesystem sharing is out of scope.
 
 ### S3 backend
 
-New file [src/loop-states/s3.ts](../../src/loop-states/s3.ts), class `S3LoopStateStore`. Uses `@aws-sdk/client-s3` via `GetObjectCommand` and `PutObjectCommand`. The whole state blob is the S3 object body. Optimistic concurrency loop on every `claim` / `complete` / `release`:
+New file [src/loop-states/s3.ts](../../src/loop-states/s3.ts), class `S3LoopState`. Uses `@aws-sdk/client-s3` via `GetObjectCommand` and `PutObjectCommand`. The whole state blob is the S3 object body. Optimistic concurrency loop on every `claim` / `complete` / `release`:
 
 1. `GetObjectCommand` to fetch body and ETag, or treat `NoSuchKey` as empty state with no ETag.
 2. Mutate state in memory.
@@ -90,7 +90,7 @@ export interface S3LoopStateConfig {
 
 Add `readonly loopState?: LoopStateSpec` to `LoopCliConfig` next to `reporter`. Default = `'file'` with path `join(outputDir, ${jobName}-loop-state.json)`, which preserves today's behavior byte-for-byte.
 
-`createLoopState(spec, { outputDir, jobName }): Promise<LoopStateStore>` lives in [src/loop-states.ts](../../src/loop-states.ts) and mirrors `createReporter`.
+`createLoopState(spec, { outputDir, jobName }): Promise<LoopState>` lives in [src/loop-states.ts](../../src/loop-states.ts) and mirrors `createReporter`.
 
 Update [schema/loop-the-loop.schema.json](../../schema/loop-the-loop.schema.json) with a `loopStateSpec` definition (tuple shape mirroring `reporterSpec`) plus `fileLoopStateConfig` and `s3LoopStateConfig` definitions.
 
@@ -126,7 +126,7 @@ Signal-handler cleanup is best-effort. Stale in-progress entries are cosmetic on
 
 ### PromptGenerator interface
 
-Rename the parameter type from `LoopState` to `LoopStateStore`. The method signature is unchanged because generators only call `isOutstanding`. The batch generator currently builds a passthrough via `Object.create` on the class; replace with a plain object that forwards `claim`/`complete`/`release`/`isOutstanding` and overrides `isOutstanding` to return `true`. Forwarded methods bind `this` to the original store.
+Keep the parameter type as the `LoopState` interface from [src/loop-states.ts](../../src/loop-states.ts). The method signature is unchanged because generators only call `isOutstanding`. The batch generator currently builds a passthrough via `Object.create` on the class; replace with a plain object that forwards `claim`/`complete`/`release`/`isOutstanding` and overrides `isOutstanding` to return `true`. Forwarded methods bind `this` to the original state object.
 
 ## Files to modify
 
@@ -140,19 +140,19 @@ Add `loopStateSpec`, `fileLoopStateConfig`, `s3LoopStateConfig` definitions. Ref
 
 ### 3. Factory module - new [src/loop-states.ts](../../src/loop-states.ts)
 
-`LoopStateStore` interface, `createLoopState` factory, internal `loopStateConstructors` map (`'file'` and `'s3'` keys), `LoopStateSpec` re-export. Same shape as [src/reporters.ts](../../src/reporters.ts).
+`LoopState` interface, `createLoopState` factory, internal `loopStateConstructors` map (`'file'` and `'s3'` keys), `LoopStateSpec` re-export. Same shape as [src/reporters.ts](../../src/reporters.ts).
 
 ### 4. Filesystem backend - new [src/loop-states/file.ts](../../src/loop-states/file.ts)
 
-`FileLoopStateStore` with `#path`, `#completed`, `#failed`, `#inProgress: Map<string, Array<string>>`, `#saveChain`. Static async `create({ path })`. tmp-file rename for atomicity. Permissive load that drops a non-object `inProgress`.
+`FileLoopState` with `#path`, `#completed`, `#failed`, `#inProgress: Map<string, Array<string>>`, `#saveChain`. Static async `create({ path })`. tmp-file rename for atomicity. Permissive load that drops a non-object `inProgress`.
 
 ### 5. S3 backend - new [src/loop-states/s3.ts](../../src/loop-states/s3.ts)
 
-`S3LoopStateStore` with an `S3Client` field. Constructor accepts `{ s3Client?: S3Client }` to allow tests to inject a mock; default constructs a real client from `S3LoopStateConfig`. Retry helper `#runWithRetry(label, mutate)` that wraps the GET/PUT loop.
+`S3LoopState` with an `S3Client` field. Constructor accepts `{ s3Client?: S3Client }` to allow tests to inject a mock; default constructs a real client from `S3LoopStateConfig`. Retry helper `#runWithRetry(label, mutate)` that wraps the GET/PUT loop.
 
 ### 6. Runtime - [src/loop.ts](../../src/loop.ts)
 
-- Replace `LoopState.create(path)` with `createLoopState(config.loopState ?? 'file', { outputDir, jobName: name })`.
+- Replace `createLoopState(path)` with `createLoopState(config.loopState ?? 'file', { outputDir, jobName: name })`.
 - Generate `runId` via `crypto.randomUUID()`.
 - Install one-shot SIGINT and SIGTERM listeners that call `loopState.release(runId)`.
 - Wrap the main `for await` in `try { ... } finally { off; await loopState.release(runId); }`.
@@ -160,7 +160,7 @@ Add `loopStateSpec`, `fileLoopStateConfig`, `s3LoopStateConfig` definitions. Ref
 
 ### 7. PromptGenerator interface - [src/prompt-generators.ts](../../src/prompt-generators.ts)
 
-Change the `LoopState` import to `LoopStateStore` and update the `generate(loopState: LoopStateStore)` type. Refresh the JSDoc to note that under cross-process collaboration, `isOutstanding(id)` reflects completed and failed items only; generators must not assume that another runner has not already claimed an outstanding id.
+Change the `LoopState` import to the interface exported by [src/loop-states.ts](../../src/loop-states.ts). Refresh the JSDoc to note that under cross-process collaboration, `isOutstanding(id)` reflects completed and failed items only; generators must not assume that another runner has not already claimed an outstanding id.
 
 ### 8. Prompt generators
 
@@ -191,7 +191,7 @@ New tests to add:
 
 - `src/loop-states/__test__/s3-live.test.ts`: file-level `// @module-tag live`. Reads `MINIO_ENDPOINT`, `MINIO_BUCKET`, AWS credential env, and skips when any are absent. Exercises the same scenarios as the unit tests but against MinIO, and a final case that runs two concurrent `claim` calls and asserts exactly one returns true.
 
-- `src/__test__/loop.test.ts`: extend with a "lost race" case using a fake `LoopStateStore` whose `claim` returns `false`; assert the loop skips the prompt without calling the agent or reporter.
+- `src/__test__/loop.test.ts`: extend with a "lost race" case using a fake `LoopState` whose `claim` returns `false`; assert the loop skips the prompt without calling the agent or reporter.
 
 Existing tests that must be updated:
 

@@ -3,9 +3,10 @@
 // @module-tag network
 // @module-tag gitlab
 
+import type { LoopState } from 'loop-the-loop/loop-states';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitLabPromptGenerator } from 'loop-the-loop/prompt-generators/gitlab';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 const DEFAULT_PROJECT = 'gitlab-org/gitlab';
@@ -63,7 +64,7 @@ describe('GitLab live prompt generator', () => {
         promptTemplate:
           'Issue {{id}}\nTitle: {{title}}\nURL: {{url}}\nState: {{state}}\nAuthor: {{author}}\nLabels: {{labels}}\nComment count: {{commentCount}}\n\n{{description}}',
       });
-      const loopState = new LoopState('ignored.json');
+      const loopState = new FileLoopState('ignored.json');
 
       const prompts = await collectPrompts(generator, loopState);
 

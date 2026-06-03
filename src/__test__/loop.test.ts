@@ -8,6 +8,7 @@ import { loop } from 'loop-the-loop';
 import type {
   Agent,
   InvokeOptions,
+  LoopState,
   Prompt,
   PromptGenerator,
 } from 'loop-the-loop';
@@ -15,7 +16,6 @@ import { TestAgent } from 'loop-the-loop/agents/test';
 import { YamlReporter } from 'loop-the-loop/reporters/yaml';
 import type { InvokeResult, LoopCliConfig } from 'loop-the-loop/types';
 import { Git } from 'loop-the-loop/util/git';
-import type { LoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -355,9 +355,10 @@ describe('main', () => {
       'utf-8',
     );
     expect(JSON.parse(raw)).toEqual({
-      completed: [],
-      failed: [],
-      inProgress: 'a.ts',
+      version: 2,
+      results: {},
+      claims: {},
+      totalUsd: 0,
     });
   });
 

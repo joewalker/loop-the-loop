@@ -11,7 +11,7 @@ import {
   toEntries,
   type JsonTask,
 } from 'loop-the-loop/prompt-generators/json';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('navigatePath', () => {
@@ -60,7 +60,7 @@ describe('toEntries', () => {
 });
 
 describe('JsonPromptGenerator', () => {
-  const loopState = new LoopState('loop-state-ignore.json');
+  const loopState = new FileLoopState('loop-state-ignore.json');
 
   async function collect(
     task: JsonTask,
@@ -149,7 +149,7 @@ describe('JsonPromptGenerator', () => {
   });
 
   it('should skip elements already tracked in loopState', async () => {
-    const stateWithOne = new LoopState('loop-state-ignore.json', ['0'], []);
+    const stateWithOne = new FileLoopState('loop-state-ignore.json', ['0'], []);
     const generator = await JsonPromptGenerator.create({
       data: ['first', 'second'],
       promptTemplate: '{{value}}',

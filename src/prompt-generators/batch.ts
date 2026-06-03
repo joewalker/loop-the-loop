@@ -1,6 +1,6 @@
+import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
-import type { LoopState } from '../util/loop-state.js';
 import {
   assertKnownProperties,
   assertRequiredString,
@@ -190,9 +190,13 @@ export class BatchPromptGenerator implements PromptGenerator {
  * stable view of the source's iteration order.
  */
 function makePassthroughLoopState(original: LoopState): LoopState {
-  return Object.create(original, {
-    isOutstanding: { value: () => true },
-  }) as LoopState;
+  return {
+    isOutstanding: () => true,
+    claim: original.claim.bind(original),
+    complete: original.complete.bind(original),
+    release: original.release.bind(original),
+    getSnapshot: original.getSnapshot.bind(original),
+  };
 }
 
 /**

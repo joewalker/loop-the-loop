@@ -1,11 +1,12 @@
 // @module-tag local
 
+import type { LoopState } from 'loop-the-loop/loop-states';
 import type { Prompt, PromptGenerator } from 'loop-the-loop/prompt-generators';
 import {
   BatchPromptGenerator,
   type BatchTask,
 } from 'loop-the-loop/prompt-generators/batch';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -51,7 +52,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new LoopState('');
+    const loopState = new FileLoopState('');
 
     const prompts = await collect(generator, loopState);
 
@@ -68,7 +69,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 2 },
       source,
     );
-    const loopState = new LoopState('');
+    const loopState = new FileLoopState('');
 
     const prompts = await collect(generator, loopState);
 
@@ -82,7 +83,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 2 },
       source,
     );
-    const loopState = new LoopState('');
+    const loopState = new FileLoopState('');
 
     const prompts = await collect(generator, loopState);
 
@@ -95,7 +96,7 @@ describe('BatchPromptGenerator', () => {
   it('yields nothing for an empty source', async () => {
     const source = makeSource([]);
     const generator = new BatchPromptGenerator(BASE_TASK, source);
-    const loopState = new LoopState('');
+    const loopState = new FileLoopState('');
 
     const prompts = await collect(generator, loopState);
 
@@ -108,7 +109,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new LoopState('', ['a', 'c'], []);
+    const loopState = new FileLoopState('', ['a', 'c'], []);
 
     const prompts = await collect(generator, loopState);
 
@@ -129,7 +130,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new LoopState('', ['a', 'b'], []);
+    const loopState = new FileLoopState('', ['a', 'b'], []);
 
     const prompts = await collect(generator, loopState);
 
@@ -146,7 +147,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 2 },
       source,
     );
-    const loopState = new LoopState('', ['a'], []);
+    const loopState = new FileLoopState('', ['a'], []);
 
     const prompts = await collect(generator, loopState);
 
@@ -171,7 +172,7 @@ describe('BatchPromptGenerator', () => {
       },
       source,
     );
-    const loopState = new LoopState('', ['a', 'c'], []);
+    const loopState = new FileLoopState('', ['a', 'c'], []);
 
     const prompts = await collect(generator, loopState);
     const summary = prompts[prompts.length - 1];
@@ -186,7 +187,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new LoopState('', ['batch-summary-after-b'], []);
+    const loopState = new FileLoopState('', ['batch-summary-after-b'], []);
 
     const prompts = await collect(generator, loopState);
 
@@ -200,7 +201,7 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 2 },
       source,
     );
-    const loopState = new LoopState(
+    const loopState = new FileLoopState(
       '',
       ['batch-summary-after-b', 'batch-summary-after-c'],
       [],
@@ -223,7 +224,7 @@ describe('BatchPromptGenerator', () => {
       },
       source,
     );
-    const loopState = new LoopState('');
+    const loopState = new FileLoopState('');
 
     const prompts = await collect(generator, loopState);
     const summary = prompts[prompts.length - 1];
@@ -237,7 +238,7 @@ describe('BatchPromptGenerator', () => {
     const ids = Array.from({ length: 50 }, (_, i) => String(i));
     const source = makeSource(ids);
     const generator = new BatchPromptGenerator(BASE_TASK, source);
-    const loopState = new LoopState('');
+    const loopState = new FileLoopState('');
 
     const prompts = await collect(generator, loopState);
 

@@ -3,9 +3,10 @@
 // @module-tag network
 // @module-tag bugzilla
 
+import type { LoopState } from 'loop-the-loop/loop-states';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { BugzillaPromptGenerator } from 'loop-the-loop/prompt-generators/bugzilla';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 const DEFAULT_ORIGIN = 'https://bugzilla.mozilla.org';
@@ -65,7 +66,7 @@ describe('Bugzilla live prompt generator', () => {
         promptTemplate:
           'Bug {{id}}\nSummary: {{summary}}\nURL: {{url}}\nProduct: {{product}}\nComponent: {{component}}\nSeverity: {{severity}}\nStatus: {{status}}\nAssignee: {{assignee}}\nWhiteboard: {{whiteboard}}',
       });
-      const loopState = new LoopState('ignored.json');
+      const loopState = new FileLoopState('ignored.json');
 
       const prompts = await collectPrompts(generator, loopState);
 

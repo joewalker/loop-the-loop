@@ -10,7 +10,7 @@ import {
   PerFilePromptGenerator,
   resolveFiles,
 } from 'loop-the-loop/prompt-generators/per-file';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('resolveFiles', () => {
@@ -81,7 +81,7 @@ describe('PerFilePromptGenerator', () => {
     };
     const generator = new PerFilePromptGenerator(task);
     const prompts: Array<Prompt> = [];
-    const loopState = new LoopState('loop-state-ignore.json');
+    const loopState = new FileLoopState('loop-state-ignore.json');
 
     for await (const prompt of generator.generate(loopState)) {
       prompts.push(prompt);
@@ -93,7 +93,7 @@ describe('PerFilePromptGenerator', () => {
   });
 
   it('should yield no prompts when no files match', async () => {
-    const loopState = new LoopState('loop-state-ignore.json');
+    const loopState = new FileLoopState('loop-state-ignore.json');
     stateFiles.push(join('cache/loop-the-loops', `state.json`));
     const task: PerFileTask = {
       filePattern: join(tempDir, '*.xyz'),
@@ -111,7 +111,7 @@ describe('PerFilePromptGenerator', () => {
 
   it('should skip files that are already tracked in the loop state', async () => {
     const file1 = join(tempDir, 'file1.ts');
-    const loopState = new LoopState('loop-state-ignore.json', [file1], []);
+    const loopState = new FileLoopState('loop-state-ignore.json', [file1], []);
 
     const task: PerFileTask = {
       filePattern: join(tempDir, '*.ts'),

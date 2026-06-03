@@ -4,9 +4,9 @@ import {
   type SearchParams,
 } from '@joewalker/bzjs';
 
+import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
-import type { LoopState } from '../util/loop-state.js';
 
 /**
  * Configuration for a Bugzilla-driven loop task. Describes which bugs

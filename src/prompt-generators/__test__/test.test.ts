@@ -6,7 +6,7 @@ import {
   TestPromptGenerator,
   type TestTask,
 } from 'loop-the-loop/prompt-generators/test';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 describe('normalizeTestTaskConfig', () => {
@@ -33,7 +33,7 @@ describe('normalizeTestTaskConfig', () => {
 });
 
 describe('TestPromptGenerator', () => {
-  const loopState = new LoopState('loop-state-ignore.json');
+  const loopState = new FileLoopState('loop-state-ignore.json');
 
   async function collect(task: TestTask): Promise<Array<Prompt>> {
     const generator = new TestPromptGenerator(task);
@@ -58,7 +58,7 @@ describe('TestPromptGenerator', () => {
   });
 
   it('should skip prompts already tracked in loopState', async () => {
-    const stateWithOne = new LoopState('loop-state-ignore.json', ['0'], []);
+    const stateWithOne = new FileLoopState('loop-state-ignore.json', ['0'], []);
     const generator = new TestPromptGenerator({
       prompts: ['First prompt', 'Second prompt'],
     });

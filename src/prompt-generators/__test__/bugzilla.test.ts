@@ -2,7 +2,7 @@
 
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { BugzillaPromptGenerator } from 'loop-the-loop/prompt-generators/bugzilla';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockSearch, MockBugzilla } = vi.hoisted(() => {
@@ -59,7 +59,7 @@ describe('BugzillaPromptGenerator', () => {
       search: { product: 'Firefox' },
       promptTemplate: 'Bug {{id}}: {{summary}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -95,7 +95,7 @@ describe('BugzillaPromptGenerator', () => {
       promptTemplate:
         '{{id}} {{summary}} {{product}} {{component}} {{severity}} {{status}} {{assignee}} {{whiteboard}} {{url}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -117,7 +117,7 @@ describe('BugzillaPromptGenerator', () => {
       search: { product: 'Firefox' },
       promptTemplate: 'Bug {{id}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -141,7 +141,7 @@ describe('BugzillaPromptGenerator', () => {
       promptTemplate: 'Bug {{id}}: {{summary}}',
     });
 
-    const loopState = new LoopState('ignored.json', ['100'], []);
+    const loopState = new FileLoopState('ignored.json', ['100'], []);
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -164,7 +164,7 @@ describe('BugzillaPromptGenerator', () => {
       search: searchParams,
       promptTemplate: 'Bug {{id}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
 
     for await (const _prompt of generator.generate(loopState)) {
       // consume

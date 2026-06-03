@@ -1,5 +1,5 @@
+import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
-import type { LoopState } from '../util/loop-state.js';
 import { assertKnownProperties, isRecord } from './util/config.js';
 
 /**

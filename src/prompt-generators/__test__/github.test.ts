@@ -2,7 +2,7 @@
 
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitHubPromptGenerator } from 'loop-the-loop/prompt-generators/github';
-import { LoopState } from 'loop-the-loop/util/loop-state';
+import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockSearchIssues, MockGitHub } = vi.hoisted(() => {
@@ -75,7 +75,7 @@ describe('GitHubPromptGenerator', () => {
       },
       promptTemplate: 'Issue {{id}}: {{title}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -118,7 +118,7 @@ describe('GitHubPromptGenerator', () => {
       promptTemplate:
         '{{id}} {{number}} {{repository}} {{owner}} {{repo}} {{title}} {{url}} {{state}} {{author}} {{assignee}} {{assignees}} {{labels}} {{milestone}} {{commentCount}} {{createdAt}} {{updatedAt}} {{closedAt}} {{body}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -148,7 +148,7 @@ describe('GitHubPromptGenerator', () => {
       promptTemplate: 'Issue {{id}}: {{title}}',
     });
 
-    const loopState = new LoopState(
+    const loopState = new FileLoopState(
       'ignored.json',
       ['octocat/Hello-World#100'],
       [],
@@ -182,7 +182,7 @@ describe('GitHubPromptGenerator', () => {
       search,
       promptTemplate: 'Issue {{id}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
 
     for await (const _prompt of generator.generate(loopState)) {
       // consume
@@ -207,7 +207,7 @@ describe('GitHubPromptGenerator', () => {
       promptTemplate:
         '{{author}}|{{assignee}}|{{assignees}}|{{labels}}|{{milestone}}|{{commentCount}}|{{createdAt}}|{{updatedAt}}|{{closedAt}}|{{body}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
@@ -236,7 +236,7 @@ describe('GitHubPromptGenerator', () => {
       },
       promptTemplate: 'Issue {{id}}',
     });
-    const loopState = new LoopState('ignored.json');
+    const loopState = new FileLoopState('ignored.json');
 
     const consume = async (): Promise<void> => {
       for await (const _prompt of generator.generate(loopState)) {
