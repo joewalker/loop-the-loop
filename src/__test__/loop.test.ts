@@ -133,7 +133,7 @@ describe('main', () => {
     expect(result).toEqual({ status: 'completed' });
   });
 
-  it('should stop on error and return error message', async () => {
+  it('should stop on error and return a failed result', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult({ status: 'error', reason: 'parsing failed' });
 
