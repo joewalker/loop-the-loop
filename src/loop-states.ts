@@ -1,5 +1,7 @@
+import { join } from 'node:path';
+
+import { FileLoopState } from './loop-states/file.js';
 import type { CostInfo, InvokeResult } from './types.js';
-import { FileLoopState } from './util/loop-state.js';
 
 export type { CostInfo, LoopRunResult } from './types.js';
 
@@ -36,8 +38,46 @@ export interface LoopState {
 }
 
 /**
- * Create the default filesystem-backed loop state store.
+ * Where a backend should write its state, mirroring `ReporterConfig`.
+ * The filesystem backend turns this into
+ * `${outputDir}/${jobName}-loop-state.json`.
  */
-export async function createLoopState(path: string): Promise<LoopState> {
+export interface LoopStateConfig {
+  readonly outputDir: string;
+  readonly jobName: string;
+}
+
+export const DEFAULT_LOOP_STATE = 'file';
+
+/**
+ * Construct the default filesystem-backed store. Later steps register an
+ * `s3` entry alongside this with no change to callers.
+ */
+function createFileLoopState(config: LoopStateConfig): Promise<LoopState> {
+  const path = join(config.outputDir, `${config.jobName}-loop-state.json`);
   return FileLoopState.create(path);
+}
+
+/**
+ * To add a new loop-state backend, add its creator function here.
+ */
+const loopStateConstructors = {
+  [DEFAULT_LOOP_STATE]: createFileLoopState,
+} satisfies Record<string, (config: LoopStateConfig) => Promise<LoopState>>;
+
+/**
+ * Enable TypeScript to know what loop-state backends are available.
+ */
+type LoopStateName = keyof typeof loopStateConstructors;
+
+/**
+ * Allow easy switching between loop-state backends, shaped like
+ * `createReporter` so backend selection can be added later without
+ * changing callers again.
+ */
+export function createLoopState(
+  type: LoopStateName = DEFAULT_LOOP_STATE,
+  config: LoopStateConfig,
+): Promise<LoopState> {
+  return loopStateConstructors[type](config);
 }

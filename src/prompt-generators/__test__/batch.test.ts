@@ -1,12 +1,12 @@
 // @module-tag local
 
 import type { LoopState } from 'loop-the-loop/loop-states';
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt, PromptGenerator } from 'loop-the-loop/prompt-generators';
 import {
   BatchPromptGenerator,
   type BatchTask,
 } from 'loop-the-loop/prompt-generators/batch';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 /**

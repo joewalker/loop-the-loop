@@ -4,13 +4,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import {
   type PerFileTask,
   PerFilePromptGenerator,
   resolveFiles,
 } from 'loop-the-loop/prompt-generators/per-file';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('resolveFiles', () => {

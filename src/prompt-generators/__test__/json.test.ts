@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import {
   JsonPromptGenerator,
@@ -11,7 +12,6 @@ import {
   toEntries,
   type JsonTask,
 } from 'loop-the-loop/prompt-generators/json';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 describe('navigatePath', () => {

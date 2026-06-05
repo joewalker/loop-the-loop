@@ -4,9 +4,9 @@
 // @module-tag github
 
 import type { LoopState } from 'loop-the-loop/loop-states';
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitHubPromptGenerator } from 'loop-the-loop/prompt-generators/github';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 const DEFAULT_REPOSITORY = 'octocat/Hello-World';

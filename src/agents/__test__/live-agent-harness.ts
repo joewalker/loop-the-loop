@@ -1,9 +1,9 @@
 import type { Agent, InvokeOptions } from 'loop-the-loop/agents';
 import type { Logger } from 'loop-the-loop/loggers';
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { TestPromptGenerator } from 'loop-the-loop/prompt-generators/test';
 import type { InvokeResult } from 'loop-the-loop/types';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 
 export const CHEAP_TEST_PROMPT =
   'Compute 19 + 23. Reply with exactly the digits of the integer answer, with no words, no punctuation, and no Markdown.';

@@ -1,12 +1,12 @@
 // @module-tag local
 
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import {
   normalizeTestTaskConfig,
   TestPromptGenerator,
   type TestTask,
 } from 'loop-the-loop/prompt-generators/test';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 describe('normalizeTestTaskConfig', () => {

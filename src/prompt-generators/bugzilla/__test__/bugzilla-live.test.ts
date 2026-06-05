@@ -4,9 +4,9 @@
 // @module-tag bugzilla
 
 import type { LoopState } from 'loop-the-loop/loop-states';
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { BugzillaPromptGenerator } from 'loop-the-loop/prompt-generators/bugzilla';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { describe, expect, it } from 'vitest';
 
 const DEFAULT_ORIGIN = 'https://bugzilla.mozilla.org';

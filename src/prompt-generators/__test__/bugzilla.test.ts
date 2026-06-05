@@ -1,8 +1,8 @@
 // @module-tag local
 
+import { FileLoopState } from 'loop-the-loop/loop-states/file';
 import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { BugzillaPromptGenerator } from 'loop-the-loop/prompt-generators/bugzilla';
-import { FileLoopState } from 'loop-the-loop/util/loop-state';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockSearch, MockBugzilla } = vi.hoisted(() => {

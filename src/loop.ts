@@ -1,10 +1,9 @@
 /* eslint-disable no-console */
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 
 import { createAgent, type Agent } from './agents.js';
 import { createLogger, type Logger } from './loggers.js';
-import { createLoopState } from './loop-states.js';
+import { createLoopState, DEFAULT_LOOP_STATE } from './loop-states.js';
 import {
   createPromptGenerator,
   type PromptGenerator,
@@ -94,10 +93,12 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
     );
   }
 
-  const path = join(outputDir, `${name}-loop-state.json`);
-  const loopState = await createLoopState(path);
+  const loopState = await createLoopState(DEFAULT_LOOP_STATE, {
+    outputDir,
+    jobName: name,
+  });
   const runId = randomUUID();
-  logger.state(`Loaded loop state from ${path}`);
+  logger.state(`Loaded loop state for ${name}`);
 
   if (maxPrompts <= 0) {
     logger.state(`Reached limit of ${maxPrompts} prompts`);
