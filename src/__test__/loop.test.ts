@@ -8,6 +8,7 @@ import { loop } from 'loop-the-loop';
 import type {
   Agent,
   InvokeOptions,
+  LoopRunResult,
   LoopState,
   Prompt,
   PromptGenerator,
@@ -62,7 +63,9 @@ class RecordingAgent implements Agent {
  * Helper to run main() with fake timers. We advance timers after starting
  * main() so the 5-second pauses resolve instantly.
  */
-async function runMainWithFakeTimers(config: LoopCliConfig): Promise<string> {
+async function runMainWithFakeTimers(
+  config: LoopCliConfig,
+): Promise<LoopRunResult> {
   const promise = loop(config);
 
   // Keep advancing fake timers until main() resolves
@@ -109,7 +112,7 @@ describe('main', () => {
     await rm(repoPath, { recursive: true, force: true });
   });
 
-  it('should return "Done" when all prompts succeed', async () => {
+  it('should return a completed result when all prompts succeed', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult(
       { status: 'success', output: 'review of a' },
@@ -125,9 +128,9 @@ describe('main', () => {
       name: 'check-done',
       agent,
       promptGenerator,
-      maxPrompts: 2,
+      maxPrompts: 3,
     });
-    expect(result).toContain('Done');
+    expect(result).toEqual({ status: 'completed' });
   });
 
   it('should stop on error and return error message', async () => {
@@ -143,8 +146,11 @@ describe('main', () => {
       agent,
       promptGenerator,
     });
-    expect(result).toContain('Error on bad.ts');
-    expect(result).toContain('parsing failed');
+    expect(result).toEqual({
+      status: 'failed',
+      reason: 'errorResult',
+      message: 'Error on bad.ts: parsing failed',
+    });
   });
 
   it('should abort after max consecutive glitches', async () => {
@@ -170,7 +176,11 @@ describe('main', () => {
       agent,
       promptGenerator,
     });
-    expect(result).toContain('Aborting after 5 consecutive glitches');
+    expect(result).toEqual({
+      status: 'failed',
+      reason: 'tooManyGlitches',
+      message: expect.stringContaining('Aborting after 5 consecutive glitches'),
+    });
   });
 
   it('should reset glitch count after a success', async () => {
@@ -196,9 +206,9 @@ describe('main', () => {
       name: 'reset-glitch-count',
       agent,
       promptGenerator,
-      maxPrompts: 5,
+      maxPrompts: 6,
     });
-    expect(result).toContain('Done');
+    expect(result).toEqual({ status: 'completed' });
   });
 
   it('should not invoke the agent when maxPrompts is 0', async () => {
@@ -213,7 +223,11 @@ describe('main', () => {
       promptGenerator,
       maxPrompts: 0,
     });
-    expect(result).toContain('Done (reached limit of 0 prompts)');
+    expect(result).toEqual({
+      status: 'stopped',
+      reason: 'maxPrompts',
+      message: 'Reached limit of 0 prompts',
+    });
     expect(agent.invokeOptions).toHaveLength(0);
   });
 
@@ -237,7 +251,11 @@ describe('main', () => {
       promptGenerator,
       maxPrompts: 1,
     });
-    expect(result).toContain('Done (reached limit of 1 prompts)');
+    expect(result).toEqual({
+      status: 'stopped',
+      reason: 'maxPrompts',
+      message: 'Reached limit of 1 prompts',
+    });
   });
 
   it('should throw if working directory is not clean when allowSourceUpdate is true', async () => {
@@ -267,7 +285,7 @@ describe('main', () => {
       agent,
       promptGenerator,
     });
-    expect(result).toBe('Done');
+    expect(result).toEqual({ status: 'completed' });
   });
 
   it('should pass allowSourceUpdate to agent invocations', async () => {
@@ -283,12 +301,16 @@ describe('main', () => {
       allowSourceUpdate: true,
     });
 
-    expect(result).toContain('Error on a.ts');
+    expect(result).toEqual({
+      status: 'failed',
+      reason: 'errorResult',
+      message: 'Error on a.ts: stop',
+    });
     expect(agent.invokeOptions).toHaveLength(1);
     expect(agent.invokeOptions[0]?.allowSourceUpdate).toBe(true);
   });
 
-  it('should return "Done" with an empty prompt generator', async () => {
+  it('should return a completed result with an empty prompt generator', async () => {
     const agent = new TestAgent();
     const promptGenerator = new FixedPromptGenerator([]);
 
@@ -297,7 +319,7 @@ describe('main', () => {
       agent,
       promptGenerator,
     });
-    expect(result).toBe('Done');
+    expect(result).toEqual({ status: 'completed' });
   });
 
   it('should pass structuredOutput through to the reporter', async () => {
@@ -322,7 +344,11 @@ describe('main', () => {
       reporter,
       maxPrompts: 1,
     });
-    expect(result).toContain('Done');
+    expect(result).toEqual({
+      status: 'stopped',
+      reason: 'maxPrompts',
+      message: 'Reached limit of 1 prompts',
+    });
     expect(appendSpy).toHaveBeenCalledOnce();
     const [, invokeResult] = appendSpy.mock.calls[0];
     expect(invokeResult.status).toBe('success');
@@ -389,7 +415,7 @@ describe('main', () => {
       promptGenerator,
     });
 
-    expect(result).toBe('Done');
+    expect(result).toEqual({ status: 'completed' });
     expect(agent.invokeOptions).toHaveLength(0);
   });
 

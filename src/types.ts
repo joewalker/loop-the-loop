@@ -71,6 +71,22 @@ export type InvokeResult =
   | ErrorInvocationResult;
 
 /**
+ * The structured outcome of a full loop run. Callers branch on the
+ * `status` field and the optional `reason`, never on a parsed message
+ * string. The reason set is open to extension by later steps (for
+ * example Step 06 adds a pipeline-level `maxPasses` stop).
+ */
+export interface LoopRunResult {
+  readonly status: 'completed' | 'stopped' | 'failed';
+  readonly reason?:
+    | 'maxPrompts'
+    | 'maxBudgetUsd'
+    | 'errorResult'
+    | 'tooManyGlitches';
+  readonly message?: string;
+}
+
+/**
  * Type definition for the main start point for the loop
  */
 export interface LoopCliConfig {

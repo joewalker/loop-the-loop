@@ -4,6 +4,7 @@ import process from 'node:process';
 
 import pkg from '../package.json' with { type: 'json' };
 import { loop } from './loop.js';
+import type { LoopRunResult } from './types.js';
 import { loadCliConfig, parseArgs, USAGE } from './util/load-cli-config.js';
 
 /**
@@ -29,7 +30,22 @@ async function main(): Promise<void> {
   }
   const config = await loadCliConfig(parsedArgs);
   const result = await loop(config);
-  console.log(result);
+  console.log(renderRunResult(result));
+}
+
+/**
+ * Render a structured loop result as a single human-readable line for
+ * the CLI. The loop's own `message` carries the detail; this only adds
+ * the familiar "Done" framing for completed and stopped runs.
+ */
+function renderRunResult(result: LoopRunResult): string {
+  if (result.status === 'completed') {
+    return 'Done';
+  }
+  if (result.status === 'stopped') {
+    return `Done (${result.message ?? result.reason})`;
+  }
+  return result.message ?? 'Failed';
 }
 
 main().catch((err: unknown) => {

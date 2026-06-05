@@ -14,7 +14,7 @@ import {
   DEFAULT_REPORTER,
   type Reporter,
 } from './reporters.js';
-import type { LoopCliConfig } from './types.js';
+import type { LoopCliConfig, LoopRunResult } from './types.js';
 import { Git } from './util/git.js';
 
 /**
@@ -33,7 +33,7 @@ const MAX_CONSECUTIVE_GLITCHES = 5;
  * Convert a configuration spec into a set of concrete implementations all with
  * defaults applied, then call the actual `loop(…)` function.
  */
-export async function loop(config: LoopCliConfig): Promise<string> {
+export async function loop(config: LoopCliConfig): Promise<LoopRunResult> {
   const { outputDir = process.cwd(), reporter = DEFAULT_REPORTER } = config;
 
   return loopImpl({
@@ -73,7 +73,7 @@ interface LoopConfig {
  * Processes prompts sequentially, saving state and report after each file.
  * Resumes from saved state if a previous run was interrupted.
  */
-async function loopImpl(config: LoopConfig): Promise<string> {
+async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
   const {
     name,
     outputDir,
@@ -101,7 +101,11 @@ async function loopImpl(config: LoopConfig): Promise<string> {
 
   if (maxPrompts <= 0) {
     logger.state(`Reached limit of ${maxPrompts} prompts`);
-    return `Done (reached limit of ${maxPrompts} prompts)`;
+    return {
+      status: 'stopped',
+      reason: 'maxPrompts',
+      message: `Reached limit of ${maxPrompts} prompts`,
+    };
   }
 
   let completed = 0;
@@ -138,24 +142,28 @@ async function loopImpl(config: LoopConfig): Promise<string> {
       } else if (result.status === 'glitch') {
         glitchCount++;
         if (glitchCount >= MAX_CONSECUTIVE_GLITCHES) {
-          logger.error(
-            `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches`,
-          );
-          return `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches. Last: ${result.reason}`;
+          const message = `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches. Last: ${result.reason}`;
+          logger.error(message);
+          return { status: 'failed', reason: 'tooManyGlitches', message };
         }
         console.log(
           `Glitch ${glitchCount}/${MAX_CONSECUTIVE_GLITCHES} on ${prompt.id}: ${result.reason}`,
         );
         logger.error(`Glitch on ${prompt.id}: ${result.reason}`);
       } else {
-        logger.error(`Error on ${prompt.id}: ${result.reason}`);
-        return `Error on ${prompt.id}: ${result.reason}`;
+        const message = `Error on ${prompt.id}: ${result.reason}`;
+        logger.error(message);
+        return { status: 'failed', reason: 'errorResult', message };
       }
 
       completed++;
       if (completed >= maxPrompts) {
         logger.state(`Reached limit of ${maxPrompts} prompts`);
-        return `Done (reached limit of ${maxPrompts} prompts)`;
+        return {
+          status: 'stopped',
+          reason: 'maxPrompts',
+          message: `Reached limit of ${maxPrompts} prompts`,
+        };
       }
 
       // istanbul ignore else
@@ -171,5 +179,5 @@ async function loopImpl(config: LoopConfig): Promise<string> {
     await loopState.release(runId);
   }
 
-  return 'Done';
+  return { status: 'completed' };
 }

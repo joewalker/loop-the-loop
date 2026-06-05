@@ -26,6 +26,7 @@ export type {
   GlitchedInvocationResult,
   InvokeResult,
   LoopCliConfig,
+  LoopRunResult,
   OutputSchema,
   SuccessfulInvocationResult,
 } from './types.js';

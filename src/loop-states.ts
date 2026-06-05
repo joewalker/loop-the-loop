@@ -1,7 +1,7 @@
 import type { CostInfo, InvokeResult } from './types.js';
 import { FileLoopState } from './util/loop-state.js';
 
-export type { CostInfo } from './types.js';
+export type { CostInfo, LoopRunResult } from './types.js';
 
 export type LoopStateResult = InvokeResult;
 
