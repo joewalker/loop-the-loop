@@ -13,6 +13,12 @@ name, or step names change.
 - Add a `loop-state` prompt generator that reads the strict v2 state snapshot.
 - Support filtering by status and selecting success, error, or all state
   outcomes.
+- Support field-path filter keys, including `structuredOutput.*`, with
+  equality matching only, so a consuming step can route on a producing step's
+  verdict. This is what Step 06 routing reads.
+- Add `maxAttempts` and `minAttempts` reader knobs plus an `incrementAttempt`
+  flag so a reader can re-emit an item at the next attempt-scoped id (`id#N`).
+  This is the primitive that makes bounded rework loops work in Step 06.
 - Gate generated ids through the consuming step's own `loopState.isOutstanding`
   check.
 - Add local handoff substitutions such as `{{steps.review.report}}` and
@@ -32,9 +38,12 @@ name, or step names change.
   `outputDir`.
 - Renaming a step or pipeline updates handoff targets through substitution
   rather than silently breaking hard-coded filenames.
-- Tests cover malformed JSONL, duplicate ids, filters, missing files, and
-  resume skips.
+- A reader can filter on `structuredOutput` fields and re-emit at an
+  incremented attempt id, which the Step 06 routing model relies on.
+- Tests cover malformed JSONL, duplicate ids, filters, field-path matching,
+  attempt-scoped re-emission, missing files, and resume skips.
 
 ## Related plans
 
-- [Wiring loops together into pipelines](pipeline.md)
+- [Conditional routing and rework loops](conditional-routing-design.md)
+- [Wiring loops together into pipelines](../archived-plans/pipeline.md)

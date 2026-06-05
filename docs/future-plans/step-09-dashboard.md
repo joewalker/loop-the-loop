@@ -12,8 +12,8 @@ prompt progress, claims, results, cost totals, and step-level pipeline status.
 - Add a read-only local dashboard that can inspect an output directory.
 - Show prompt status counts, active claims, failures, cost totals, and recent
   results.
-- For pipelines, show the DAG, per-step status, step cost, and downstream
-  blocked state.
+- For pipelines, show the step flow, per-step status, step cost, attempt and
+  rework counts, and downstream blocked state.
 - Decide whether real-time updates use file polling first or a new event
   stream. File polling is likely sufficient for the first version.
 
