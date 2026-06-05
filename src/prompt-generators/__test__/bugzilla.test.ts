@@ -239,8 +239,13 @@ describe('BugzillaPromptGenerator', () => {
         ['api key resolvable', 'ok'],
         ['whoami authenticates', 'ok'],
       ]);
-      const url = vi.mocked(fetch).mock.calls[0][0] as string;
-      expect(url).toContain('/rest/whoami?api_key=secret');
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
+      // The API key travels in a header, never the URL, so it cannot leak
+      // into access logs or referrers.
+      expect(url).toMatch(/\/rest\/whoami$/u);
+      expect(url).not.toContain('secret');
+      const headers = init?.headers as Record<string, string>;
+      expect(headers['X-BUGZILLA-API-KEY']).toBe('secret');
     });
 
     it('fails whoami when the response body reports an error', async () => {

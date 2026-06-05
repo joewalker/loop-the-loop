@@ -118,9 +118,13 @@ export class BugzillaPromptGenerator implements PromptGenerator {
     yield { name: 'api key resolvable', status: 'ok' };
 
     try {
-      const url = `${bz.origin}/rest/whoami?api_key=${encodeURIComponent(apiKey)}`;
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
+      // Send the API key as a header rather than a query parameter so the
+      // secret is not captured by access logs or referrers.
+      const response = await fetch(`${bz.origin}/rest/whoami`, {
+        headers: {
+          Accept: 'application/json',
+          'X-BUGZILLA-API-KEY': apiKey,
+        },
       });
       const body = (await response.json()) as {
         error?: boolean;
