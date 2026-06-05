@@ -111,7 +111,11 @@ describe('PerFilePromptGenerator', () => {
 
   it('should skip files that are already tracked in the loop state', async () => {
     const file1 = join(tempDir, 'file1.ts');
-    const loopState = new FileLoopState('loop-state-ignore.json', [file1], []);
+    const loopState = FileLoopState.fromPersisted('loop-state-ignore.json', {
+      version: 2,
+      results: { [file1]: { status: 'success' } },
+      claims: {},
+    });
 
     const task: PerFileTask = {
       filePattern: join(tempDir, '*.ts'),

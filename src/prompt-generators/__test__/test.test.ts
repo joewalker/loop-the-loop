@@ -58,7 +58,11 @@ describe('TestPromptGenerator', () => {
   });
 
   it('should skip prompts already tracked in loopState', async () => {
-    const stateWithOne = new FileLoopState('loop-state-ignore.json', ['0'], []);
+    const stateWithOne = FileLoopState.fromPersisted('loop-state-ignore.json', {
+      version: 2,
+      results: { '0': { status: 'success' } },
+      claims: {},
+    });
     const generator = new TestPromptGenerator({
       prompts: ['First prompt', 'Second prompt'],
     });

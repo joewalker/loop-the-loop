@@ -150,11 +150,11 @@ describe('GitLabPromptGenerator', () => {
       promptTemplate: 'Issue {{id}}: {{title}}',
     });
 
-    const loopState = new FileLoopState(
-      'ignored.json',
-      ['gitlab-org/gitlab#100'],
-      [],
-    );
+    const loopState = FileLoopState.fromPersisted('ignored.json', {
+      version: 2,
+      results: { 'gitlab-org/gitlab#100': { status: 'success' } },
+      claims: {},
+    });
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {

@@ -148,11 +148,11 @@ describe('GitHubPromptGenerator', () => {
       promptTemplate: 'Issue {{id}}: {{title}}',
     });
 
-    const loopState = new FileLoopState(
-      'ignored.json',
-      ['octocat/Hello-World#100'],
-      [],
-    );
+    const loopState = FileLoopState.fromPersisted('ignored.json', {
+      version: 2,
+      results: { 'octocat/Hello-World#100': { status: 'success' } },
+      claims: {},
+    });
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {

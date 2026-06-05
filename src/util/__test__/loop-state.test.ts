@@ -52,35 +52,6 @@ describe('LoopState', () => {
     expect(raw).not.toContain('"file"');
   });
 
-  it('should migrate old failed ids', async () => {
-    const path = join(tempDir, 'state.json');
-    await writeFile(
-      path,
-      `${JSON.stringify(
-        {
-          completed: [],
-          failed: [{ id: 'ticket-42', reason: 'bad item' }],
-          inProgress: undefined,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-
-    const loopState = await FileLoopState.create(path);
-
-    expect(loopState.isOutstanding('ticket-42')).toBe(false);
-    expect(loopState.isOutstanding('ticket-99')).toBe(true);
-    expect(await loopState.getSnapshot()).toEqual({
-      version: 2,
-      results: {
-        'ticket-42': { status: 'error', reason: 'bad item' },
-      },
-      claims: {},
-      totalUsd: 0,
-    });
-  });
-
   it('should throw when the saved state is malformed', async () => {
     const path = join(tempDir, 'state.json');
     await writeFile(path, '{"completed": [');
@@ -156,30 +127,48 @@ describe('LoopState', () => {
 
   it('should default results and claims to empty when missing from saved state', async () => {
     const path = join(tempDir, 'state.json');
-    await writeFile(path, `${JSON.stringify({}, null, 2)}\n`);
+    await writeFile(path, `${JSON.stringify({ version: 2 }, null, 2)}\n`);
 
     const loopState = await FileLoopState.create(path);
 
     expect(loopState.isOutstanding('anything')).toBe(true);
+    expect(await loopState.getSnapshot()).toEqual({
+      version: 2,
+      results: {},
+      claims: {},
+      totalUsd: 0,
+    });
   });
 
-  it('should load completed ids from saved state', async () => {
+  it('should reject a state file that is not version 2', async () => {
     const path = join(tempDir, 'state.json');
     await writeFile(
       path,
-      `${JSON.stringify({ completed: ['already-done'], failed: [] }, null, 2)}\n`,
+      `${JSON.stringify({ completed: ['x'], failed: [] }, null, 2)}\n`,
     );
 
+    await expect(FileLoopState.create(path)).rejects.toThrow(
+      /Unsupported loop-state file/,
+    );
+  });
+
+  it('should write atomically and leave no temp file behind', async () => {
+    const path = join(tempDir, 'state.json');
     const loopState = await FileLoopState.create(path);
-    expect(loopState.isOutstanding('already-done')).toBe(false);
-    expect(loopState.isOutstanding('not-done')).toBe(true);
-    expect(await loopState.getSnapshot()).toEqual({
-      version: 2,
-      results: {
-        'already-done': { status: 'success' },
+
+    await loopState.claim('run-1', 'item-1');
+    await loopState.complete('run-1', 'item-1', {
+      status: 'success',
+      output: 'ok',
+    });
+
+    expect(JSON.parse(await readFile(path, 'utf-8')).results['item-1']).toEqual(
+      {
+        status: 'success',
       },
-      claims: {},
-      totalUsd: 0,
+    );
+    await expect(readFile(`${path}.tmp`, 'utf-8')).rejects.toMatchObject({
+      code: 'ENOENT',
     });
   });
 
@@ -274,44 +263,6 @@ describe('LoopState', () => {
     expect(loopState.totalUsd).toBe(0);
   });
 
-  it('should expose completed and failed ids through the getters', async () => {
-    const path = join(tempDir, 'state.json');
-    const loopState = await FileLoopState.create(path);
-
-    await loopState.complete('run-1', 'ok-item', {
-      status: 'success',
-      output: 'done',
-    });
-    await loopState.complete('run-1', 'bad-item', {
-      status: 'error',
-      reason: 'boom',
-    });
-
-    expect(loopState.completed).toEqual(['ok-item']);
-    expect(loopState.failed).toEqual([{ id: 'bad-item', reason: 'boom' }]);
-  });
-
-  it('should default a failed reason to an empty string in the getter', async () => {
-    const path = join(tempDir, 'state.json');
-    await writeFile(
-      path,
-      `${JSON.stringify(
-        {
-          version: 2,
-          results: { 'no-reason': { status: 'error' } },
-          claims: {},
-          totalUsd: 0,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-
-    const loopState = await FileLoopState.create(path);
-
-    expect(loopState.failed).toEqual([{ id: 'no-reason', reason: '' }]);
-  });
-
   it('should reject a claim for an id that already has a result', async () => {
     const path = join(tempDir, 'state.json');
     const loopState = await FileLoopState.create(path);
@@ -395,30 +346,5 @@ describe('LoopState', () => {
 
     // A subsequent save still rejects rather than hanging on a poisoned chain.
     await expect(loopState.save()).rejects.toThrow();
-  });
-
-  it('should drop old in-progress values on load', async () => {
-    const path = join(tempDir, 'state.json');
-    await writeFile(
-      path,
-      `${JSON.stringify(
-        {
-          completed: [],
-          failed: [],
-          inProgress: ['old-a', 'old-b'],
-        },
-        null,
-        2,
-      )}\n`,
-    );
-
-    const loopState = await FileLoopState.create(path);
-
-    expect(await loopState.getSnapshot()).toEqual({
-      version: 2,
-      results: {},
-      claims: {},
-      totalUsd: 0,
-    });
   });
 });

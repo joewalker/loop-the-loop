@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type {
@@ -9,25 +9,22 @@ import type {
   PromptOutcome,
 } from '../loop-states.js';
 
-interface FailedState {
-  readonly id: string;
-  readonly reason: string;
-}
-
+/**
+ * The only persisted shape we accept. A file that is not `version: 2`
+ * fails clearly on load rather than being silently migrated.
+ */
 interface PersistedLoopState {
-  readonly version?: number;
+  readonly version: number;
   readonly results?: Record<string, PromptOutcome>;
   readonly claims?: Record<string, PromptClaim>;
   readonly totalUsd?: number;
-  readonly completed?: Array<string>;
-  readonly failed?: Array<FailedState>;
-  readonly inProgress?: string | Array<string> | Record<string, Array<string>>;
 }
 
 /**
  * Persisted state for a running or interrupted loop. Saved before and
  * after every prompt execution so that any interruption loses at most one
- * item's work.
+ * item's work. Writes go through a temp file and an atomic rename so an
+ * interrupted write never leaves a half-written file.
  */
 export class FileLoopState implements LoopState {
   #path: string;
@@ -36,31 +33,22 @@ export class FileLoopState implements LoopState {
   #totalUsd: number;
   #saveChain: Promise<void> = Promise.resolve();
 
-  /**
-   * Compatibility constructor for tests and programmatic callers that build
-   * an in-memory state from the old completed/failed arrays.
-   */
-  constructor(
-    path: string,
-    completed: Array<string> = [],
-    failed: Array<FailedState> = [],
-    _inProgress?: string,
-  ) {
+  constructor(path: string) {
     this.#path = path;
-    this.#results = migrateResults(completed, failed);
+    this.#results = new Map();
     this.#claims = new Map();
     this.#totalUsd = 0;
   }
 
   /**
-   * Create a StateManager for the given task. If saved state exists on disk
-   * from a previous interrupted run, it is loaded automatically. Otherwise
-   * fresh state is created.
+   * Create a state store for the given path. If a saved v2 state file
+   * exists it is loaded; if none exists a fresh store is returned; a file
+   * that exists but is not v2 throws.
    */
   static async create(path: string): Promise<FileLoopState> {
     try {
       const raw = await readFile(path, 'utf-8');
-      const data = JSON.parse(raw) as PersistedLoopState;
+      const data = JSON.parse(raw) as unknown;
       return FileLoopState.fromPersisted(path, data);
     } catch (error) {
       if (
@@ -74,16 +62,17 @@ export class FileLoopState implements LoopState {
     }
   }
 
-  static fromPersisted(path: string, data: PersistedLoopState): FileLoopState {
+  static fromPersisted(path: string, data: unknown): FileLoopState {
+    if (!isV2(data)) {
+      throw new Error(
+        `Unsupported loop-state file at ${path}: expected a { version: 2, … } document. ` +
+          `Pre-v2 state files are not supported; delete it to start a fresh run.`,
+      );
+    }
+
     const state = new FileLoopState(path);
-    state.#results =
-      data.results === undefined
-        ? migrateResults(data.completed ?? [], data.failed ?? [])
-        : new Map(Object.entries(data.results));
-    state.#claims =
-      data.claims === undefined
-        ? new Map()
-        : new Map(Object.entries(data.claims));
+    state.#results = new Map(Object.entries(data.results ?? {}));
+    state.#claims = new Map(Object.entries(data.claims ?? {}));
     state.#totalUsd = isUsableTotal(data.totalUsd) ? data.totalUsd : 0;
     return state;
   }
@@ -161,24 +150,13 @@ export class FileLoopState implements LoopState {
     return this.#snapshot();
   }
 
-  get completed(): ReadonlyArray<string> {
-    return Array.from(this.#results.entries())
-      .filter(([, outcome]) => outcome.status === 'success')
-      .map(([id]) => id);
-  }
-
-  get failed(): ReadonlyArray<FailedState> {
-    return Array.from(this.#results.entries())
-      .filter(([, outcome]) => outcome.status === 'error')
-      .map(([id, outcome]) => ({ id, reason: outcome.reason ?? '' }));
-  }
-
   get totalUsd(): number {
     return this.#totalUsd;
   }
 
   /**
-   * Persist the current state to disk
+   * Persist the current state to disk. Concurrent calls are serialized
+   * through an internal chain so in-process updates are not lost.
    */
   async save(): Promise<void> {
     const next = this.#saveChain.then(() => this.#writeSnapshot());
@@ -209,27 +187,30 @@ export class FileLoopState implements LoopState {
     };
   }
 
+  /**
+   * Write the snapshot to a sibling temp file then rename it into place.
+   * `rename` is atomic on a single filesystem, so a crash mid-write
+   * leaves either the old file or the new file, never a partial one.
+   */
   async #writeSnapshot(): Promise<void> {
     await mkdir(dirname(this.#path), { recursive: true });
-    await writeFile(
-      this.#path,
-      `${JSON.stringify(this.#snapshot(), null, 2)}\n`,
-    );
+    const tmpPath = `${this.#path}.tmp`;
+    await writeFile(tmpPath, `${JSON.stringify(this.#snapshot(), null, 2)}\n`);
+    await rename(tmpPath, this.#path);
   }
 }
 
-function migrateResults(
-  completed: ReadonlyArray<string>,
-  failed: ReadonlyArray<FailedState>,
-): Map<string, PromptOutcome> {
-  const results = new Map<string, PromptOutcome>();
-  for (const id of completed) {
-    results.set(id, { status: 'success' });
-  }
-  for (const item of failed) {
-    results.set(item.id, { status: 'error', reason: item.reason });
-  }
-  return results;
+/**
+ * Narrow unknown parsed JSON to the supported v2 envelope. Only the
+ * version is checked here; field shapes are trusted per the forward
+ * contract (no legacy migration).
+ */
+function isV2(data: unknown): data is PersistedLoopState {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    (data as { version?: unknown }).version === 2
+  );
 }
 
 function isUsableTotal(value: unknown): value is number {

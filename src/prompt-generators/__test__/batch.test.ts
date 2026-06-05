@@ -109,7 +109,11 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new FileLoopState('', ['a', 'c'], []);
+    const loopState = FileLoopState.fromPersisted('', {
+      version: 2,
+      results: { a: { status: 'success' }, c: { status: 'success' } },
+      claims: {},
+    });
 
     const prompts = await collect(generator, loopState);
 
@@ -130,7 +134,11 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new FileLoopState('', ['a', 'b'], []);
+    const loopState = FileLoopState.fromPersisted('', {
+      version: 2,
+      results: { a: { status: 'success' }, b: { status: 'success' } },
+      claims: {},
+    });
 
     const prompts = await collect(generator, loopState);
 
@@ -147,7 +155,11 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 2 },
       source,
     );
-    const loopState = new FileLoopState('', ['a'], []);
+    const loopState = FileLoopState.fromPersisted('', {
+      version: 2,
+      results: { a: { status: 'success' } },
+      claims: {},
+    });
 
     const prompts = await collect(generator, loopState);
 
@@ -172,7 +184,11 @@ describe('BatchPromptGenerator', () => {
       },
       source,
     );
-    const loopState = new FileLoopState('', ['a', 'c'], []);
+    const loopState = FileLoopState.fromPersisted('', {
+      version: 2,
+      results: { a: { status: 'success' }, c: { status: 'success' } },
+      claims: {},
+    });
 
     const prompts = await collect(generator, loopState);
     const summary = prompts[prompts.length - 1];
@@ -187,7 +203,11 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 10 },
       source,
     );
-    const loopState = new FileLoopState('', ['batch-summary-after-b'], []);
+    const loopState = FileLoopState.fromPersisted('', {
+      version: 2,
+      results: { 'batch-summary-after-b': { status: 'success' } },
+      claims: {},
+    });
 
     const prompts = await collect(generator, loopState);
 
@@ -201,11 +221,14 @@ describe('BatchPromptGenerator', () => {
       { ...BASE_TASK, batchSize: 2 },
       source,
     );
-    const loopState = new FileLoopState(
-      '',
-      ['batch-summary-after-b', 'batch-summary-after-c'],
-      [],
-    );
+    const loopState = FileLoopState.fromPersisted('', {
+      version: 2,
+      results: {
+        'batch-summary-after-b': { status: 'success' },
+        'batch-summary-after-c': { status: 'success' },
+      },
+      claims: {},
+    });
 
     const prompts = await collect(generator, loopState);
 

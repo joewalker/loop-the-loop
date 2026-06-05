@@ -141,7 +141,11 @@ describe('BugzillaPromptGenerator', () => {
       promptTemplate: 'Bug {{id}}: {{summary}}',
     });
 
-    const loopState = new FileLoopState('ignored.json', ['100'], []);
+    const loopState = FileLoopState.fromPersisted('ignored.json', {
+      version: 2,
+      results: { '100': { status: 'success' } },
+      claims: {},
+    });
     const prompts: Array<Prompt> = [];
 
     for await (const prompt of generator.generate(loopState)) {
