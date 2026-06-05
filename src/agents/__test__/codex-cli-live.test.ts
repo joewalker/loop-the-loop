@@ -5,6 +5,7 @@
 // @module-tag codex-cli
 
 import { CodexCLIAgent } from 'loop-the-loop/agents/codex-cli';
+import type { CheckResult } from 'loop-the-loop/doctor';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,6 +14,20 @@ import {
   invokeLiveTestPrompt,
   normalizeScalarAnswer,
 } from './live-agent-harness.js';
+
+describe('Codex CLI live check()', () => {
+  it('does not fail when the codex binary is installed', async () => {
+    const agent = new CodexCLIAgent();
+    const results: Array<CheckResult> = [];
+    for await (const result of agent.check()) {
+      results.push(result);
+    }
+
+    const onPath = results.find(r => r.name === 'codex on PATH');
+    expect(onPath?.status).toBe('ok');
+    expect(results.some(r => r.status === 'fail')).toBe(false);
+  });
+});
 
 describe('Codex CLI live agent', () => {
   it(

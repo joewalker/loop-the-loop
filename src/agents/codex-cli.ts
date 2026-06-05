@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { Agent, InvokeOptions } from '../agents.js';
+import type { CheckResult } from '../doctor.js';
 import type { Logger } from '../loggers.js';
 import type { InvokeResult } from '../types.js';
 
@@ -102,6 +103,110 @@ export class CodexCLIAgent implements Agent {
       }
     }
   }
+
+  /**
+   * Preflight probe used by `--doctor`.
+   *
+   * Probes, in order: the `codex` binary is resolvable on PATH (spawns
+   * `codex --version`), `CODEX_MODEL` is configured (a warning when unset
+   * since codex has its own default), and the configured `timeoutMs` is a
+   * positive integer when present. Any unexpected probe error is caught and
+   * surfaced as a fail rather than propagated.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    yield await probeCodexVersion();
+
+    const model = process.env['CODEX_MODEL'];
+    yield model !== undefined && model.length > 0
+      ? { name: 'CODEX_MODEL set', status: 'ok', message: model }
+      : {
+          name: 'CODEX_MODEL set',
+          status: 'warn',
+          message: 'CODEX_MODEL not set; codex default will be used',
+        };
+
+    const timeoutMs = this.#config.timeoutMs;
+    yield timeoutMs === undefined ||
+    (Number.isInteger(timeoutMs) && timeoutMs > 0)
+      ? { name: 'timeoutMs valid', status: 'ok' }
+      : {
+          name: 'timeoutMs valid',
+          status: 'fail',
+          message: 'timeoutMs must be a positive integer when set',
+        };
+  }
+}
+
+/**
+ * Spawn `codex --version` and report the resolved binary as a CheckResult.
+ *
+ * A spawn `error` (typically `ENOENT` when codex is not on PATH) or a
+ * non-zero exit produces a `fail`; otherwise the trimmed stdout/stderr is
+ * reported as the detected version.
+ */
+function probeCodexVersion(): Promise<CheckResult> {
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (result: CheckResult): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn('codex', ['--version'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      finish({
+        name: 'codex on PATH',
+        status: 'fail',
+        message: err instanceof Error ? err.message : String(err),
+        cause: err,
+      });
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr?.setEncoding('utf8');
+    child.stderr?.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+
+    child.on('error', err => {
+      finish({
+        name: 'codex on PATH',
+        status: 'fail',
+        message: err instanceof Error ? err.message : String(err),
+        cause: err,
+      });
+    });
+
+    child.on('close', code => {
+      if (code === 0) {
+        const version = stdout.trim() || stderr.trim() || 'codex';
+        finish({ name: 'codex on PATH', status: 'ok', message: version });
+        return;
+      }
+      const detail = stderr.trim();
+      finish({
+        name: 'codex on PATH',
+        status: 'fail',
+        message:
+          detail.length > 0
+            ? `codex --version exited with code ${String(code)}: ${detail}`
+            : `codex --version exited with code ${String(code)}`,
+      });
+    });
+  });
 }
 
 interface CodexProcessResult {

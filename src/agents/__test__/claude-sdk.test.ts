@@ -1,5 +1,6 @@
 // @module-tag local
 
+import { ClaudeSDKAgent } from 'loop-the-loop/agents/claude-sdk';
 import {
   classifyResultStatus,
   configureQueryOptions,
@@ -8,7 +9,28 @@ import {
   formatToolUseSummary,
   isTokenLimitError,
 } from 'loop-the-loop/agents/claude-sdk';
-import { describe, expect, it } from 'vitest';
+import type { CheckResult } from 'loop-the-loop/doctor';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const queryMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query: queryMock,
+}));
+
+async function drainCheck(agent: {
+  check?(): AsyncIterable<CheckResult>;
+}): Promise<Array<CheckResult>> {
+  const check = agent.check;
+  if (check === undefined) {
+    throw new Error('agent.check is not defined');
+  }
+  const results: Array<CheckResult> = [];
+  for await (const result of check.call(agent)) {
+    results.push(result);
+  }
+  return results;
+}
 
 describe('configureQueryOptions', () => {
   describe('allowedTools', () => {
@@ -595,5 +617,144 @@ describe('formatSystemMessage', () => {
       session_id: 'sess-1',
     } as unknown as Parameters<typeof formatSystemMessage>[0]);
     expect(line).toBe('[system] {"payload":{"foo":"bar"}}');
+  });
+});
+
+describe('ClaudeSDKAgent.check()', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
+  function stubNoCredentials(): void {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '');
+  }
+
+  it('passes every probe when credentials are present and the query works', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-test');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '');
+    queryMock.mockReturnValue(
+      (async function* () {
+        yield { type: 'system' };
+      })(),
+    );
+
+    const agent = await ClaudeSDKAgent.create({
+      model: 'sonnet',
+      outputSchema: { type: 'object' },
+      allowedTools: ['Read'],
+      loadedTools: { type: 'preset', preset: 'claude_code' },
+    });
+    const results = await drainCheck(agent);
+    const byName = Object.fromEntries(results.map(r => [r.name, r]));
+
+    expect(byName['SDK module loaded']?.status).toBe('ok');
+    expect(byName['credentials present']?.status).toBe('ok');
+    expect(byName['config shape valid']?.status).toBe('ok');
+    expect(byName['query probe']?.status).toBe('ok');
+    expect(queryMock).toHaveBeenCalledOnce();
+  });
+
+  it('fails credentials and skips the query probe when no token is set', async () => {
+    stubNoCredentials();
+    const agent = await ClaudeSDKAgent.create({});
+    const results = await drainCheck(agent);
+    const byName = Object.fromEntries(results.map(r => [r.name, r]));
+
+    expect(byName['credentials present']).toStrictEqual({
+      name: 'credentials present',
+      status: 'fail',
+      message: 'set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN',
+    });
+    expect(byName['query probe']).toStrictEqual({
+      name: 'query probe',
+      status: 'skip',
+      message: 'no credentials',
+    });
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts the OAuth token as credentials', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'oauth-token');
+    queryMock.mockReturnValue(
+      (async function* () {
+        yield { type: 'system' };
+      })(),
+    );
+    const agent = await ClaudeSDKAgent.create({});
+    const results = await drainCheck(agent);
+    expect(results.find(r => r.name === 'credentials present')?.status).toBe(
+      'ok',
+    );
+  });
+
+  it('fails config validation when outputSchema is not an object', async () => {
+    stubNoCredentials();
+    const agent = await ClaudeSDKAgent.create({
+      outputSchema: 'nope' as never,
+    });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('outputSchema');
+  });
+
+  it('fails config validation when model is not a string', async () => {
+    stubNoCredentials();
+    const agent = await ClaudeSDKAgent.create({ model: 42 as never });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('model');
+  });
+
+  it('fails config validation when allowedTools is not an array', async () => {
+    stubNoCredentials();
+    const agent = await ClaudeSDKAgent.create({
+      allowedTools: 'Read' as never,
+    });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('allowedTools');
+  });
+
+  it('fails config validation when loadedTools is an invalid shape', async () => {
+    stubNoCredentials();
+    const agent = await ClaudeSDKAgent.create({
+      loadedTools: { type: 'bogus' } as never,
+    });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('loadedTools');
+  });
+
+  it('accepts an array form of loadedTools', async () => {
+    stubNoCredentials();
+    const agent = await ClaudeSDKAgent.create({ loadedTools: ['Read'] });
+    const results = await drainCheck(agent);
+    expect(results.find(r => r.name === 'config shape valid')?.status).toBe(
+      'ok',
+    );
+  });
+
+  it('fails the query probe when the SDK throws', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-test');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '');
+    const boom = new Error('auth failed');
+    queryMock.mockReturnValue({
+      // A minimal async iterable whose iterator rejects on first `next()`.
+      [Symbol.asyncIterator]: () => ({
+        next: () => Promise.reject(boom),
+      }),
+    });
+    const agent = await ClaudeSDKAgent.create({});
+    const results = await drainCheck(agent);
+    const probe = results.find(r => r.name === 'query probe');
+    expect(probe?.status).toBe('fail');
+    expect(probe?.cause).toBe(boom);
   });
 });

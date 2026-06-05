@@ -27,6 +27,7 @@ import {
 import { UnixLocalSandboxClient } from '@openai/agents/sandbox/local';
 
 import type { Agent, InvokeOptions } from '../agents.js';
+import type { CheckResult } from '../doctor.js';
 import type { Logger } from '../loggers.js';
 import type {
   InvokeResult,
@@ -125,6 +126,111 @@ export class OpenAISDKAgent implements Agent {
       logger.error(`OpenAI SDK agent exception: ${reason}`);
       return { status, reason };
     }
+  }
+
+  /**
+   * Preflight probe used by `--doctor`.
+   *
+   * Probes, in order: `OPENAI_API_KEY` is present, the stored config has a
+   * valid shape, and (only when the key is present) the read-only
+   * `GET /v1/models` endpoint authenticates. This is the HTTP equivalent of
+   * `openai.models.list()` and uses the same env key the agent's run path
+   * relies on. Probe failures are reported as results rather than thrown.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    const apiKey = process.env['OPENAI_API_KEY'];
+    const hasKey = apiKey !== undefined && apiKey.length > 0;
+    yield hasKey
+      ? { name: 'credentials present', status: 'ok' }
+      : {
+          name: 'credentials present',
+          status: 'fail',
+          message: 'set OPENAI_API_KEY',
+        };
+
+    const badField = invalidOpenAIConfigField(this.#config);
+    yield badField === undefined
+      ? { name: 'config shape valid', status: 'ok' }
+      : {
+          name: 'config shape valid',
+          status: 'fail',
+          message: `invalid ${badField}`,
+        };
+
+    if (!hasKey) {
+      yield {
+        name: 'models reachable',
+        status: 'skip',
+        message: 'no credentials',
+      };
+      return;
+    }
+    yield await probeOpenAIModels(apiKey);
+  }
+}
+
+/**
+ * Return whether a value is a plain (non-array) object.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Validate the doctor-relevant fields of an `OpenAISDKAgentConfig` and
+ * return the name of the first field with the wrong shape, or undefined when
+ * the config is well-formed.
+ */
+function invalidOpenAIConfigField(
+  config: OpenAISDKAgentConfig,
+): string | undefined {
+  if (config.model !== undefined && typeof config.model !== 'string') {
+    return 'model (expected a string)';
+  }
+  if (
+    config.modelSettings !== undefined &&
+    !isPlainObject(config.modelSettings)
+  ) {
+    return 'modelSettings (expected an object)';
+  }
+  if (
+    config.outputSchema !== undefined &&
+    !isPlainObject(config.outputSchema)
+  ) {
+    return 'outputSchema (expected an object)';
+  }
+  return undefined;
+}
+
+/**
+ * Read-only probe equivalent to `openai.models.list()`: a `GET /v1/models`
+ * authenticated with the same env key the agent uses. HTTP 200 is `ok`; any
+ * non-200 or thrown error is `fail` (with the cause when thrown).
+ */
+async function probeOpenAIModels(apiKey: string): Promise<CheckResult> {
+  try {
+    const response = await fetch('https://api.openai.com/v1/models', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: 'application/json',
+      },
+    });
+    if (response.ok) {
+      return { name: 'models reachable', status: 'ok' };
+    }
+    return {
+      name: 'models reachable',
+      status: 'fail',
+      message: `GET /v1/models -> ${String(response.status)} ${response.statusText}`,
+    };
+  } catch (err) {
+    return {
+      name: 'models reachable',
+      status: 'fail',
+      message: err instanceof Error ? err.message : String(err),
+      cause: err,
+    };
   }
 }
 

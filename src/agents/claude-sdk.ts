@@ -7,6 +7,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 
 import type { Agent, InvokeOptions } from '../agents.js';
+import type { CheckResult } from '../doctor.js';
 import type {
   InvokeResult,
   OutputSchema,
@@ -248,6 +249,78 @@ export class ClaudeSDKAgent implements Agent {
     }
   }
 
+  /**
+   * Preflight probe used by `--doctor`.
+   *
+   * Probes, in order: the SDK module loaded (`query` is callable),
+   * credentials are present in the environment, the stored config has a
+   * valid shape, and (only when credentials are present) a minimal live
+   * `query()` succeeds. Probe failures are reported as results rather than
+   * thrown.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    yield typeof query === 'function'
+      ? { name: 'SDK module loaded', status: 'ok' }
+      : { name: 'SDK module loaded', status: 'fail' };
+
+    const hasCredentials =
+      hasEnv('ANTHROPIC_API_KEY') || hasEnv('CLAUDE_CODE_OAUTH_TOKEN');
+    yield hasCredentials
+      ? { name: 'credentials present', status: 'ok' }
+      : {
+          name: 'credentials present',
+          status: 'fail',
+          message: 'set ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN',
+        };
+
+    const badField = invalidConfigField(this.#config);
+    yield badField === undefined
+      ? { name: 'config shape valid', status: 'ok' }
+      : {
+          name: 'config shape valid',
+          status: 'fail',
+          message: `invalid ${badField}`,
+        };
+
+    if (!hasCredentials) {
+      yield { name: 'query probe', status: 'skip', message: 'no credentials' };
+      return;
+    }
+    yield await this.#probeQuery();
+  }
+
+  /**
+   * Run the smallest possible live `query()` and iterate its first message.
+   * Any error (network, auth, quota) is reported as a fail with the cause.
+   */
+  async #probeQuery(): Promise<CheckResult> {
+    try {
+      const messages = query({
+        prompt: 'ping',
+        options: {
+          ...(this.#config.model !== undefined
+            ? { model: this.#config.model }
+            : {}),
+          maxTurns: 1,
+          tools: [],
+          allowedTools: [],
+          permissionMode: 'default',
+        },
+      });
+      for await (const _message of messages) {
+        break;
+      }
+      return { name: 'query probe', status: 'ok' };
+    } catch (err) {
+      return {
+        name: 'query probe',
+        status: 'fail',
+        message: err instanceof Error ? err.message : String(err),
+        cause: err,
+      };
+    }
+  }
+
   static #successResult(
     output: string,
     structuredOutput: unknown,
@@ -273,6 +346,55 @@ export class ClaudeSDKAgent implements Agent {
     }
     return `${message}\nstderr: ${stderr}`;
   }
+}
+
+/**
+ * Return whether an environment variable is set to a non-empty value.
+ */
+function hasEnv(name: string): boolean {
+  const value = process.env[name];
+  return value !== undefined && value.length > 0;
+}
+
+/**
+ * Return whether a value is a plain (non-array) object.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Validate the doctor-relevant fields of a `ClaudeSDKAgentConfig` and return
+ * the name of the first field with the wrong shape, or undefined when the
+ * config is well-formed. Used by `check()` to flag a misconfigured agent
+ * before any network call.
+ */
+function invalidConfigField(config: ClaudeSDKAgentConfig): string | undefined {
+  if (
+    config.outputSchema !== undefined &&
+    !isPlainObject(config.outputSchema)
+  ) {
+    return 'outputSchema (expected an object)';
+  }
+  if (config.model !== undefined && typeof config.model !== 'string') {
+    return 'model (expected a string)';
+  }
+  if (
+    config.allowedTools !== undefined &&
+    !Array.isArray(config.allowedTools)
+  ) {
+    return 'allowedTools (expected an array)';
+  }
+  if (config.loadedTools !== undefined) {
+    const loaded = config.loadedTools;
+    const valid =
+      Array.isArray(loaded) ||
+      (isPlainObject(loaded) && loaded['type'] === 'preset');
+    if (!valid) {
+      return 'loadedTools (expected an array or a preset object)';
+    }
+  }
+  return undefined;
 }
 
 /**

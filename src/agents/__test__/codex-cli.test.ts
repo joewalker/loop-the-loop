@@ -3,8 +3,9 @@
 import { EventEmitter } from 'node:events';
 
 import { CodexCLIAgent } from 'loop-the-loop/agents/codex-cli';
+import type { CheckResult } from 'loop-the-loop/doctor';
 import type { Logger } from 'loop-the-loop/loggers';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 const readFileMock = vi.hoisted(() => vi.fn());
@@ -403,7 +404,190 @@ describe('CodexCLIAgent', () => {
       expect(result.reason).toContain('exit code: 1');
     }
   });
+
+  // #region check()
+
+  describe('check()', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('reports the codex version, CODEX_MODEL, and timeoutMs', async () => {
+      vi.stubEnv('CODEX_MODEL', 'gpt-5.5-codex');
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent({ timeoutMs: 1_000 });
+      const drained = drainCheck(agent);
+
+      child.stdout.emit('data', 'codex-cli 1.2.3\n');
+      child.emit('close', 0, null);
+
+      const results = await drained;
+      expect(spawnMock).toHaveBeenCalledWith(
+        'codex',
+        ['--version'],
+        expect.objectContaining({ stdio: ['ignore', 'pipe', 'pipe'] }),
+      );
+      expect(results).toStrictEqual([
+        { name: 'codex on PATH', status: 'ok', message: 'codex-cli 1.2.3' },
+        { name: 'CODEX_MODEL set', status: 'ok', message: 'gpt-5.5-codex' },
+        { name: 'timeoutMs valid', status: 'ok' },
+      ]);
+    });
+
+    it('fails when the codex binary cannot be spawned', async () => {
+      vi.stubEnv('CODEX_MODEL', '');
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent();
+      const drained = drainCheck(agent);
+
+      const enoent = Object.assign(new Error('spawn codex ENOENT'), {
+        code: 'ENOENT',
+      });
+      child.emit('error', enoent);
+
+      const results = await drained;
+      expect(results[0]).toStrictEqual({
+        name: 'codex on PATH',
+        status: 'fail',
+        message: 'spawn codex ENOENT',
+        cause: enoent,
+      });
+    });
+
+    it('fails when codex --version exits non-zero', async () => {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent();
+      const drained = drainCheck(agent);
+
+      child.stderr.emit('data', 'boom\n');
+      child.emit('close', 3, null);
+
+      const results = await drained;
+      expect(results[0].name).toBe('codex on PATH');
+      expect(results[0].status).toBe('fail');
+      expect(results[0].message).toContain('exited with code 3');
+    });
+
+    it('falls back to "codex" when --version prints nothing', async () => {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent();
+      const drained = drainCheck(agent);
+
+      child.emit('close', 0, null);
+
+      const results = await drained;
+      expect(results[0]).toStrictEqual({
+        name: 'codex on PATH',
+        status: 'ok',
+        message: 'codex',
+      });
+    });
+
+    it('fails with a bare message when --version exits non-zero silently', async () => {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent();
+      const drained = drainCheck(agent);
+
+      child.emit('close', 1, null);
+
+      const results = await drained;
+      expect(results[0].message).toBe('codex --version exited with code 1');
+    });
+
+    it('fails when spawn throws synchronously', async () => {
+      const boom = new Error('spawn blew up');
+      spawnMock.mockImplementation(() => {
+        throw boom;
+      });
+
+      const agent = new CodexCLIAgent();
+      const results = await drainCheck(agent);
+      expect(results[0]).toStrictEqual({
+        name: 'codex on PATH',
+        status: 'fail',
+        message: 'spawn blew up',
+        cause: boom,
+      });
+    });
+
+    it('warns when CODEX_MODEL is unset', async () => {
+      vi.stubEnv('CODEX_MODEL', '');
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent();
+      const drained = drainCheck(agent);
+
+      child.stdout.emit('data', 'codex 1.0.0\n');
+      child.emit('close', 0, null);
+
+      const results = await drained;
+      expect(results[1]).toStrictEqual({
+        name: 'CODEX_MODEL set',
+        status: 'warn',
+        message: 'CODEX_MODEL not set; codex default will be used',
+      });
+    });
+
+    it('fails timeoutMs validation for a non-positive integer', async () => {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent({ timeoutMs: -5 });
+      const drained = drainCheck(agent);
+
+      child.stdout.emit('data', 'codex 1.0.0\n');
+      child.emit('close', 0, null);
+
+      const results = await drained;
+      expect(results[2]).toStrictEqual({
+        name: 'timeoutMs valid',
+        status: 'fail',
+        message: 'timeoutMs must be a positive integer when set',
+      });
+    });
+
+    it('fails timeoutMs validation for a non-integer value', async () => {
+      const child = new FakeChildProcess();
+      spawnMock.mockReturnValue(child);
+
+      const agent = new CodexCLIAgent({ timeoutMs: 1.5 });
+      const drained = drainCheck(agent);
+
+      child.stdout.emit('data', 'codex 1.0.0\n');
+      child.emit('close', 0, null);
+
+      const results = await drained;
+      expect(results[2].status).toBe('fail');
+    });
+  });
+
+  // #endregion
 });
+
+async function drainCheck(agent: {
+  check?(): AsyncIterable<CheckResult>;
+}): Promise<Array<CheckResult>> {
+  const check = agent.check;
+  if (check === undefined) {
+    throw new Error('agent.check is not defined');
+  }
+  const results: Array<CheckResult> = [];
+  for await (const result of check.call(agent)) {
+    results.push(result);
+  }
+  return results;
+}
 
 function createLogger(enabled: boolean): Logger {
   return {

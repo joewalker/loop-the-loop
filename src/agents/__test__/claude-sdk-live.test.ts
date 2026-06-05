@@ -5,6 +5,7 @@
 // @module-tag claude-sdk
 
 import { ClaudeSDKAgent } from 'loop-the-loop/agents/claude-sdk';
+import type { CheckResult } from 'loop-the-loop/doctor';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,6 +14,29 @@ import {
   invokeLiveTestPrompt,
   normalizeScalarAnswer,
 } from './live-agent-harness.js';
+
+describe('Claude SDK live check()', () => {
+  it(
+    'does not fail any probe when credentials are present',
+    { timeout: 60_000, retry: { count: 1, delay: 1_000 } },
+    async () => {
+      const agent = await ClaudeSDKAgent.create({ maxTurns: 1 });
+      const check = agent.check;
+      if (check === undefined) {
+        throw new Error('agent.check is not defined');
+      }
+      const results: Array<CheckResult> = [];
+      for await (const result of check.call(agent)) {
+        results.push(result);
+      }
+
+      expect(results.find(r => r.name === 'credentials present')?.status).toBe(
+        'ok',
+      );
+      expect(results.some(r => r.status === 'fail')).toBe(false);
+    },
+  );
+});
 
 describe('Claude SDK live agent', () => {
   it(

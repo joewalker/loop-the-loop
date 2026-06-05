@@ -6,6 +6,7 @@ import {
   ToolTimeoutError,
   UserError,
 } from '@openai/agents';
+import { OpenAISDKAgent } from 'loop-the-loop/agents/openai-sdk';
 import {
   buildCapabilities,
   buildSandboxAgentOptions,
@@ -17,7 +18,22 @@ import {
   toOpenAIOutputType,
   wrapShellToolsForReadOnly,
 } from 'loop-the-loop/agents/openai-sdk';
-import { describe, expect, it } from 'vitest';
+import type { CheckResult } from 'loop-the-loop/doctor';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+async function drainCheck(agent: {
+  check?(): AsyncIterable<CheckResult>;
+}): Promise<Array<CheckResult>> {
+  const check = agent.check;
+  if (check === undefined) {
+    throw new Error('agent.check is not defined');
+  }
+  const results: Array<CheckResult> = [];
+  for await (const result of check.call(agent)) {
+    results.push(result);
+  }
+  return results;
+}
 
 describe('buildSandboxAgentOptions', () => {
   it('maps config fields into SandboxAgent options', () => {
@@ -339,5 +355,121 @@ describe('OpenAI SDK error handling', () => {
     expect(describeOpenAIError(error)).toBe(
       'Error: request failed (status=429, code=rate_limit_exceeded, type=rate_limit_error)',
     );
+  });
+});
+
+describe('OpenAISDKAgent.check()', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('passes every probe when the key is present and models list is reachable', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent = await OpenAISDKAgent.create({
+      model: 'gpt-5.5',
+      modelSettings: { temperature: 0 },
+      outputSchema: { type: 'object' },
+    });
+    const results = await drainCheck(agent);
+    const byName = Object.fromEntries(results.map(r => [r.name, r]));
+
+    expect(byName['credentials present']?.status).toBe('ok');
+    expect(byName['config shape valid']?.status).toBe('ok');
+    expect(byName['models reachable']?.status).toBe('ok');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.openai.com/v1/models',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer sk-test',
+        }),
+      }),
+    );
+  });
+
+  it('fails credentials and skips the models probe when no key is set', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const agent = await OpenAISDKAgent.create({});
+    const results = await drainCheck(agent);
+    const byName = Object.fromEntries(results.map(r => [r.name, r]));
+
+    expect(byName['credentials present']?.status).toBe('fail');
+    expect(byName['models reachable']).toStrictEqual({
+      name: 'models reachable',
+      status: 'skip',
+      message: 'no credentials',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails the models probe on a non-200 response', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-bad');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+      }),
+    );
+
+    const agent = await OpenAISDKAgent.create({});
+    const results = await drainCheck(agent);
+    const probe = results.find(r => r.name === 'models reachable');
+    expect(probe?.status).toBe('fail');
+    expect(probe?.message).toContain('401');
+  });
+
+  it('fails the models probe when fetch rejects', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'sk-test');
+    const boom = new Error('network down');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(boom));
+
+    const agent = await OpenAISDKAgent.create({});
+    const results = await drainCheck(agent);
+    const probe = results.find(r => r.name === 'models reachable');
+    expect(probe?.status).toBe('fail');
+    expect(probe?.cause).toBe(boom);
+  });
+
+  it('fails config validation when model is not a string', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const agent = await OpenAISDKAgent.create({ model: 1 as never });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('model');
+  });
+
+  it('fails config validation when modelSettings is not an object', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const agent = await OpenAISDKAgent.create({
+      modelSettings: 'nope' as never,
+    });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('modelSettings');
+  });
+
+  it('fails config validation when outputSchema is not an object', async () => {
+    vi.stubEnv('OPENAI_API_KEY', '');
+    const agent = await OpenAISDKAgent.create({
+      outputSchema: 'nope' as never,
+    });
+    const results = await drainCheck(agent);
+    const config = results.find(r => r.name === 'config shape valid');
+    expect(config?.status).toBe('fail');
+    expect(config?.message).toContain('outputSchema');
   });
 });

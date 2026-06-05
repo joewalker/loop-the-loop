@@ -1,4 +1,5 @@
 import type { Agent, InvokeOptions } from '../agents.js';
+import type { CheckResult } from '../doctor.js';
 import type { InvokeResult } from '../types.js';
 
 /**
@@ -86,5 +87,20 @@ export class TestAgent implements Agent {
       return { status: 'error', reason: '#results is empty' };
     }
     return result;
+  }
+
+  /**
+   * Preflight probe used by `--doctor`. Reports whether the agent has any
+   * canned responses to serve; an empty `responses` list means every
+   * invocation would error.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    yield this.#results.length > 0
+      ? { name: 'responses configured', status: 'ok' }
+      : {
+          name: 'responses configured',
+          status: 'fail',
+          message: 'responses must be non-empty',
+        };
   }
 }

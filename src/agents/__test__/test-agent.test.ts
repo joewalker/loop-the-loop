@@ -146,4 +146,36 @@ describe('TestAgent', () => {
   });
 
   // #endregion
+
+  // #region check()
+
+  it('check() yields ok when responses are configured', async () => {
+    const agent = await TestAgent.create({
+      responses: [{ status: 'success', output: 'a' }],
+    });
+    const results = [];
+    for await (const result of agent.check()) {
+      results.push(result);
+    }
+    expect(results).toStrictEqual([
+      { name: 'responses configured', status: 'ok' },
+    ]);
+  });
+
+  it('check() yields fail when responses are empty', async () => {
+    const agent = await TestAgent.create({ responses: [] });
+    const results = [];
+    for await (const result of agent.check()) {
+      results.push(result);
+    }
+    expect(results).toStrictEqual([
+      {
+        name: 'responses configured',
+        status: 'fail',
+        message: 'responses must be non-empty',
+      },
+    ]);
+  });
+
+  // #endregion
 });
