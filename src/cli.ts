@@ -3,6 +3,8 @@
 import process from 'node:process';
 
 import pkg from '../package.json' with { type: 'json' };
+import { doctor } from './doctor.js';
+import { createLogger } from './loggers.js';
 import { loop } from './loop.js';
 import type { LoopRunResult } from './types.js';
 import { loadCliConfig, parseArgs, USAGE } from './util/load-cli-config.js';
@@ -29,6 +31,11 @@ async function main(): Promise<void> {
     return;
   }
   const config = await loadCliConfig(parsedArgs);
+  if (parsedArgs.doctor === true) {
+    const ok = await doctor(config, createLogger(config.logger));
+    process.exitCode = ok ? 0 : 1;
+    return;
+  }
   const result = await loop(config);
   console.log(renderRunResult(result));
 }

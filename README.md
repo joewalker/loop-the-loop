@@ -50,6 +50,7 @@ Flag             | Description
 `--verbose`      | Stream diagnostic events to stderr
 `--max-prompts N`| Stop after N prompts (overrides `maxPrompts` in the config)
 `--dry-run`      | Swap the configured agent for a `test` agent that returns "dry run" for every prompt, and force verbose logging so the prompts that would have been sent are visible. Useful for inspecting prompt generation without invoking a real backend.
+`--doctor`       | Validate the configured agent, prompt generator, reporter, output directory, resumable state file, and git prerequisites, then exit without running the loop. In the spirit of `gh auth status`, it turns silent runtime failures into a single readable up-front report: it exits 0 when every check passes and 1 when any check fails. `--dry-run` is ignored under `--doctor` because the probe must hit the real configured components.
 
 The config file is a JSON object matching the `LoopCliConfig` type. For example:
 

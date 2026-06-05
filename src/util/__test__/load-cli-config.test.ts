@@ -185,6 +185,28 @@ describe('parseArgs', () => {
 
   // #endregion
 
+  // #region --doctor
+
+  it('doctor defaults to false', () => {
+    expect(parseArgs(['config.json']).doctor).toBe(false);
+  });
+
+  it('sets doctor when --doctor is present', () => {
+    expect(parseArgs(['--doctor', 'config.json']).doctor).toBe(true);
+  });
+
+  it('accepts --doctor after the config path', () => {
+    expect(parseArgs(['config.json', '--doctor']).doctor).toBe(true);
+  });
+
+  it('throws when --doctor is given a value', () => {
+    expect(() => parseArgs(['--doctor=true', 'config.json'])).toThrow(
+      'Option --doctor does not take a value',
+    );
+  });
+
+  // #endregion
+
   it('throws when --verbose is given a value', () => {
     expect(() => parseArgs(['--verbose=true', 'config.json'])).toThrow(
       'Option --verbose does not take a value',
@@ -1666,6 +1688,33 @@ describe('loadCliConfig', () => {
     });
 
     expect(config.agent).toBe('claude-sdk');
+  });
+
+  it('should ignore --dry-run when --doctor is set', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'doctor-dryrun',
+        agent: 'claude-sdk',
+        promptGenerator: ['test', { prompts: ['hello'] }],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({
+      configPath,
+      verbose: false,
+      dryRun: true,
+      doctor: true,
+      maxPrompts: undefined,
+    });
+
+    // The configured agent is preserved (not swapped for the dry-run test
+    // agent) and verbose is not force-enabled by the ignored --dry-run.
+    expect(config.agent).toBe('claude-sdk');
+    expect(config.logger).toBeUndefined();
   });
 
   // #endregion

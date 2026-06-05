@@ -18,6 +18,7 @@ export interface ParsedArgs {
   readonly version?: boolean | undefined;
   readonly verbose?: boolean | undefined;
   readonly dryRun?: boolean | undefined;
+  readonly doctor?: boolean | undefined;
   readonly maxPrompts?: number | undefined;
 }
 
@@ -26,9 +27,9 @@ export interface ParsedArgs {
  * and the `--help` output in cli.ts.
  */
 export const USAGE =
-  'Usage: loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] <config.json>';
+  'Usage: loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--doctor] [--max-prompts N] <config.json>';
 
-type BooleanField = 'verbose' | 'dryRun' | 'help' | 'version';
+type BooleanField = 'verbose' | 'dryRun' | 'doctor' | 'help' | 'version';
 
 /**
  * Canonical name for each supported flag. Lookups are done after
@@ -38,6 +39,7 @@ type BooleanField = 'verbose' | 'dryRun' | 'help' | 'version';
 const BOOLEAN_FLAGS: ReadonlyMap<string, BooleanField> = new Map([
   ['verbose', 'verbose'],
   ['dryrun', 'dryRun'],
+  ['doctor', 'doctor'],
   ['help', 'help'],
   ['version', 'version'],
 ]);
@@ -69,6 +71,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
   const booleans: Record<BooleanField, boolean> = {
     verbose: false,
     dryRun: false,
+    doctor: false,
     help: false,
     version: false,
   };
@@ -153,6 +156,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
     version: false,
     verbose: booleans.verbose,
     dryRun: booleans.dryRun,
+    doctor: booleans.doctor,
     maxPrompts,
   };
 }
@@ -164,7 +168,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
 export async function loadCliConfig(
   parsedArgs: ParsedArgs,
 ): Promise<LoopCliConfig> {
-  const { configPath, maxPrompts, verbose, dryRun } = parsedArgs;
+  const { configPath, maxPrompts, verbose, dryRun, doctor } = parsedArgs;
   /* istanbul ignore next -- cli.ts handles --help/--version before reaching
      here, so configPath is always defined for real callers. */
   if (configPath === undefined) {
@@ -190,16 +194,20 @@ export async function loadCliConfig(
     throw new Error(`Config file must contain a JSON object: ${resolvedPath}`);
   }
 
+  // --doctor probes the real configured components, so --dry-run is ignored
+  // under it (the dry-run agent swap and forced verbose are both suppressed).
+  const effectiveDryRun = dryRun === true && doctor !== true;
+
   return {
     ...(await normalizeCliConfig(config as LoopCliConfig, resolvedPath)),
     ...(maxPrompts !== undefined
       ? /* istanbul ignore next */ { maxPrompts }
       : {}),
     // --dry-run forces verbose so the prompts being skipped are visible.
-    ...(verbose === true || dryRun === true
+    ...(verbose === true || effectiveDryRun
       ? { logger: 'verbose' as const }
       : {}),
-    ...(dryRun === true ? { agent: DRY_RUN_AGENT_SPEC } : {}),
+    ...(effectiveDryRun ? { agent: DRY_RUN_AGENT_SPEC } : {}),
   };
 }
 
