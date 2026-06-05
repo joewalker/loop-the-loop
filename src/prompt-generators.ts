@@ -1,3 +1,4 @@
+import type { CheckResult } from './doctor.js';
 import type { LoopState } from './loop-states.js';
 import {
   BatchPromptGenerator,
@@ -70,6 +71,11 @@ export interface PromptGenerator {
    * Use `loopState.isOutstanding(id)` to skip previously processed items.
    */
   generate(loopState: LoopState): AsyncIterable<Prompt>;
+
+  /**
+   * Optional preflight probe used by `--doctor` (see Agent.check).
+   */
+  check?(): AsyncIterable<CheckResult>;
 }
 
 /**

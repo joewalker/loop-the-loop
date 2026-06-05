@@ -1,3 +1,4 @@
+import type { CheckResult } from './doctor.js';
 import type { Prompt } from './prompt-generators.js';
 import { JsonlReporter } from './reporters/jsonl.js';
 import { YamlReporter } from './reporters/yaml.js';
@@ -24,6 +25,11 @@ export interface Reporter {
    * Serialize a single result entry and append it to the report.
    */
   append(prompt: Prompt, result: InvokeResult): Promise<void>;
+
+  /**
+   * Optional preflight probe used by `--doctor` (see Agent.check).
+   */
+  check?(): AsyncIterable<CheckResult>;
 }
 
 export interface ReporterConfig {

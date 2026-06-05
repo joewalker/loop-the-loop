@@ -2,6 +2,7 @@ import { ClaudeSDKAgent } from './agents/claude-sdk.js';
 import { CodexCLIAgent } from './agents/codex-cli.js';
 import { OpenAISDKAgent } from './agents/openai-sdk.js';
 import { TestAgent } from './agents/test.js';
+import type { CheckResult } from './doctor.js';
 import type { Logger } from './loggers.js';
 import type { InvokeResult } from './types.js';
 
@@ -43,6 +44,13 @@ export interface InvokeOptions {
  */
 export interface Agent {
   invoke: (prompt: string, options: InvokeOptions) => Promise<InvokeResult>;
+
+  /**
+   * Optional preflight probe used by `--doctor`. Yields results one at a
+   * time so a slow probe does not block earlier fast probes from printing.
+   * Optional so external and test implementations stay valid.
+   */
+  check?(): AsyncIterable<CheckResult>;
 }
 
 /**
