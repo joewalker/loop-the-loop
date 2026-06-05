@@ -57,7 +57,7 @@ Reporters (yaml, jsonl): `outputDir` writable via `fs.access(dir, W_OK)`; the ta
 `doctor()` emits an `environment` component covering:
 
 - Output directory writable (`fs.access(config.outputDir, W_OK)`), checked independently of the reporter so a bad `outputDir` surfaces even with no reporter configured.
-- Resumable state: if `${outputDir}/${name}-loop-state.json` exists, load it under the strict Step 01 contract; `fail` on a malformed or non-v2 file, `ok` otherwise, `skip` when absent.
+- Resumable state: if `${outputDir}/${name}-loop-state.json` exists, load it through the Step 01 loader (`createLoopState` / `FileLoopState.create` in `src/loop-states/file.ts`), which already throws clearly on a malformed or non-v2 file; `fail` on that throw, `ok` otherwise, `skip` when absent.
 - Git working tree, only when `allowSourceUpdate === true`: reuse the same preflight as `loopImpl` (`git rev-parse --is-inside-work-tree`, clean tree, `user.name` / `user.email` configured for commits). Extract that preflight into a shared helper so doctor and loop stay in lockstep.
 
 ## Output format

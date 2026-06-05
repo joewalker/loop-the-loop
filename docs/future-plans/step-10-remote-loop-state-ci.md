@@ -29,11 +29,20 @@ Credentials come from the standard AWS SDK chain (env, shared config, IAM role),
 
 ## Config
 
+Step 01 shipped `createLoopState(type, { outputDir, jobName })` as a two-argument factory keyed by a plain backend name, with an internal `loopStateConstructors` map (currently just `{ file }`), a `DEFAULT_LOOP_STATE = 'file'` constant, and a `LoopStateConfig = { outputDir, jobName }` type. It deliberately did not add a `LoopStateSpec` union, because there was one backend and no config block to select another. This step introduces the spec union and reshapes the factory to carry backend-specific config alongside the ambient `{ outputDir, jobName }` context.
+
 ```ts
+export type LoopStateName = 'file' | 's3';
+
 export type LoopStateSpec =
-  | 'file'
-  | ['file', { readonly path?: string }]
+  | LoopStateName
+  | ['file', FileLoopStateConfig]
   | ['s3', S3LoopStateConfig];
+
+export interface FileLoopStateConfig {
+  // Overrides the derived `${outputDir}/${jobName}-loop-state.json`.
+  readonly path?: string;
+}
 
 export interface S3LoopStateConfig {
   readonly bucket: string;
@@ -44,7 +53,19 @@ export interface S3LoopStateConfig {
 }
 ```
 
-Add `readonly loopState?: LoopStateSpec` to `LoopCliConfig`, defaulting to `'file'` writing `${outputDir}/${jobName}-loop-state.json` (today's behaviour). `createLoopState` (shaped in Step 01) registers the `s3` constructor. Schema gains a `loopStateSpec` mirroring `reporterSpec`, plus `fileLoopStateConfig` and `s3LoopStateConfig`.
+Each backend constructor changes from Step 01's `(config: LoopStateConfig)` to `(backendConfig, context)`, and `createLoopState` splits a spec into `(name, backendConfig)` before dispatching through the map:
+
+```ts
+export function createLoopState(
+  spec: LoopStateSpec = DEFAULT_LOOP_STATE,
+  context: LoopStateConfig, // { outputDir, jobName } from Step 01
+): Promise<LoopState> {
+  const [name, backendConfig] = Array.isArray(spec) ? spec : [spec, {}];
+  return loopStateConstructors[name](backendConfig, context);
+}
+```
+
+The `file` constructor uses `backendConfig.path` when set and otherwise derives `${outputDir}/${jobName}-loop-state.json` exactly as Step 01 does, so the default stays byte-for-byte. The `s3` constructor reads `bucket` / `key` from its config and ignores the filesystem path. Add `readonly loopState?: LoopStateSpec` to `LoopCliConfig`, defaulting to `'file'`. The only caller, `loop.ts`, changes its first argument from `DEFAULT_LOOP_STATE` to `config.loopState ?? DEFAULT_LOOP_STATE`; the second argument is unchanged. Schema gains a `loopStateSpec` mirroring `reporterSpec`, plus `fileLoopStateConfig` and `s3LoopStateConfig`.
 
 ## Run-id lifecycle
 
@@ -91,7 +112,7 @@ The batch generator's passthrough state must forward `claim` / `complete` / `rel
 
 - New `src/loop-states/s3.ts` and its tests.
 - `src/types.ts`: `LoopStateSpec`, `S3LoopStateConfig`, and `loopState` on `LoopCliConfig`.
-- `src/loop-states.ts`: register the `s3` constructor.
+- `src/loop-states.ts`: add the `LoopStateSpec` union and `FileLoopStateConfig`, reshape `createLoopState` to split a spec into `(name, backendConfig)`, change the constructor signatures to `(backendConfig, context)`, and register the `s3` constructor.
 - `src/loop.ts`: install the SIGINT / SIGTERM release handlers.
 - `src/prompt-generators/batch.ts`: the plain forwarding passthrough state.
 - `package.json`: `@aws-sdk/client-s3` (the user adds it interactively).

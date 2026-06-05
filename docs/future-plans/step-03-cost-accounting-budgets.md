@@ -10,7 +10,7 @@ Record cost and token metadata for every prompt result when available, persist r
 - Extract provider cost from Claude SDK results.
 - Extract token usage from OpenAI SDK results and estimate USD only when the user has configured pricing for the resolved model.
 - Extract token usage from Codex CLI JSONL events and estimate USD only when pricing is configured.
-- Persist per-result cost in loop state outcomes and full reporter output.
+- Persist per-result cost in full reporter output. The loop-state side (per-result `cost` on outcomes plus `totalUsd` accumulation with clamping) already shipped in Step 01; this step only feeds it real agent costs.
 - Add YAML reporter cost serialization.
 - Add `maxBudgetUsd` to runtime config, CLI parsing, and schema.
 - Use `LoopRunResult` for budget stops instead of return-string text.
@@ -67,7 +67,7 @@ export function estimateCost(
 
 ## Persistence and totals
 
-Cost lands in the v2 loop-state outcomes (Step 01) and in full reporter output. `totalUsd` accumulates on every `complete()` whose `cost.costSource` is `'provider'` or `'estimated'`, including glitches, which still cost real money even though they stay outstanding for retry. `'unavailable'` records tokens but does not advance `totalUsd`. Negative or non-finite cost is clamped to a no-op increment, never written.
+This persistence is already built. Step 01's `FileLoopState.complete()` stores `cost` on the outcome and its `#addCost` accumulates `totalUsd`, with tests covering the rules below, so the only new work here is making the agents populate `CostInfo`; the loop-state behaviour is described so this step can rely on it. Cost lands in the v2 loop-state outcomes (Step 01) and in full reporter output. `totalUsd` accumulates on every `complete()` whose `cost.costSource` is `'provider'` or `'estimated'`, including glitches, which still cost real money even though they stay outstanding for retry. `'unavailable'` records tokens but does not advance `totalUsd`. Negative or non-finite cost is clamped to a no-op increment, never written.
 
 ## Reporters
 

@@ -6,7 +6,7 @@ Backwards compatibility with old pre-v2 state files is not a goal at this stage.
 
 ## Sequence
 
-1. [Runtime contracts and state hardening](step-01-runtime-contracts-state-hardening.md)
+1. [Runtime contracts and state hardening](step-01-runtime-contracts-state-hardening.md) - completed
 2. [`--doctor`](step-02-doctor.md)
 3. [Cost accounting and budgets](step-03-cost-accounting-budgets.md)
 4. [In-process concurrency](step-04-in-process-concurrency.md)
@@ -17,6 +17,8 @@ Backwards compatibility with old pre-v2 state files is not a goal at this stage.
 9. [Dashboard](step-09-dashboard.md)
 10. [Remote loop state for CI coordination](step-10-remote-loop-state-ci.md)
 11. [S3-backed pipeline handoff](step-11-s3-backed-pipeline-handoff.md)
+
+Step 1 is complete and merged on the `step-01-runtime-contracts-state-hardening` branch. See [next.md](next.md) for the as-built contracts and the context that carries into Step 2.
 
 ## Definition of done for each step
 

@@ -1,5 +1,9 @@
 # Step 01: Runtime contracts and state hardening
 
+## Status
+
+Completed and merged on the `step-01-runtime-contracts-state-hardening` branch. The as-built contracts are summarized in [next.md](next.md). Two deltas from the design below: `createLoopState` shipped as `createLoopState(type, { outputDir, jobName })` keyed by a plain backend name rather than a spec union, and `LoopStateSpec` / `loopStateTypes` were deferred to Step 10.
+
 ## Goal
 
 Establish strict runtime contracts that later work can rely on without parsing status strings, supporting legacy state shapes, or sharing filesystem details between features.
