@@ -1,6 +1,6 @@
 // @module-tag local
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -191,5 +191,63 @@ describe('JsonlReporter', () => {
     for (const line of lines) {
       expect(() => JSON.parse(line) as Record<string, unknown>).not.toThrow();
     }
+  });
+
+  it('check() reports both probes ok when the report file is absent', async () => {
+    const report = await JsonlReporter.create({
+      outputDir: tempDir,
+      jobName: 'check-fresh',
+    });
+    const results = [];
+    for await (const r of report.check()) {
+      results.push(r);
+    }
+    expect(results.map(r => [r.name, r.status])).toEqual([
+      ['output directory writable', 'ok'],
+      ['report file appendable', 'ok'],
+    ]);
+    expect(
+      results.find(r => r.name === 'report file appendable')?.message,
+    ).toBe('will be created on first append');
+  });
+
+  it('check() reports the file appendable when it already exists', async () => {
+    const report = await JsonlReporter.create({
+      outputDir: tempDir,
+      jobName: 'check-exists',
+    });
+    const path = join(tempDir, 'check-exists-report.jsonl');
+    await writeFile(path, '');
+    const results = [];
+    for await (const r of report.check()) {
+      results.push(r);
+    }
+    expect(results.map(r => [r.name, r.status])).toEqual([
+      ['output directory writable', 'ok'],
+      ['report file appendable', 'ok'],
+    ]);
+    expect(
+      results.find(r => r.name === 'report file appendable')?.message,
+    ).toBe(path);
+  });
+
+  it('check() fails when the output directory cannot be created', async () => {
+    const outputDir = join(tempDir, 'reportdir');
+    const report = await JsonlReporter.create({
+      outputDir,
+      jobName: 'blocked',
+    });
+    // Replace the output directory with a regular file so the check()'s
+    // mkdir(dir, { recursive: true }) rejects.
+    await rm(outputDir, { recursive: true, force: true });
+    await writeFile(outputDir, 'now a file');
+    const results = [];
+    for await (const r of report.check()) {
+      results.push(r);
+    }
+    expect(results).toHaveLength(1);
+    expect(results[0].name).toBe('output directory writable');
+    expect(results[0].status).toBe('fail');
+    expect(results[0].cause).toBeDefined();
   });
 });
