@@ -44,6 +44,48 @@ export class Git {
   }
 
   /**
+   * 'git rev-parse --is-inside-work-tree'
+   *
+   * Returns true only when the repo path is inside a git work tree. A
+   * non-zero exit (no repository) is reported as false rather than thrown.
+   */
+  async isInsideWorkTree(): Promise<boolean> {
+    try {
+      const out = await exec('git', [
+        '-C',
+        this.#repoPath,
+        'rev-parse',
+        '--is-inside-work-tree',
+      ]);
+      return out.trim() === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 'git config --get <key>'
+   *
+   * Returns the trimmed config value, or undefined when the key is unset
+   * (git exits non-zero) or resolves to an empty string.
+   */
+  async configValue(key: string): Promise<string | undefined> {
+    try {
+      const out = await exec('git', [
+        '-C',
+        this.#repoPath,
+        'config',
+        '--get',
+        key,
+      ]);
+      const value = out.trim();
+      return value.length > 0 ? value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * 'git add'
    */
   async add(...files: Array<string>): Promise<string> {

@@ -1,11 +1,16 @@
 // @module-tag local
 
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Git } from 'loop-the-loop/util/git';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+function setConfig(repoPath: string, key: string, value: string): void {
+  execFileSync('git', ['-C', repoPath, 'config', key, value]);
+}
 
 describe('Git', () => {
   let repoPath: string;
@@ -134,6 +139,38 @@ describe('Git', () => {
       const options = { committer: { name: 'Bot', email: 'bot@test.com' } };
       const result = await git.maybeCommitAll('Nothing to commit', options);
       expect(result).toBe('');
+    });
+  });
+
+  describe('isInsideWorkTree', () => {
+    it('should return true inside a work tree', async () => {
+      expect(await git.isInsideWorkTree()).toBe(true);
+    });
+
+    it('should return false outside a work tree', async () => {
+      const nonRepo = await mkdtemp(join(tmpdir(), 'git-nonrepo-'));
+      try {
+        const outside = new Git(nonRepo);
+        expect(await outside.isInsideWorkTree()).toBe(false);
+      } finally {
+        await rm(nonRepo, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('configValue', () => {
+    it('should return the trimmed value of a set key', async () => {
+      setConfig(repoPath, 'loop.test', 'hello');
+      expect(await git.configValue('loop.test')).toBe('hello');
+    });
+
+    it('should return undefined for an unset key', async () => {
+      expect(await git.configValue('loop.definitelyUnset')).toBeUndefined();
+    });
+
+    it('should return undefined for an empty value', async () => {
+      setConfig(repoPath, 'loop.empty', '');
+      expect(await git.configValue('loop.empty')).toBeUndefined();
     });
   });
 });

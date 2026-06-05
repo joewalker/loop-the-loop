@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { createAgent, type Agent } from './agents.js';
+import { gitPreflight } from './git-preflight.js';
 import { createLogger, type Logger } from './loggers.js';
 import { createLoopState, DEFAULT_LOOP_STATE } from './loop-states.js';
 import {
@@ -87,10 +88,15 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
 
   const git = allowSourceUpdate ? new Git(process.cwd()) : undefined;
 
-  if (git && !(await git.isClean())) {
-    throw new Error(
-      'Working directory is not clean. Commit or stash changes before starting.',
-    );
+  if (git) {
+    const failed = (await gitPreflight(git)).find(item => !item.ok);
+    if (failed) {
+      throw new Error(
+        failed.message !== undefined
+          ? failed.message
+          : /* istanbul ignore next */ `Git preflight failed: ${failed.name}`,
+      );
+    }
   }
 
   const loopState = await createLoopState(DEFAULT_LOOP_STATE, {

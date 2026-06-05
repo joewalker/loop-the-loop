@@ -1,5 +1,6 @@
 // @module-tag local
 
+import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -98,6 +99,17 @@ describe('main', () => {
     await git.commit('Initial commit', {
       committer: { name: 'Test', email: 'test@test.com' },
     });
+
+    // Set a local committer identity so the loop's git preflight is
+    // deterministic regardless of the machine's global git config.
+    execFileSync('git', ['-C', repoPath, 'config', 'user.name', 'Test']);
+    execFileSync('git', [
+      '-C',
+      repoPath,
+      'config',
+      'user.email',
+      'test@test.com',
+    ]);
 
     process.chdir(repoPath);
 
