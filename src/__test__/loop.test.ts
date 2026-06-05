@@ -362,6 +362,37 @@ describe('main', () => {
     });
   });
 
+  it('should skip a prompt already claimed by another run', async () => {
+    const agent = new RecordingAgent({ status: 'success', output: 'unused' });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'Review a' },
+    ]);
+
+    await writeFile(
+      join(repoPath, 'skip-claimed-loop-state.json'),
+      `${JSON.stringify(
+        {
+          version: 2,
+          results: {},
+          claims: { 'a.ts': { runId: 'other-run', claimedAt: '2020-01-01' } },
+          totalUsd: 0,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const result = await runMainWithFakeTimers({
+      name: 'skip-claimed',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+    });
+
+    expect(result).toBe('Done');
+    expect(agent.invokeOptions).toHaveLength(0);
+  });
+
   it('should emit each prompt on the verbose logger so --dry-run can inspect it', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult({ status: 'success', output: 'ok' });

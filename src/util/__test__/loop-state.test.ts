@@ -1,6 +1,6 @@
 // @module-tag local
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -272,6 +272,129 @@ describe('LoopState', () => {
     });
 
     expect(loopState.totalUsd).toBe(0);
+  });
+
+  it('should expose completed and failed ids through the getters', async () => {
+    const path = join(tempDir, 'state.json');
+    const loopState = await FileLoopState.create(path);
+
+    await loopState.complete('run-1', 'ok-item', {
+      status: 'success',
+      output: 'done',
+    });
+    await loopState.complete('run-1', 'bad-item', {
+      status: 'error',
+      reason: 'boom',
+    });
+
+    expect(loopState.completed).toEqual(['ok-item']);
+    expect(loopState.failed).toEqual([{ id: 'bad-item', reason: 'boom' }]);
+  });
+
+  it('should default a failed reason to an empty string in the getter', async () => {
+    const path = join(tempDir, 'state.json');
+    await writeFile(
+      path,
+      `${JSON.stringify(
+        {
+          version: 2,
+          results: { 'no-reason': { status: 'error' } },
+          claims: {},
+          totalUsd: 0,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const loopState = await FileLoopState.create(path);
+
+    expect(loopState.failed).toEqual([{ id: 'no-reason', reason: '' }]);
+  });
+
+  it('should reject a claim for an id that already has a result', async () => {
+    const path = join(tempDir, 'state.json');
+    const loopState = await FileLoopState.create(path);
+
+    await loopState.complete('run-1', 'done-item', {
+      status: 'success',
+      output: 'done',
+    });
+
+    expect(await loopState.claim('run-2', 'done-item')).toBe(false);
+  });
+
+  it('should ignore a complete from a run that does not own the claim', async () => {
+    const path = join(tempDir, 'state.json');
+    const loopState = await FileLoopState.create(path);
+
+    await loopState.claim('run-1', 'owned-item');
+    await loopState.complete('run-2', 'owned-item', {
+      status: 'success',
+      output: 'sneaky',
+    });
+
+    expect(loopState.isOutstanding('owned-item')).toBe(true);
+  });
+
+  it('should keep the cost on an error result', async () => {
+    const path = join(tempDir, 'state.json');
+    const loopState = await FileLoopState.create(path);
+
+    await loopState.complete('run-1', 'err-item', {
+      status: 'error',
+      reason: 'broke',
+      cost: { usd: 0.4, costSource: 'provider' },
+    });
+
+    expect(loopState.totalUsd).toBe(0.4);
+    expect(await loopState.getSnapshot()).toMatchObject({
+      results: {
+        'err-item': {
+          status: 'error',
+          reason: 'broke',
+          cost: { usd: 0.4, costSource: 'provider' },
+        },
+      },
+    });
+  });
+
+  it('should restore claims and totalUsd from saved state', async () => {
+    const path = join(tempDir, 'state.json');
+    await writeFile(
+      path,
+      `${JSON.stringify(
+        {
+          version: 2,
+          results: {},
+          claims: { 'live-item': { runId: 'run-9', claimedAt: '2020-01-01' } },
+          totalUsd: 1.25,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const loopState = await FileLoopState.create(path);
+
+    expect(loopState.totalUsd).toBe(1.25);
+    expect(await loopState.getSnapshot()).toMatchObject({
+      claims: { 'live-item': { runId: 'run-9', claimedAt: '2020-01-01' } },
+      totalUsd: 1.25,
+    });
+  });
+
+  it('should swallow a failed write in the save chain', async () => {
+    // Pointing the state path at a directory makes writeFile reject, which
+    // exercises the chain's error-swallowing catch.
+    const dirPath = join(tempDir, 'state-as-dir');
+    await mkdir(dirPath);
+    const loopState = new FileLoopState(dirPath);
+
+    await expect(loopState.save()).rejects.toThrow();
+
+    // A subsequent save still rejects rather than hanging on a poisoned chain.
+    await expect(loopState.save()).rejects.toThrow();
   });
 
   it('should drop old in-progress values on load', async () => {

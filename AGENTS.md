@@ -38,6 +38,7 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
 
 - Run the tests before writing code to check we start clean
 - Write tests first. Use Red/Green TDD
+- Use the `/coverage-to-100` skill to ensure test coverage levels are high
 - Arrays: prefer `Array<Type>` over `Type[]`
 - Use `readonly` and `ReadonlyArray<…>` unless the data is designed to be mutable
 - Prefix unused variables with underscore (\_varName)
@@ -64,7 +65,7 @@ Bugs are tracked as issues in this [project's Github repository](https://github.
 ## Completing Work
 
 - If you have changed any code, before finishing:
-  - Check tests pass `pnpm tsc && pnpm test`
+  - Check tests pass and that coverage is at 100% `pnpm tsc && pnpm test --coverage`
   - Check with lint and fix any linting errors `pnpm lint`
   - Run oxfmt `pnpm format`
 - Never alter git (this includes altering the index, e.g. `git add`, `git mv`, `git rm`) without the users explicit request

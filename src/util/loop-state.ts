@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type {
-  LoopState as LoopStateInterface,
+  LoopState,
   LoopStateSnapshot,
   LoopStateResult,
   PromptClaim,
@@ -29,7 +29,7 @@ interface PersistedLoopState {
  * after every prompt execution so that any interruption loses at most one
  * item's work.
  */
-export class FileLoopState implements LoopStateInterface {
+export class FileLoopState implements LoopState {
   #path: string;
   #results: Map<string, PromptOutcome>;
   #claims: Map<string, PromptClaim>;
@@ -90,14 +90,6 @@ export class FileLoopState implements LoopStateInterface {
 
   isOutstanding(id: string): boolean {
     return !this.#results.has(id);
-  }
-
-  async begin(id: string): Promise<void> {
-    await this.claim('legacy-run', id);
-  }
-
-  async end(id: string, result: LoopStateResult): Promise<void> {
-    await this.complete('legacy-run', id, result);
   }
 
   async claim(runId: string, id: string): Promise<boolean> {
