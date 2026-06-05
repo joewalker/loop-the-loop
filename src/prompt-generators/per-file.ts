@@ -1,5 +1,6 @@
 import { glob } from 'glob';
 
+import type { CheckResult } from '../doctor.js';
 import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
@@ -74,6 +75,42 @@ export class PerFilePromptGenerator implements PromptGenerator {
         const prompt = await expandPrompt(template, this.#basePath, { file });
         yield { id: file, prompt };
       }
+    }
+  }
+
+  /**
+   * Preflight probe used by `--doctor`: run the configured glob and report
+   * whether it resolves to any files. A glob that throws (invalid syntax) is
+   * reported as a synthetic fail rather than propagating.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    const { filePattern, excludePatterns } = this.#task;
+    try {
+      const files = await glob(filePattern, {
+        ...(excludePatterns ? { ignore: excludePatterns } : {}),
+        nodir: true,
+      });
+      yield files.length > 0
+        ? {
+            name: 'glob resolves',
+            status: 'ok',
+            message: `${files.length} files`,
+          }
+        : {
+            name: 'glob resolves',
+            status: 'warn',
+            message: 'glob matched 0 files',
+          };
+    } catch (err) {
+      yield {
+        name: 'glob resolves',
+        status: 'fail',
+        message:
+          err instanceof Error
+            ? err.message
+            : /* istanbul ignore next */ String(err),
+        cause: err,
+      };
     }
   }
 }

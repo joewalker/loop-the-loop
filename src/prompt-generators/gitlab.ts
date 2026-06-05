@@ -1,3 +1,4 @@
+import type { CheckResult } from '../doctor.js';
 import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
@@ -87,6 +88,15 @@ export class GitLabPromptGenerator implements PromptGenerator {
         yield { id, prompt };
       }
     }
+  }
+
+  /**
+   * Preflight probe used by `--doctor`: delegate to the GitLab client's auth
+   * probe, which validates token resolution and `GET /user` access using the
+   * same connection options the generator uses for searches.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    yield* new GitLab(this.#task.gitlab).checkAuth();
   }
 }
 

@@ -1,6 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { access, constants, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import type { CheckResult } from '../doctor.js';
 import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
@@ -114,6 +115,47 @@ export class JsonPromptGenerator implements PromptGenerator {
         );
         yield { id, prompt };
       }
+    }
+  }
+
+  /**
+   * Preflight probe used by `--doctor`: confirm the configured data source is
+   * usable. Inline `data` is reported as ok directly; a `dataFile` is resolved
+   * against `basePath`, then accessed, read, and parsed, reporting a fail with
+   * the cause when missing or unparseable.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    if (this.#task.data !== undefined) {
+      yield { name: 'data source', status: 'ok', message: 'inline data' };
+      return;
+    }
+
+    /* istanbul ignore next -- normalization guarantees one of data/dataFile */
+    if (this.#task.dataFile === undefined) {
+      yield {
+        name: 'data source',
+        status: 'fail',
+        message: 'no data or dataFile configured',
+      };
+      return;
+    }
+
+    const filePath = resolve(this.#basePath, this.#task.dataFile);
+    try {
+      await access(filePath, constants.F_OK);
+      const content = await readFile(filePath, 'utf-8');
+      JSON.parse(content);
+      yield { name: 'data file readable', status: 'ok', message: filePath };
+    } catch (err) {
+      yield {
+        name: 'data file readable',
+        status: 'fail',
+        message:
+          err instanceof Error
+            ? err.message
+            : /* istanbul ignore next */ String(err),
+        cause: err,
+      };
     }
   }
 }

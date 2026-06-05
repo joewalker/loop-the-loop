@@ -1,3 +1,4 @@
+import type { CheckResult } from '../doctor.js';
 import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { assertKnownProperties, isRecord } from './util/config.js';
@@ -48,6 +49,14 @@ export class TestPromptGenerator implements PromptGenerator {
         };
       }
     }
+  }
+
+  /**
+   * Preflight probe used by `--doctor`: the test generator has no external
+   * dependencies, so it trivially reports ok.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    yield { name: 'test generator', status: 'ok' };
   }
 }
 

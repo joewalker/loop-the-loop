@@ -250,4 +250,78 @@ describe('JsonPromptGenerator', () => {
       expect(prompts[1]).toStrictEqual({ id: 'b', prompt: 'item b' });
     });
   });
+
+  describe('check()', () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'json-check-'));
+    });
+
+    afterEach(async () => {
+      await rm(tempDir, { recursive: true, force: true });
+    });
+
+    const drain = async (
+      generator: JsonPromptGenerator,
+    ): Promise<Array<{ name: string; status: string; message?: string }>> => {
+      const results = [];
+      for await (const result of generator.check()) {
+        results.push(result);
+      }
+      return results;
+    };
+
+    it('reports ok for inline data', async () => {
+      const generator = new JsonPromptGenerator(
+        { data: [{ id: 'a' }], promptTemplate: '{{id}}' },
+        tempDir,
+      );
+
+      const results = await drain(generator);
+
+      expect(results).toStrictEqual([
+        { name: 'data source', status: 'ok', message: 'inline data' },
+      ]);
+    });
+
+    it('reports ok for a readable, parseable dataFile', async () => {
+      const filePath = join(tempDir, 'data.json');
+      await writeFile(filePath, JSON.stringify([{ id: 'a' }]), 'utf-8');
+      const generator = new JsonPromptGenerator(
+        { dataFile: 'data.json', promptTemplate: '{{id}}' },
+        tempDir,
+      );
+
+      const results = await drain(generator);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].status).toBe('ok');
+      expect(results[0].message).toBe(filePath);
+    });
+
+    it('fails when the dataFile is missing', async () => {
+      const generator = new JsonPromptGenerator(
+        { dataFile: 'missing.json', promptTemplate: '{{id}}' },
+        tempDir,
+      );
+
+      const results = await drain(generator);
+
+      expect(results[0].status).toBe('fail');
+      expect(results[0].name).toBe('data file readable');
+    });
+
+    it('fails when the dataFile is not valid JSON', async () => {
+      await writeFile(join(tempDir, 'bad.json'), 'not json', 'utf-8');
+      const generator = new JsonPromptGenerator(
+        { dataFile: 'bad.json', promptTemplate: '{{id}}' },
+        tempDir,
+      );
+
+      const results = await drain(generator);
+
+      expect(results[0].status).toBe('fail');
+    });
+  });
 });

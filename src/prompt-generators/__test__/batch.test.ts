@@ -269,4 +269,57 @@ describe('BatchPromptGenerator', () => {
     expect(prompts).toHaveLength(51);
     expect(prompts[50].id).toBe('batch-summary-after-49');
   });
+
+  describe('check()', () => {
+    const drain = async (
+      generator: BatchPromptGenerator,
+    ): Promise<Array<{ name: string; status: string; message?: string }>> => {
+      const results = [];
+      for await (const result of generator.check()) {
+        results.push(result);
+      }
+      return results;
+    };
+
+    it('delegates to the source check and prefixes result names', async () => {
+      const source: PromptGenerator = {
+        async *generate() {},
+        async *check() {
+          yield { name: 'token resolvable', status: 'ok' };
+          yield {
+            name: 'GET /user authenticates',
+            status: 'fail',
+            message: '401',
+          };
+        },
+      };
+      const generator = new BatchPromptGenerator(BASE_TASK, source);
+
+      const results = await drain(generator);
+
+      expect(results).toStrictEqual([
+        { name: 'source: token resolvable', status: 'ok' },
+        {
+          name: 'source: GET /user authenticates',
+          status: 'fail',
+          message: '401',
+        },
+      ]);
+    });
+
+    it('yields one skip when the source has no check()', async () => {
+      const source = makeSource(['a']);
+      const generator = new BatchPromptGenerator(BASE_TASK, source);
+
+      const results = await drain(generator);
+
+      expect(results).toStrictEqual([
+        {
+          name: 'source',
+          status: 'skip',
+          message: 'source has no diagnostics defined',
+        },
+      ]);
+    });
+  });
 });

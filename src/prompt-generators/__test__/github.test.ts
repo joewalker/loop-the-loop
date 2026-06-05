@@ -5,15 +5,21 @@ import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitHubPromptGenerator } from 'loop-the-loop/prompt-generators/github';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockSearchIssues, MockGitHub } = vi.hoisted(() => {
+const { mockSearchIssues, mockCheckAuth, MockGitHub } = vi.hoisted(() => {
   const searchIssues = vi.fn();
+  const checkAuth = vi.fn();
   const GitHubClass = vi.fn().mockImplementation(function () {
     return {
       searchIssues,
+      checkAuth,
       origin: 'https://api.github.com',
     };
   });
-  return { mockSearchIssues: searchIssues, MockGitHub: GitHubClass };
+  return {
+    mockSearchIssues: searchIssues,
+    mockCheckAuth: checkAuth,
+    MockGitHub: GitHubClass,
+  };
 });
 
 vi.mock('loop-the-loop/prompt-generators/github/github', () => ({
@@ -247,5 +253,33 @@ describe('GitHubPromptGenerator', () => {
     await expect(consume()).rejects.toThrow(
       'GitHub repository must be in owner/repo form: octocat',
     );
+  });
+
+  it('check() delegates to the GitHub client checkAuth probe', async () => {
+    mockCheckAuth.mockImplementation(async function* () {
+      yield { name: 'token resolvable', status: 'ok' };
+      yield {
+        name: 'GET /user authenticates',
+        status: 'ok',
+        message: 'HTTP 200',
+      };
+    });
+
+    const generator = new GitHubPromptGenerator({
+      github: { token: 'tok' },
+      search: { repository: 'octocat/Hello-World', query: 'is:open' },
+      promptTemplate: 'Issue {{id}}',
+    });
+
+    const results = [];
+    for await (const result of generator.check()) {
+      results.push(result);
+    }
+
+    expect(mockCheckAuth).toHaveBeenCalledTimes(1);
+    expect(results.map(r => [r.name, r.status])).toEqual([
+      ['token resolvable', 'ok'],
+      ['GET /user authenticates', 'ok'],
+    ]);
   });
 });

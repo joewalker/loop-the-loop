@@ -381,4 +381,82 @@ describe('GitLab', () => {
       );
     });
   });
+
+  describe('checkAuth', () => {
+    it('fails token resolution and skips whoami when no token is set', async () => {
+      vi.stubEnv('GITLAB_TOKEN', undefined);
+      vi.stubEnv('GL_TOKEN', undefined);
+      const gitlab = new GitLab();
+      const results = await drain(gitlab.checkAuth());
+
+      expect(results.map(r => [r.name, r.status])).toEqual([
+        ['token resolvable', 'fail'],
+        ['GET /user authenticates', 'skip'],
+      ]);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('reports ok for token and GET /user on HTTP 200', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK' }),
+      );
+      const gitlab = new GitLab({
+        token: 'secret',
+        origin: 'https://api.test',
+      });
+      const results = await drain(gitlab.checkAuth());
+
+      expect(results.map(r => [r.name, r.status])).toEqual([
+        ['token resolvable', 'ok'],
+        ['GET /user authenticates', 'ok'],
+      ]);
+      expect(fetchedUrl()).toBe('https://api.test/user');
+      const headers = fetchedHeaders();
+      expect(headers['PRIVATE-TOKEN']).toBe('secret');
+      expect(headers['Accept']).toBe('application/json');
+    });
+
+    it('fails GET /user on a non-ok response', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+        }),
+      );
+      const gitlab = new GitLab({ token: 'bad' });
+      const results = await drain(gitlab.checkAuth());
+
+      const auth = results.find(r => r.name === 'GET /user authenticates');
+      expect(auth?.status).toBe('fail');
+      expect(auth?.message).toContain('401');
+    });
+
+    it('fails GET /user with the cause when fetch throws', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new Error('network down')),
+      );
+      const gitlab = new GitLab({ token: 'tok' });
+      const results = await drain(gitlab.checkAuth());
+
+      const auth = results.find(r => r.name === 'GET /user authenticates');
+      expect(auth?.status).toBe('fail');
+      expect(auth?.message).toBe('network down');
+      expect(auth?.cause).toBeInstanceOf(Error);
+    });
+  });
 });
+
+/**
+ * Collect all results from an async iterable into an array.
+ */
+async function drain<T>(iterable: AsyncIterable<T>): Promise<Array<T>> {
+  const items: Array<T> = [];
+  for await (const item of iterable) {
+    items.push(item);
+  }
+  return items;
+}

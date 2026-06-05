@@ -75,3 +75,16 @@ describe('TestPromptGenerator', () => {
     expect(prompts).toStrictEqual([{ id: '1', prompt: 'Second prompt' }]);
   });
 });
+
+describe('TestPromptGenerator.check', () => {
+  it('trivially yields an ok result', async () => {
+    const generator = new TestPromptGenerator({ prompts: ['a'] });
+
+    const results = [];
+    for await (const result of generator.check()) {
+      results.push(result);
+    }
+
+    expect(results).toStrictEqual([{ name: 'test generator', status: 'ok' }]);
+  });
+});

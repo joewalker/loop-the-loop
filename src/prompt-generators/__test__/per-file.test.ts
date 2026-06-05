@@ -11,7 +11,17 @@ import {
   PerFilePromptGenerator,
   resolveFiles,
 } from 'loop-the-loop/prompt-generators/per-file';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockGlob } = vi.hoisted(() => ({ mockGlob: vi.fn() }));
+
+vi.mock('glob', async importActual => {
+  const actual = await importActual<typeof import('glob')>();
+  // Delegate to the real glob by default so resolveFiles tests keep working;
+  // individual tests can override mockGlob to exercise the failure branch.
+  mockGlob.mockImplementation(actual.glob);
+  return { ...actual, glob: mockGlob };
+});
 
 describe('resolveFiles', () => {
   let tempDir: string;
@@ -130,5 +140,79 @@ describe('PerFilePromptGenerator', () => {
 
     expect(prompts).toHaveLength(1);
     expect(prompts[0].id).toContain('file2.ts');
+  });
+});
+
+describe('PerFilePromptGenerator.check', () => {
+  const drain = async (
+    generator: PerFilePromptGenerator,
+  ): Promise<
+    Array<{
+      name: string;
+      status: string;
+      message?: string;
+      cause?: unknown;
+    }>
+  > => {
+    const results = [];
+    for await (const result of generator.check()) {
+      results.push(result);
+    }
+    return results;
+  };
+
+  it('yields ok with a match count when files match', async () => {
+    const generator = new PerFilePromptGenerator(
+      { filePattern: 'src/**/*.ts', promptTemplate: 'x' },
+      process.cwd(),
+    );
+
+    const results = await drain(generator);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('ok');
+    expect(results[0].message).toMatch(/^\d+ files$/u);
+  });
+
+  it('honours excludePatterns when counting matches', async () => {
+    const generator = new PerFilePromptGenerator(
+      {
+        filePattern: 'src/**/*.ts',
+        excludePatterns: ['**/*'],
+        promptTemplate: 'x',
+      },
+      process.cwd(),
+    );
+
+    const results = await drain(generator);
+
+    expect(results[0].status).toBe('warn');
+  });
+
+  it('yields warn when the glob matches nothing', async () => {
+    const generator = new PerFilePromptGenerator(
+      { filePattern: 'no/such/**/*.zzz', promptTemplate: 'x' },
+      process.cwd(),
+    );
+
+    const results = await drain(generator);
+
+    expect(results[0].status).toBe('warn');
+    expect(results[0].message).toBe('glob matched 0 files');
+  });
+
+  it('yields fail with the cause when glob throws', async () => {
+    const generator = new PerFilePromptGenerator(
+      { filePattern: 'src/**/*.ts', promptTemplate: 'x' },
+      process.cwd(),
+    );
+    const boom = new Error('bad glob');
+    mockGlob.mockRejectedValueOnce(boom);
+
+    const results = await drain(generator);
+
+    expect(results[0].status).toBe('fail');
+    expect(results[0].message).toBe('bad glob');
+    expect(results[0].cause).toBe(boom);
   });
 });

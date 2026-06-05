@@ -5,15 +5,21 @@ import type { Prompt } from 'loop-the-loop/prompt-generators';
 import { GitLabPromptGenerator } from 'loop-the-loop/prompt-generators/gitlab';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockSearchIssues, MockGitLab } = vi.hoisted(() => {
+const { mockSearchIssues, mockCheckAuth, MockGitLab } = vi.hoisted(() => {
   const searchIssues = vi.fn();
+  const checkAuth = vi.fn();
   const GitLabClass = vi.fn().mockImplementation(function () {
     return {
       searchIssues,
+      checkAuth,
       origin: 'https://gitlab.com/api/v4',
     };
   });
-  return { mockSearchIssues: searchIssues, MockGitLab: GitLabClass };
+  return {
+    mockSearchIssues: searchIssues,
+    mockCheckAuth: checkAuth,
+    MockGitLab: GitLabClass,
+  };
 });
 
 vi.mock('loop-the-loop/prompt-generators/gitlab/gitlab', () => ({
@@ -224,5 +230,33 @@ describe('GitLabPromptGenerator', () => {
 
     expect(MockGitLab).toHaveBeenCalledWith(gitlab);
     expect(mockSearchIssues).toHaveBeenCalledWith(search);
+  });
+
+  it('check() delegates to the GitLab client checkAuth probe', async () => {
+    mockCheckAuth.mockImplementation(async function* () {
+      yield { name: 'token resolvable', status: 'ok' };
+      yield {
+        name: 'GET /user authenticates',
+        status: 'ok',
+        message: 'HTTP 200',
+      };
+    });
+
+    const generator = new GitLabPromptGenerator({
+      gitlab: { token: 'tok' },
+      search: { project: 'gitlab-org/gitlab' },
+      promptTemplate: 'Issue {{id}}',
+    });
+
+    const results = [];
+    for await (const result of generator.check()) {
+      results.push(result);
+    }
+
+    expect(mockCheckAuth).toHaveBeenCalledTimes(1);
+    expect(results.map(r => [r.name, r.status])).toEqual([
+      ['token resolvable', 'ok'],
+      ['GET /user authenticates', 'ok'],
+    ]);
   });
 });

@@ -1,3 +1,4 @@
+import type { CheckResult } from '../doctor.js';
 import type { LoopState } from '../loop-states.js';
 import type { Prompt, PromptGenerator } from '../prompt-generators.js';
 import { expandPrompt } from '../util/expand-prompt.js';
@@ -149,6 +150,26 @@ export class BatchPromptGenerator implements PromptGenerator {
       if (summary !== undefined) {
         yield summary;
       }
+    }
+  }
+
+  /**
+   * Preflight probe used by `--doctor`: delegate to the resolved source
+   * generator. Each source result is re-emitted with its name prefixed
+   * `source: `. When the source defines no `check()`, a single skip is yielded.
+   */
+  async *check(): AsyncIterable<CheckResult> {
+    if (this.#source.check === undefined) {
+      yield {
+        name: 'source',
+        status: 'skip',
+        message: 'source has no diagnostics defined',
+      };
+      return;
+    }
+
+    for await (const result of this.#source.check()) {
+      yield { ...result, name: `source: ${result.name}` };
     }
   }
 

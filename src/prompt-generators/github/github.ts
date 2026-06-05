@@ -1,3 +1,4 @@
+import type { CheckResult } from '../../doctor.js';
 import type {
   GitHubConstructorOptions,
   GitHubIssue,
@@ -109,6 +110,62 @@ export class GitHub {
     this.#apiVersion = apiVersion;
     this.#token = resolveToken(options);
     this.#userAgent = userAgent;
+  }
+
+  /**
+   * Preflight probe used by `--doctor`: confirm a token resolves and that it
+   * authenticates against `GET /user`. Uses the same Accept / User-Agent /
+   * X-GitHub-Api-Version / Authorization headers as live queries. Skips the
+   * authentication probe when no token is configured.
+   */
+  async *checkAuth(): AsyncIterable<CheckResult> {
+    if (this.#token === undefined) {
+      yield {
+        name: 'token resolvable',
+        status: 'fail',
+        message: 'set GITHUB_TOKEN or GH_TOKEN, or configure token/tokenEnv',
+      };
+      yield {
+        name: 'GET /user authenticates',
+        status: 'skip',
+        message: 'no token',
+      };
+      return;
+    }
+
+    yield { name: 'token resolvable', status: 'ok' };
+
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': this.#userAgent,
+      'X-GitHub-Api-Version': this.#apiVersion,
+      Authorization: `Bearer ${this.#token}`,
+    };
+
+    try {
+      const response = await fetch(`${this.origin}/user`, { headers });
+      yield response.ok
+        ? {
+            name: 'GET /user authenticates',
+            status: 'ok',
+            message: `HTTP ${response.status}`,
+          }
+        : {
+            name: 'GET /user authenticates',
+            status: 'fail',
+            message: `HTTP ${response.status} ${response.statusText}`,
+          };
+    } catch (err) {
+      yield {
+        name: 'GET /user authenticates',
+        status: 'fail',
+        message:
+          err instanceof Error
+            ? err.message
+            : /* istanbul ignore next */ String(err),
+        cause: err,
+      };
+    }
   }
 
   /**
