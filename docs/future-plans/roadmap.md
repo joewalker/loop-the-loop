@@ -1,13 +1,8 @@
 # Roadmap
 
-This roadmap orders the larger planned changes by dependency and product value.
-The goal is to make correctness-focused runtime foundations first, then build
-up to richer local workflows, and leave distributed and S3 handoff work until
-the local model is proven.
+This roadmap orders the larger planned changes by dependency and product value. The goal is to make correctness-focused runtime foundations first, then build up to richer local workflows, and leave distributed and S3 handoff work until the local model is proven.
 
-Backwards compatibility with old pre-v2 state files is not a goal at this
-stage. Plans should prefer strict forward contracts and clear failures over
-legacy migration paths.
+Backwards compatibility with old pre-v2 state files is not a goal at this stage. Plans should prefer strict forward contracts and clear failures over legacy migration paths.
 
 ## Sequence
 
@@ -27,16 +22,11 @@ legacy migration paths.
 
 Current detailed design that the step documents above defer to:
 
-- [Conditional routing and rework loops](conditional-routing-design.md) -
-  the detailed design behind the routing and rework model in steps 5, 6,
-  and 8.
+- [Conditional routing and rework loops](conditional-routing-design.md) - the detailed design behind the routing and rework model in steps 5, 6, and 8.
 
 ## Archived detailed plans
 
-The earlier detailed plans now live in `docs/archived-plans/`. They remain
-useful design inputs, but the step documents above are the ordering source of
-truth. Where an older detailed plan still mentions legacy migration, a DAG
-pipeline model, or a different dependency order, the step documents win.
+The earlier detailed plans now live in `docs/archived-plans/`. They remain useful design inputs, but the step documents above are the ordering source of truth. Where an older detailed plan still mentions legacy migration, a DAG pipeline model, or a different dependency order, the step documents win.
 
 - [`--doctor` CLI option](../archived-plans/doctor-flag.md)
 - [Optional parallel prompt execution](../archived-plans/concurrency.md)

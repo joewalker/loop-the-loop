@@ -2,8 +2,7 @@
 
 ## Goal
 
-Allow one loop process to run multiple prompts concurrently while preserving
-claim ownership, reporter integrity, budget behavior, and clear stop semantics.
+Allow one loop process to run multiple prompts concurrently while preserving claim ownership, reporter integrity, budget behavior, and clear stop semantics.
 
 ## Work
 
@@ -13,15 +12,13 @@ claim ownership, reporter integrity, budget behavior, and clear stop semantics.
 - Reject `concurrency > 1` with `allowSourceUpdate: true`.
 - Reject `concurrency > 1` with the batch prompt generator.
 - Serialize reporter appends when concurrency is greater than 1.
-- Treat `maxPrompts`, `maxBudgetUsd`, errors, and too many glitches as
-  completion-order stop conditions with in-flight work allowed to drain.
+- Treat `maxPrompts`, `maxBudgetUsd`, errors, and too many glitches as completion-order stop conditions with in-flight work allowed to drain.
 - Keep `interPromptPause` as a per-worker pause.
 
 ## Dependencies
 
 - Step 01, for claim and completion semantics plus structured loop results.
-- Step 03, so cost and budget stop behavior is designed once for concurrent
-  completion.
+- Step 03, so cost and budget stop behavior is designed once for concurrent completion.
 
 ## Done when
 

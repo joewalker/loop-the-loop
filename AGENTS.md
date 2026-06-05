@@ -28,6 +28,7 @@ When writing reports, documents, technical explanations, analyses, or any long-f
 - Use standard paragraph breaks for organization and reserve markdown primarily for `inline code`, fenced code blocks (\`\`\`), and simple headings (##, and ###).
 - Avoid using **bold** and _italics_ particularly in headings.
 - Avoid em dashes, smart quotes, non-breaking spaces, zero-width spaces, and similar "fancy" punctuation in all output including code comments, documentation, and prose. Unicode characters with purpose like "→", "•", "©", "×", "€" and "æ" and acceptable.
+- Markdown paragraphs: one line each. No hard line breaks. Editor handles wrapping
 
 ## Bug Tracking
 
