@@ -1,87 +1,69 @@
-# Carry-over context from Step 01 into Step 02
+# Carry-over context from Step 02 into Step 03
 
-This records the state of the runtime after Step 01 (runtime contracts and state hardening) landed, so the Step 02 `--doctor` work builds on what actually shipped rather than on the pre-Step-01 code or on the Step 01 design doc's earlier wording. Step 01 lives on the `step-01-runtime-contracts-state-hardening` branch (five commits ahead of `main`); the items below are all merged into that branch.
+This records the state of the runtime after Step 02 (`--doctor`) landed, so the Step 03 cost-accounting work builds on what actually shipped. Steps 01 and 02 are merged on `main`. The Step 01 carry-over that still matters for Step 03 is summarised at the end.
 
-## What Step 01 actually shipped
+## What Step 02 actually shipped
 
-`loop()` and `loopImpl()` now return a structured `LoopRunResult` instead of a status string. The shape is in `src/types.ts`:
+A new preflight command, `--doctor`, validates the configured components and environment without ever running the loop. It exits 0 when every check passes and 1 when any check fails. `--dry-run` is ignored when `--doctor` is set.
+
+The orchestrator and result type live in `src/doctor.ts`:
 
 ```ts
-export interface LoopRunResult {
-  readonly status: 'completed' | 'stopped' | 'failed';
-  readonly reason?: 'maxPrompts' | 'maxBudgetUsd' | 'errorResult' | 'tooManyGlitches';
+export interface CheckResult {
+  readonly name: string;
+  readonly status: 'ok' | 'warn' | 'fail' | 'skip';
+  readonly message?: string;
+  readonly cause?: unknown;
+}
+
+export async function doctor(
+  config: LoopCliConfig,
+  logger: Logger,
+  write?: (line: string) => void,
+): Promise<boolean>;
+```
+
+`doctor()` returns `false` iff any check reported `fail`. It streams each result as a formatted line via the injected `write` (default writes to `process.stdout`; tests inject a collector). The line format is `[<status>] <component-kind> (<component-name>): <check-name>[ - <message>]` with the status tag padded to width 6, followed by a `Summary: N ok, N warn, N fail, N skip` line. When the logger is enabled (`--verbose`), the underlying `cause` of any result is logged via `logger.error`.
+
+`cli.ts` dispatches to `doctor()` after config load and before `loop()`, mapping the boolean to `process.exitCode`. `cli.ts` remains untested by design (no test imports it), so the dispatch is a thin pass-through and all real logic lives in `src/doctor.ts`, which is at 100% coverage.
+
+## The optional `check()` capability
+
+`Agent`, `PromptGenerator`, and `Reporter` each gained an optional member:
+
+```ts
+check?(): AsyncIterable<CheckResult>;
+```
+
+It is optional so external and test implementations stay valid. The interface files (`src/agents.ts`, `src/prompt-generators.ts`, `src/reporters.ts`) import `CheckResult` type-only from `./doctor.js`; `doctor.ts` imports the factories at runtime, so there is no runtime cycle. The orchestrator yields a single `skip` ("no diagnostics defined") for any component without a `check()`, a synthetic `fail` when a probe throws mid-iteration, and a synthetic `fail` (without aborting the rest of the run) when a component fails to construct.
+
+Built-in `check()` implementations now exist for every agent (`claude-sdk`, `openai-sdk`, `codex-cli`, `test`), every prompt generator (`batch` delegates to its child source, `bugzilla`, `github`, `gitlab`, `json`, `per-file`, `test`), and both reporters (`yaml`, `jsonl`). The real external probes (claude query, openai models list, codex `--version`, github/gitlab `GET /user`, bugzilla whoami) are exercised by `*-live.test.ts` files gated on env tokens; local unit tests mock the SDK / `fetch` / `spawn`.
+
+Note for Step 03: when cost accounting adds new agent or reporter behaviour, consider whether each component's `check()` should grow a corresponding probe (the doctor is the natural place to surface a misconfigured budget or missing pricing data early).
+
+## The shared git preflight
+
+The loop's inline clean-tree check was extracted into `src/git-preflight.ts`:
+
+```ts
+export interface GitPreflightItem {
+  readonly name: string;       // 'inside work tree' | 'clean working tree' | 'committer identity'
+  readonly ok: boolean;
   readonly message?: string;
 }
+export function gitPreflight(git: Git): Promise<ReadonlyArray<GitPreflightItem>>;
 ```
 
-`maxBudgetUsd` is reserved for Step 03 and is not produced yet. `cli.ts` renders the result to a single line via a local `renderRunResult(result)` helper (`completed` to `Done`, `stopped` to `Done (<message>)`, `failed` to the message). `--doctor` does not return a `LoopRunResult`; it exits 0 or 1 on its own and must never invoke `loop()`.
+`gitPreflight` probes, in order: inside a work tree (short-circuits the rest when false), clean working tree (its failure message is byte-for-byte the loop's previous error), and committer identity (`user.name` / `user.email`). `loopImpl` now calls `gitPreflight` and throws the first failing item's message; the doctor's `environment` checks reuse it (only when `allowSourceUpdate === true`). `Git` (`src/util/git.ts`) gained `isInsideWorkTree()` and `configValue(key)` to support this. Because the loop now also requires a committer identity under `allowSourceUpdate`, the loop tests set a local `user.name` / `user.email` in their temp repo.
 
-The filesystem loop-state backend moved out of `src/util/loop-state.ts` to `src/loop-states/file.ts` (class `FileLoopState`), with its test at `src/loop-states/__test__/file.test.ts`. The old `src/util/loop-state.ts` and its test are deleted. Any Step 02 code that touches loop state must import from the new path.
+## CLI surface as it now stands
 
-## The strict state loader (for the doctor resumable-state check)
+`ParsedArgs` (`src/util/load-cli-config.ts`) has `doctor?: boolean`; `--doctor` is in `BOOLEAN_FLAGS`; `USAGE` lists it. `loadCliConfig` computes `effectiveDryRun = dryRun && !doctor` and uses it for both the dry-run agent swap and the forced-verbose behaviour, so `--doctor` suppresses `--dry-run`. `--doctor` adds no JSON config key, so `schema/loop-the-loop.schema.json` and `src/examples/` are unchanged. The README documents `--doctor`.
 
-The state file is `${outputDir}/${jobName}-loop-state.json` and the only supported persisted shape is v2 (`{ version: 2, results, claims, totalUsd }`). The loader is strict, which is exactly what the doctor wants for a clear preflight verdict:
+## Step 01 context that still carries into Step 03
 
-- A missing file (`ENOENT`) yields a fresh empty store, no error. The doctor should report this as `skip` (no state to resume).
-- A file that parses but is not `version: 2` throws an `Error` whose message matches `Unsupported loop-state file at <path>: ...`. The doctor should report this as `fail`.
-- A file that is not valid JSON throws `SyntaxError` from `JSON.parse`. The doctor should report this as `fail`.
-- A valid v2 file loads and the doctor reports `ok`.
+`loop()` and `loopImpl()` return a structured `LoopRunResult` (`{ status, reason?, message? }`) from `src/types.ts`. `reason: 'maxBudgetUsd'` is reserved for Step 03 and not produced yet; Step 03 will add the budget-stop path that produces it.
 
-Use the Step 01 loader rather than re-parsing the file in the doctor, so the doctor and the loop agree byte-for-byte on what counts as loadable. Two equivalent entry points exist:
+Cost persistence already shipped in Step 01's filesystem loop-state backend (`src/loop-states/file.ts`, class `FileLoopState`, reached via `createLoopState(DEFAULT_LOOP_STATE, { outputDir, jobName })` from `src/loop-states.ts`): per-result `cost` is persisted and `totalUsd` is accumulated in the v2 state snapshot (`{ version: 2, results, claims, totalUsd }`). Step 03's remaining cost work is therefore the agent-side cost extraction, the reporters, and the budgets, not the state plumbing.
 
-- `createLoopState(DEFAULT_LOOP_STATE, { outputDir, jobName })` from `src/loop-states.ts` (the factory the loop uses), or
-- `FileLoopState.create(path)` from `src/loop-states/file.ts` (the path-based loader the factory wraps).
-
-Writes are atomic (write to `${path}.tmp` then `rename`) and saves are serialized through an internal `#saveChain`. The doctor only reads, so these matter only as background.
-
-## The git preflight to share with the loop
-
-Step 02 plans to extract the loop's git preflight into a shared helper so doctor and loop stay in lockstep. Step 01 left that check inline in `loopImpl` (`src/loop.ts`, immediately after computing `git`):
-
-```ts
-const git = allowSourceUpdate ? new Git(process.cwd()) : undefined;
-if (git && !(await git.isClean())) {
-  throw new Error(
-    'Working directory is not clean. Commit or stash changes before starting.',
-  );
-}
-```
-
-`Git` is in `src/util/git.ts` and currently exposes `isClean()`, `init()`, `add()`, `commit()`, and `maybeCommitAll()`. It does not yet have a "is inside a work tree" or "committer identity configured" probe; Step 02's deeper git checks (`git rev-parse --is-inside-work-tree`, `user.name` / `user.email`) will need new helpers there. When extracting the shared preflight, update `loopImpl` to call it so the two paths cannot drift.
-
-## Component factories the doctor instantiates
-
-The doctor instantiates the same configured components the loop does, then calls their optional `check()`. The factory signatures as of Step 01:
-
-```ts
-createAgent(agentSpec: AgentSpec): Promise<Agent>;                      // src/agents.ts
-createPromptGenerator(spec: PromptGeneratorSpec): Promise<PromptGenerator>; // src/prompt-generators.ts
-createReporter(type = DEFAULT_REPORTER, config: ReporterConfig): Promise<Reporter>; // src/reporters.ts
-createLoopState(type = DEFAULT_LOOP_STATE, config: LoopStateConfig): Promise<LoopState>; // src/loop-states.ts
-createLogger(loggerSpec: LoggerSpec): Logger;                          // src/loggers.ts
-```
-
-`ReporterConfig` and `LoopStateConfig` are both `{ outputDir, jobName }`. The loop derives `jobName` from `config.name`. `createReporter` and `createLoopState` are the model to copy for the doctor's component-construction-then-check pattern: a name-keyed constructor map plus a `DEFAULT_*` constant. The optional `check?()` capability Step 02 adds goes on the `Agent`, `PromptGenerator`, and `Reporter` interfaces in `src/agents.ts`, `src/prompt-generators.ts`, and `src/reporters.ts`.
-
-## CLI surface to extend for `--doctor`
-
-Arg parsing lives in `src/util/load-cli-config.ts`:
-
-- `ParsedArgs` currently has `configPath`, `help`, `version`, `verbose`, `dryRun`, `maxPrompts`. Add `doctor?: boolean`.
-- Flags are matched after `normalizeFlagName` (case and separators stripped), via `BOOLEAN_FLAGS` and `VALUE_FLAGS` maps. `--doctor` is a boolean flag, so add it to `BOOLEAN_FLAGS`.
-- `USAGE` is a single shared string; extend it to mention `--doctor`.
-- `loadCliConfig` and `normalizeCliConfig` produce the resolved config; the doctor needs the same resolved `LoopCliConfig` the loop would run.
-
-`cli.ts` `main()` currently parses args, handles `--help` / `--version`, loads the config, runs `loop`, and prints the rendered result. The `--doctor` branch goes after config load and before `loop`, exiting with code 1 if any check fails. Note that when `--doctor` is set, `--dry-run` is ignored (the probe must hit the real configured components).
-
-## Conventions and gotchas confirmed during Step 01
-
-- `cli.ts` is not measured by coverage (no test imports it, and Vitest v8 only reports imported files). The `renderRunResult` helper added in Step 01 is therefore untested by design. The new `doctor()` orchestrator and checks must live in `src/doctor.ts` (imported by tests) and reach 100% coverage; keep `cli.ts` to a thin dispatch so the untested surface stays trivial.
-- 100% coverage on statements, branches, functions, and lines is enforced. Prefer deleting dead code or adding a real test over an istanbul ignore.
-- Tests are tagged. Default `pnpm test` runs only the `local` tag; live API tests use `*-live.test.ts` with a `// @module-tag <service>` header and are gated on env tokens. The doctor's real external probes (github / gitlab / bugzilla / codex) follow that same live-test convention.
-- Test files use absolute extensionless imports (`loop-the-loop/...`); same-package runtime files use relative `.js` imports.
-- This step adds a CLI flag with no JSON config key, so `schema/loop-the-loop.schema.json` does not change, and no `src/examples/` config is needed. README and `USAGE` should still mention `--doctor`.
-
-## Note for later steps (not Step 02)
-
-Step 01 deliberately did not add a `LoopStateSpec` union or `loopStateTypes`; the factory is keyed by a plain backend name (`type: LoopStateName`, currently only `'file'`) with the per-call config being `{ outputDir, jobName }`. Step 10 (remote loop state) introduces the spec union and reshapes the factory to carry backend-specific config; step-10's doc has been updated to reflect this. Step 03 should note that per-result `cost` persistence and `totalUsd` accumulation already shipped in Step 01's `FileLoopState`, so its remaining cost work is the agent-side extraction, the reporters, and budgets.
+The state file is `${outputDir}/${jobName}-loop-state.json`; the loader is strict (missing file yields a fresh store, a non-v2 or malformed file throws). The doctor's resumable-state check reuses `FileLoopState.create(path)` so the doctor and the loop agree on what counts as loadable.
