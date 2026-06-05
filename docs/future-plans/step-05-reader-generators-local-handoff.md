@@ -6,7 +6,7 @@ Make one loop consume another loop's local output through normal prompt generato
 
 ## Work
 
-- Add a `jsonl` prompt generator that reads JSONL reporter output line by line.
+- Add a `jsonl` prompt generator that reads JSONL reporter output line by line. It can only read `jsonl-report` output: the default `yaml-report` is not line-delimited JSON and neither reader can consume it. A handoff path that resolves to a non-JSONL report must fail with a clear format-mismatch message rather than being silently treated as empty.
 - Add a `loop-state` prompt generator that reads the strict v2 state snapshot.
 - Support filtering by status and selecting success, error, or all state outcomes.
 - Support field-path filter keys, including `structuredOutput.*`, with equality matching only, so a consuming step can route on a producing step's verdict. This is what Step 06 routing reads.
@@ -25,6 +25,7 @@ Make one loop consume another loop's local output through normal prompt generato
 - The readers are useful in ordinary non-pipeline loop configs.
 - Handoff paths resolve to the actual upstream local artifacts under `outputDir`.
 - Renaming a step or pipeline updates handoff targets through substitution rather than silently breaking hard-coded filenames.
+- A `jsonl` reader pointed at `yaml-report` output (the default reporter) fails with a clear message naming the format mismatch, not a generic parse error or a silent empty read.
 - A reader can filter on `structuredOutput` fields and re-emit at an incremented attempt id, which the Step 06 routing model relies on.
 - Tests cover malformed JSONL, duplicate ids, filters, field-path matching, attempt-scoped re-emission, missing files, and resume skips.
 

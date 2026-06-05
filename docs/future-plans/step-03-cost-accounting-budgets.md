@@ -6,7 +6,7 @@ Record cost and token metadata for every prompt result when available, persist r
 
 ## Work
 
-- Add a pure pricing helper for configured per-model prices.
+- Add a pure pricing helper for configured per-model prices. Prices are configured per agent, as a `prices` map keyed by model id on the openai-sdk and codex-cli agent configs; claude-sdk reports provider cost directly and needs none.
 - Extract provider cost from Claude SDK results.
 - Extract token usage from OpenAI SDK results and estimate USD only when the user has configured pricing for the resolved model.
 - Extract token usage from Codex CLI JSONL events and estimate USD only when pricing is configured.
@@ -26,6 +26,13 @@ Record cost and token metadata for every prompt result when available, persist r
 - Budget stops happen after the result that crosses the cap has been fully reported and completed in state.
 - Resume stops immediately if persisted `totalUsd` is already at or above the configured budget.
 - No built-in price table is shipped.
+
+## Out of scope
+
+- Currencies other than USD. Cost is tracked and capped in USD only.
+- Token-budget caps separate from the USD cap.
+- A `budgetAction: warn | stop` selector. Omitting `maxBudgetUsd` is the warn-only (track-only) mode.
+- Built-in price tables. Users supply per-model pricing explicitly or accept `costSource: 'unavailable'`.
 
 ## Related plans
 
