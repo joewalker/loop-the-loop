@@ -26,8 +26,3 @@ This is intentionally last because local artifact handoff covers the common case
 - A pipeline can run steps on hosts that do not share a filesystem and still pass upstream data to downstream readers.
 - Local handoff behavior remains unchanged.
 - Missing, malformed, or unauthorized remote artifacts fail clearly.
-
-## Related plans
-
-- [Pluggable loop state for CI and concurrent runs](remote-loop-state.md)
-- [Wiring loops together into pipelines](pipeline.md)

@@ -2,7 +2,7 @@
 
 ## Context
 
-The motivating example for pipelines is "find bug, fix bug, review fix, update fix, create pr". The "update fix" arm is a rework loop: a verify step that judges a fix inadequate sends the item back to the fix step, and the item cycles through fix and verify until it either passes or is abandoned. The archived pipeline plan declared this out of scope because it modelled a pipeline as a directed acyclic graph (DAG), and a DAG cannot express the fix to verify to fix cycle. The current roadmap inherited that gap without restating it, so the headline use case is not actually expressible.
+The motivating example for pipelines is "find bug, fix bug, review fix, update fix, create pr". The "update fix" arm is a rework loop: a verify step that judges a fix inadequate sends the item back to the fix step, and the item cycles through fix and verify until it either passes or is abandoned. An earlier DAG-based pipeline design declared this out of scope because it modelled a pipeline as a directed acyclic graph (DAG), and a DAG cannot express the fix to verify to fix cycle. The current roadmap inherited that gap without restating it, so the headline use case is not actually expressible.
 
 This document settles the design so rework loops are a first-class feature rather than a documented limitation.
 
@@ -23,7 +23,7 @@ Execution runs in passes. In each pass the orchestrator runs every step's `loop(
 
 `dependsOn`, if retained at all, is demoted from a correctness constraint to an optional ordering hint within a pass: running an upstream step before a downstream step in the same pass lets work propagate in fewer passes. Cyclic hints (fix depends on verify and verify depends on fix) are now legal because the model no longer forbids cycles. When no ordering is given, steps run in configuration order.
 
-This replaces the archived plan's DAG validation. Cycle detection is deleted. Cycle support is the feature.
+This replaces the earlier DAG validation. Cycle detection is deleted. Cycle support is the feature.
 
 ## Routing via structuredOutput
 
@@ -35,7 +35,7 @@ A step that makes a decision emits it in `structuredOutput`, for example `{ "ver
 - The giveup step pulls verify results whose verdict is `rework` but whose attempt count has reached the cap.
 - The terminal step pulls commit and giveup outputs for the summary.
 
-There is no central router. The flow is reconstructed from each step's sources and filters, the same way the archived DAG's edges were already distributed across `dependsOn` declarations.
+There is no central router. The flow is reconstructed from each step's sources and filters, the same way the earlier DAG's edges were already distributed across `dependsOn` declarations.
 
 Results with status `error` or `glitch` never carry a forward verdict and so never route onward through a verdict filter. A failure sink step can pull them explicitly by filtering on `status`.
 
@@ -85,7 +85,7 @@ A safety `maxPasses` ceiling is the final backstop against a misconfiguration th
 
 ## New primitives on the readers
 
-B1 needs only modest additions to the step-05 reader generators. The filter surface stays declarative and minimal.
+The routing model needs only modest additions to the step-05 reader generators. The filter surface stays declarative and minimal.
 
 - Field-path matching in `filter`. Today the reader supports `filter: { "status": "success" }`. Extend the key space to dotted paths including `structuredOutput.*`, for example `filter: { "structuredOutput.verdict": "rework" }`. Matching is equality only. No operators, no expression language.
 - Two scalar attempt knobs on a reader: `maxAttempts` (emit only while the parsed attempt is below this value) and `minAttempts` (emit only once the parsed attempt is at or above this value).
@@ -165,7 +165,6 @@ These changes are integrated into the step documents:
 - step-05 now lists the filter field-path extension, the `maxAttempts`/`minAttempts` knobs, and `incrementAttempt` as hard requirements of the routing model rather than nice-to-haves.
 - step-06 no longer validates a DAG or topologically sorts. It validates the step set, requires a terminal `output` step, and runs to a fixed point. Cycle detection is removed; cycle support is the feature. Strict failure handling still applies: an `error`/`glitch` that no sink consumes stops the pipeline under the strict default.
 - step-08 expresses parallelism as running independent steps within a pass concurrently, rather than as a ready set of steps whose dependencies have completed, while preserving the `allowSourceUpdate` global barrier.
-- limitations.md item 1 is marked resolved and points at this document.
 
 ## Out of scope and future work
 

@@ -23,8 +23,3 @@ Let a pipeline enforce a shared USD budget across all steps instead of treating 
 - Step-level state remains the source of persisted per-prompt cost.
 - The aggregate budget result is deterministic on resume.
 - Tests cover inherited caps, step overrides, resume, and no-cost results.
-
-## Related plans
-
-- [Per-prompt cost accounting and run budgets](cost-accounting.md)
-- [Wiring loops together into pipelines](pipeline.md)

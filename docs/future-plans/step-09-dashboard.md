@@ -26,7 +26,3 @@ Show the current and historical status of loops and pipelines, including prompt 
 - The dashboard does not require remote state.
 - The first version is read-only.
 - Dashboard tests or smoke checks cover ordinary loops and pipelines.
-
-## Related plans
-
-- [Runtime dashboard](dashboard.md)

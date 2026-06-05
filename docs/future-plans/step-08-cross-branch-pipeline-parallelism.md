@@ -31,6 +31,4 @@ The pipeline model is fixed-point passes, not a DAG (Step 06), so concurrency is
 
 ## Related plans
 
-- [Optional parallel prompt execution](../archived-plans/concurrency.md)
 - [Conditional routing and rework loops](conditional-routing-design.md)
-- [Wiring loops together into pipelines](../archived-plans/pipeline.md)

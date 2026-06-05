@@ -18,19 +18,20 @@ Backwards compatibility with old pre-v2 state files is not a goal at this stage.
 10. [Remote loop state for CI coordination](step-10-remote-loop-state-ci.md)
 11. [S3-backed pipeline handoff](step-11-s3-backed-pipeline-handoff.md)
 
+## Definition of done for each step
+
+Beyond each step's own "Done when" list, every step follows the standard completion gate in [AGENTS.md](../../AGENTS.md): `pnpm tsc && pnpm test` pass, `pnpm lint` is clean, `pnpm format` leaves no diff, and coverage stays at 100%.
+
+In addition, any step that changes user-facing surface keeps three artifacts in lockstep within the same change:
+
+- Schema: when a step adds, removes, or renames a field loadable from a CLI JSON config (a top-level `LoopCliConfig` field, an agent or generator task type, a loop-state or pipeline spec), `schema/loop-the-loop.schema.json` moves with the runtime types, per AGENTS.md. This applies to steps 3, 4, 5, 6, 7, 8, 10, and 11. A step that adds only a CLI flag with no config key, such as step 2's `--doctor`, needs no schema change.
+- Examples: a step that adds a new config shape adds or updates a config under `src/examples/`, which the schema test in `src/__test__/schema.test.ts` validates automatically.
+- User docs: a step that adds a user-facing flag, config field, or command updates the README and any other affected docs so the feature is discoverable.
+
 ## Detailed designs
 
 Current detailed design that the step documents above defer to:
 
 - [Conditional routing and rework loops](conditional-routing-design.md) - the detailed design behind the routing and rework model in steps 5, 6, and 8.
 
-## Archived detailed plans
-
-The earlier detailed plans now live in `docs/archived-plans/`. They remain useful design inputs, but the step documents above are the ordering source of truth. Where an older detailed plan still mentions legacy migration, a DAG pipeline model, or a different dependency order, the step documents win.
-
-- [`--doctor` CLI option](../archived-plans/doctor-flag.md)
-- [Optional parallel prompt execution](../archived-plans/concurrency.md)
-- [Per-prompt cost accounting and run budgets](../archived-plans/cost-accounting.md)
-- [Pluggable loop state for CI and concurrent runs](../archived-plans/remote-loop-state.md)
-- [Wiring loops together into pipelines](../archived-plans/pipeline.md)
-- [Runtime dashboard](../archived-plans/dashboard.md)
+The implementation detail from the earlier standalone plans (component shapes, decided constants, file lists, and test outlines) has been folded into the step documents above, which are now the single source of truth.
