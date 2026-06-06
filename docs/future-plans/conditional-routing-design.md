@@ -95,6 +95,8 @@ Fan-in is the existing `batch` generator composing several readers. No central r
 
 ## Configuration sketch
 
+As-built note (Step 06): the sketch below predates implementation and shows fan-in via a `batch` generator wrapping multiple `sources`. The implemented `batch` generator is single-source plus summary injection and was not changed. Fan-in is instead done by the `jsonl` reader's `dataFile` accepting an array of report paths read in sequence (homogeneous fan-in, one shared filter and template). Heterogeneous fan-in, such as the single `fix` step below that batches new bugs and rework with different filters, is expressed as separate steps whose reports a later step fans in over: the headline pipeline ships as review -> fix-new / fix-rework -> verify -> commit / giveup -> summary, where `verify` reads `["{{steps.fix-new.report}}", "{{steps.fix-rework.report}}"]`. The worked example lives in `src/examples/pipeline/bugfix.json`. The trace, attempt-id, and termination model below are unchanged.
+
 The pipeline still lives nested under `promptGenerator` as `["pipeline", { ... }]`, with an explicit `output` key naming the terminal step rather than relying on a magic step name. The reporter is `jsonl-report` because verdict routing requires it.
 
 ```json
