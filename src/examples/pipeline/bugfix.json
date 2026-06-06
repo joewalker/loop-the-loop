@@ -3,6 +3,7 @@
   "name": "bugfix",
   "agent": "claude-sdk",
   "reporter": "jsonl-report",
+  "maxBudgetUsd": 20,
   "promptGenerator": [
     "pipeline",
     {
@@ -55,6 +56,7 @@
         },
         "commit": {
           "allowSourceUpdate": true,
+          "maxBudgetUsd": 5,
           "dependsOn": ["verify"],
           "promptGenerator": [
             "jsonl",

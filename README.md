@@ -633,6 +633,8 @@ Verdict routing requires the producing step to use the `jsonl-report` reporter, 
 
 The pipeline runs to a fixed point: every step runs once per pass, and passes repeat until a whole pass records no new terminal outcomes anywhere. `maxPasses` (default 100) is the safety ceiling. The failure policy is strict: any non-`completed` step result, including a controlled abort such as `maxPrompts`, stops the pipeline and downstream steps do not run. Resuming a pipeline is simply rerunning it; each step gates emitted ids through its own state, so a settled pipeline fast-forwards and adds nothing.
 
+A pipeline can also cap spend. A top-level `maxBudgetUsd` is a pipeline-wide shared budget: before scheduling each step the orchestrator sums the lifetime `totalUsd` across every step's state file, and once that aggregate reaches the cap it stops scheduling new steps and returns a stopped result whose message carries the aggregate spend. A running step is governed only by its own budget, so the aggregate is re-checked after it completes rather than mid-step. A step may set its own stricter `maxBudgetUsd` as a local cap, which is enforced inside that step's loop and, when it trips, stops the pipeline under the strict policy. Because the aggregate is read from the per-step state files rather than tracked in memory, a resumed pipeline whose persisted spend already crosses the cap stops deterministically before any step re-runs.
+
 See `src/examples/pipeline/bugfix.json` for a worked review -> fix -> verify -> commit/giveup -> summary pipeline with a bounded rework loop.
 
 ## Building Custom Extensions
