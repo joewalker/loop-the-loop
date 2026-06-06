@@ -1,39 +1,30 @@
-# Carry-over context for Step 04 (in-process concurrency)
+# Carry-over context for Step 05 (reader generators plus local handoff)
 
-Steps 01, 02, and 03 are complete and merged on `main`. This records what Step 04 needs to know from Step 03's cost accounting and budget work. The Step 03 design lives in `step-03-cost-accounting-budgets.md` and the as-built task breakdown in `step-03-cost-accounting-budgets-plans.md`; only the parts that touch Step 04 are repeated here.
+Steps 01 through 04 are complete on `main`. This records what Step 05 needs to know from Step 04's in-process concurrency work. The Step 04 design lives in `step-04-in-process-concurrency.md` and the as-built task breakdown in `step-04-in-process-concurrency-plans.md`; only the parts that touch Step 05 are repeated here.
 
-## Budget enforcement is sequential today and must become completion-order
+## The loop body is now a worker-pool callback, not a `for await`
 
-Step 04's "Done when" lists `maxBudgetUsd` as a completion-order stop condition with in-flight prompts draining. As built in Step 03, the budget logic lives inline in `loopImpl` in `src/loop.ts` in two places:
+`loopImpl` in `src/loop.ts` no longer iterates the generator with a sequential `for await`. It drives `promptGenerator.generate(loopState)` through `runPool` (`src/util/run-pool.ts`), an in-process worker pool: N workers share one async iterator, and the per-prompt body is an `async (prompt) => 'continue' | 'stop'` callback. Stop conditions (`maxPrompts`, `maxBudgetUsd`, an error result, too many glitches) set a closed-over `stopResult` and return `'stop'`; the pool stops pulling, in-flight prompts drain, and `loopImpl` returns `stopResult ?? { status: 'completed' }`. At `concurrency === 1` this is byte-for-byte the old serial behaviour. Step 05 does not need to change the runner; it only adds new generators that the runner consumes the same way.
 
-- A startup stop, immediately after the loop state is loaded: it reads `(await loopState.getSnapshot()).totalUsd` and returns `{ status: 'stopped', reason: 'maxBudgetUsd', message }` when the persisted total is already `>= maxBudgetUsd`. This runs once before any worker pulls, so under concurrency it stays where it is.
-- A post-completion stop inside the sequential `for await` body, placed after the success/glitch/error if-else block (the error branch returns first, so the budget check only runs for success and glitch) and before `completed++`. It logs the cost line when `result.cost` is present, then re-reads `getSnapshot().totalUsd` and stops with reason `maxBudgetUsd` when at or over the cap.
+## PromptGenerator contract changed for concurrency, and Step 05's readers must honor it
 
-When Step 04 converts the loop body into the `runPool` work callback, the cost log and this post-completion budget check move into that callback. Crossing the cap should make `work` return `'stop'` (set the shared `stop`, drain in-flight, then surface the `maxBudgetUsd` `LoopRunResult`), rather than returning directly from a sequential loop. The budget check currently sits before the `maxPrompts` check, so on a prompt that crosses both, budget wins; preserve whatever ordering you choose with a comment.
+The `PromptGenerator` interface doc in `src/prompt-generators.ts` now states: under `concurrency > 1`, multiple yielded items may be in flight at once; a generator must yield each id exactly once per run and must not rely on `isOutstanding` reflecting items yielded earlier in the same run (those items may not have completed yet). The Step 05 `jsonl` and `loop-state` readers already plan to gate emitted ids through the consuming step's own `loopState.isOutstanding(id)` once, at yield time, which satisfies this. Do not add any "wait until previously yielded items finish" logic; the pool owns in-flight tracking, and the loop state's `claim`/`complete` own arbitration.
 
-## Cost totals are already concurrency-safe
+## Reporter appends are serialized under concurrency, so JSONL stays well-formed
 
-`FileLoopState.complete()` / `#addCost` (Step 01) accumulate `totalUsd` and persist through the internal `#saveChain`, which serializes concurrent `save()` calls. `getSnapshot().totalUsd` reflects every completion recorded so far, so reading it from concurrent workers is safe. The accumulation rules (unchanged): `costSource` of `provider` or `estimated` advances the total, including glitches; `unavailable` records tokens but does not advance it; negative / non-finite is clamped to a no-op. Step 04 does not need to touch `src/loop-states/file.ts`.
+When `concurrency > 1` the runner wraps the reporter with `serializeReporter` (`src/util/serialize-reporter.ts`), which chains `append` calls so they never overlap. The `Reporter` interface doc now records that implementations may assume non-overlapping calls. This matters to Step 05's `jsonl` reader: a `jsonl-report` produced by a concurrent run is still one complete JSON object per line (no interleaved partial writes), so the line-by-line reader can trust the format. At `concurrency === 1` the reporter is used directly, unchanged.
 
-## Per-agent cost is now populated
+## State shape and cost fields are unchanged
 
-Each agent attaches `CostInfo` when it can: claude-sdk reports a real provider USD figure (`costSource: 'provider'`); openai-sdk and codex-cli estimate USD from token counts when the user configured `prices` for the resolved model (`'estimated'`), otherwise record tokens only (`'unavailable'`, one `logger.system` warning). The pure helper is `estimateCost` in `src/util/pricing.ts` (exports `ModelPrice` and `TokenUsage` too). The three real agent files keep `// istanbul ignore file`, so their extraction helpers are unit-tested for correctness but do not count toward the coverage gate.
+Step 04 did not touch `src/loop-states/` or the `CostInfo` / `LoopRunResult` / `LoopStateSnapshot` types. The strict v2 snapshot (`{ version: 2, results, claims, totalUsd }`) that Step 05's `loop-state` reader consumes, and the cost fields the readers pass through, are exactly as Steps 01 and 03 left them. Step 05's dependencies on Step 01 (state shape) and Step 03 (cost pass-through) hold as written.
 
-## CLI / schema / loop config shape Step 04 extends
+## CLI config touch-points Step 05 extends
 
-Step 04 adds `--concurrency` and a top-level `concurrency`; Step 03 left these touch-points in a known state:
+- `src/util/load-cli-config.ts`: `VALUE_FLAGS` is now a three-entry `ReadonlyMap<string, 'maxPrompts' | 'maxBudgetUsd' | 'concurrency'>` with a three-branch `if/else if/else` dispatch, each branch covered by tests. `--concurrency` parses like `--max-prompts` (integer, rejects `< 1` and non-integers). Step 05's `{{steps.<name>.report}}` / `{{steps.<name>.state}}` handoff substitution belongs in the config-normalization path (`normalizeCliConfig` / `normalizePromptGeneratorSpec`), not the flag parser, so it does not collide with this dispatch.
+- `src/types.ts`: `LoopCliConfig` has optional `concurrency?: number`; `loop()` maps it to `LoopConfig.concurrency` with a default of `1`, and `loopImpl` destructures it and validates it as the first statements (`Invalid concurrency` for `< 1` or non-integer; rejects `concurrency > 1` with `allowSourceUpdate` or with a `BatchPromptGenerator` instance).
+- `schema/loop-the-loop.schema.json`: top-level `concurrency` (`integer`, `minimum: 1`, `default: 1`) sits next to `maxBudgetUsd`. Step 05 adds `jsonlTask` and `loopStateTask` definitions modeled on `jsonTask`; leave the top-level `concurrency` intact.
+- `src/examples/concurrency/` is the Step 04 example. The schema test validates every example under `src/examples/` automatically, so any Step 05 example must validate against the schema as it then stands.
 
-- `src/util/load-cli-config.ts`: `VALUE_FLAGS` is now a two-entry `ReadonlyMap<string, 'maxPrompts' | 'maxBudgetUsd'>`, and the value-flag dispatch is a real `if (valueField === 'maxPrompts') { ... } else { ... }` (the old `istanbul ignore else` is gone). Add `--concurrency` as a third `VALUE_FLAGS` entry and a third branch (or refactor the per-flag validation), keeping each branch covered by tests since this file is coverage-measured at 100%. `maxBudgetUsd` accepts decimals (`/^\d+(?:\.\d+)?$/u`, rejects `0`/negatives/non-numerics); `--concurrency` should parse like `--max-prompts` (integer, rejecting `< 1`).
-- `ParsedArgs` carries `maxBudgetUsd?` and `loadCliConfig` merges it (tested, no istanbul-ignore); follow the same merge pattern for `concurrency`. `USAGE` already lists `[--max-budget-usd N]`; add `[--concurrency N]`.
-- `src/cli.ts` (untested by design) lists the flags in its help text; add `--concurrency` there too.
-- `src/types.ts`: `LoopCliConfig` has optional `maxBudgetUsd?: number`. `loop()` maps it to `LoopConfig.maxBudgetUsd` with a default of `Infinity`, and `loopImpl` destructures it. Add `concurrency` to both `LoopCliConfig` and `LoopConfig` (default `1` in `loop()`) the same way.
-- `schema/loop-the-loop.schema.json`: top-level `maxBudgetUsd` (`number`, `exclusiveMinimum: 0`) sits next to `maxPrompts`; add `concurrency` (`integer`, `minimum: 1`, `default: 1`) alongside it. A shared `modelPrice` definition and `prices` properties now exist on `openaiSdkAgentConfig` and `codexCliAgentConfig`, plus `model` on `codexCliAgentConfig`; leave those intact.
+## Testing note: observing real overlap needs real timers
 
-## Verbose cost log and stop messages
-
-`loopImpl` has a top-level `formatCost(cost: CostInfo)` helper that renders the one-line `Cost: ...` log (both the priced and `unavailable` branches). When the loop body moves into the work callback, keep calling it on each completion. The startup and post-completion budget stops emit human-readable messages containing `Budget already reached:` and `Budget reached after <id>:`; tests assert on `reason: 'maxBudgetUsd'` and a `Budget`-containing message, not exact wording.
-
-## Example and reporter notes
-
-- `src/examples/cost-budget/` is the example exercising `prices` + `maxBudgetUsd`; the schema test validates every example automatically, so a Step 04 example that adds `concurrency` must validate against the updated schema.
-- The YAML reporter emits a `cost:` block (after `status:`, before `output`/`reason`); the JSONL reporter serialises cost via its existing `result` spread. Step 04's reporter serialization wrapper must preserve these outputs unchanged at `concurrency === 1`.
+The loop tests run under `vi.useFakeTimers()` by default. The one test that asserts agents actually overlap (`runs multiple prompts concurrently when concurrency > 1`) must use `vi.useRealTimers()` and call `loop(...)` directly. The reason: `FileLoopState.claim` performs real filesystem I/O, which does not interleave with a faked agent delay under fake timers, so invocations pipeline serially and never overlap. Stop-condition and serialization tests work fine under fake timers; only tests that need genuine wall-clock overlap need real timers. Keep this in mind for any Step 05 test that wants to observe concurrent reader/runner behaviour.
