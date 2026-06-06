@@ -12,13 +12,13 @@ Backwards compatibility with old pre-v2 state files is not a goal at this stage.
 4. [In-process concurrency](step-04-in-process-concurrency.md) - completed
 5. [Reader generators plus local handoff substitution](step-05-reader-generators-local-handoff.md) - completed
 6. [Pipelines with routing and rework](step-06-sequential-pipelines.md) - completed
-7. [Pipeline-wide budgets](step-07-pipeline-wide-budgets.md)
+7. [Pipeline-wide budgets](step-07-pipeline-wide-budgets.md) - completed
 8. [Cross-branch pipeline parallelism](step-08-cross-branch-pipeline-parallelism.md)
 9. [Dashboard](step-09-dashboard.md)
 10. [Remote loop state for CI coordination](step-10-remote-loop-state-ci.md)
 11. [S3-backed pipeline handoff](step-11-s3-backed-pipeline-handoff.md)
 
-Steps 1 through 6 are complete on `main`. The as-built Step 3 plan lives in [step-03-cost-accounting-budgets-plans.md](step-03-cost-accounting-budgets-plans.md), the as-built Step 4 plan in [step-04-in-process-concurrency-plans.md](step-04-in-process-concurrency-plans.md), the as-built Step 5 plan in [step-05-reader-generators-local-handoff-plans.md](step-05-reader-generators-local-handoff-plans.md), and the as-built Step 6 plan in [step-06-sequential-pipelines-plans.md](step-06-sequential-pipelines-plans.md). See [next.md](next.md) for the as-built contracts and the context that carries into Step 7.
+Steps 1 through 7 are complete on `main`. The as-built Step 3 plan lives in [step-03-cost-accounting-budgets-plans.md](step-03-cost-accounting-budgets-plans.md), the as-built Step 4 plan in [step-04-in-process-concurrency-plans.md](step-04-in-process-concurrency-plans.md), the as-built Step 5 plan in [step-05-reader-generators-local-handoff-plans.md](step-05-reader-generators-local-handoff-plans.md), the as-built Step 6 plan in [step-06-sequential-pipelines-plans.md](step-06-sequential-pipelines-plans.md), and the as-built Step 7 plan in [step-07-pipeline-wide-budgets-plans.md](step-07-pipeline-wide-budgets-plans.md). See [next.md](next.md) for the as-built contracts and the context that carries into Step 8.
 
 ## Definition of done for each step
 
