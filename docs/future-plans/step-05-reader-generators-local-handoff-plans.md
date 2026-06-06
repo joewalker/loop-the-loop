@@ -983,7 +983,7 @@ describe('JsonlPromptGenerator', () => {
       { id: 'a', status: 'success' },
       { id: 'b', status: 'success' },
     ]);
-    const consuming = new FileLoopState('ignore.json');
+    const consuming = new FileLoopState(join(dir, 'consuming-state.json'));
     await consuming.complete('r', 'a', { status: 'success', output: '' });
     const prompts = await collect(
       { dataFile, promptTemplate: '{{id}}' },
