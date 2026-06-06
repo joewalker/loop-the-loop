@@ -19,6 +19,9 @@ import type { InvokeResult } from './types.js';
  * 3. Register it in the `reporterConstructors` map in this file.
  *
  * See `YamlReporter` and `JsonlReporter` for reference implementations.
+ *
+ * When the loop runs with `concurrency > 1`, appends are serialized so
+ * implementations may assume calls do not overlap.
  */
 export interface Reporter {
   /**

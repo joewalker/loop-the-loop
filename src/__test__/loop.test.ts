@@ -13,6 +13,7 @@ import type {
   LoopState,
   Prompt,
   PromptGenerator,
+  Reporter,
 } from 'loop-the-loop';
 import { TestAgent } from 'loop-the-loop/agents/test';
 import { BatchPromptGenerator } from 'loop-the-loop/prompt-generators/batch';
@@ -58,6 +59,43 @@ class RecordingAgent implements Agent {
   async invoke(_prompt: string, options: InvokeOptions): Promise<InvokeResult> {
     this.invokeOptions.push(options);
     return this.#result;
+  }
+}
+
+/**
+ * An agent that records the peak number of overlapping invocations, using a
+ * fake-timer delay so the loop's pool keeps several invocations in flight.
+ */
+class OverlapAgent implements Agent {
+  active = 0;
+  maxActive = 0;
+  async invoke(): Promise<InvokeResult> {
+    this.active += 1;
+    this.maxActive = Math.max(this.maxActive, this.active);
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 10);
+    });
+    this.active -= 1;
+    return { status: 'success', output: 'ok' };
+  }
+}
+
+/**
+ * A reporter that records the peak number of overlapping append calls, to
+ * prove serialization under concurrency.
+ */
+class SleepingReporter implements Reporter {
+  active = 0;
+  maxActive = 0;
+  readonly appended: Array<string> = [];
+  async append(prompt: Prompt): Promise<void> {
+    this.active += 1;
+    this.maxActive = Math.max(this.maxActive, this.active);
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 5);
+    });
+    this.appended.push(prompt.id);
+    this.active -= 1;
   }
 }
 
@@ -642,5 +680,148 @@ describe('main', () => {
     expect(systemMessages.some(m => m.includes('Please review file X'))).toBe(
       true,
     );
+  });
+
+  it('runs multiple prompts concurrently when concurrency > 1', async () => {
+    // This test needs real timers: the agent's overlap is observed through a
+    // short real delay, and `loopState.claim` performs real filesystem I/O.
+    // Under fake timers the faked agent delay fires before the real claim I/O
+    // of sibling workers completes, so invocations pipeline serially and never
+    // overlap. With real timers both run on the same clock and overlap as
+    // intended.
+    vi.useRealTimers();
+
+    const agent = new OverlapAgent();
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a', prompt: 'a' },
+      { id: 'b', prompt: 'b' },
+      { id: 'c', prompt: 'c' },
+      { id: 'd', prompt: 'd' },
+      { id: 'e', prompt: 'e' },
+    ]);
+
+    const result = await loop({
+      name: 'overlap',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      concurrency: 3,
+      interPromptPause: 0,
+    });
+
+    expect(result).toEqual({ status: 'completed' });
+    expect(agent.maxActive).toBeGreaterThan(1);
+  });
+
+  it('does not interleave reporter appends when concurrency > 1', async () => {
+    const agent = new TestAgent({
+      responses: [{ status: 'success', output: 'ok' }],
+      repeat: 'cycle',
+    });
+    const reporter = new SleepingReporter();
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a', prompt: 'a' },
+      { id: 'b', prompt: 'b' },
+      { id: 'c', prompt: 'c' },
+      { id: 'd', prompt: 'd' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'serial-reporter',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      reporter,
+      concurrency: 3,
+      interPromptPause: 0,
+    });
+
+    expect(result).toEqual({ status: 'completed' });
+    expect(reporter.maxActive).toBe(1);
+    expect([...reporter.appended].sort()).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('aborts on too many glitches in completion order under concurrency', async () => {
+    const agent = new TestAgent({
+      responses: [
+        { status: 'glitch', reason: 'rate limit' },
+        { status: 'glitch', reason: 'rate limit' },
+        { status: 'glitch', reason: 'rate limit' },
+        { status: 'glitch', reason: 'rate limit' },
+        { status: 'glitch', reason: 'rate limit' },
+        { status: 'glitch', reason: 'rate limit' },
+      ],
+    });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a', prompt: 'a' },
+      { id: 'b', prompt: 'b' },
+      { id: 'c', prompt: 'c' },
+      { id: 'd', prompt: 'd' },
+      { id: 'e', prompt: 'e' },
+      { id: 'f', prompt: 'f' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'conc-glitches',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      concurrency: 2,
+      interPromptPause: 0,
+    });
+
+    expect(result).toEqual({
+      status: 'failed',
+      reason: 'tooManyGlitches',
+      message: expect.stringContaining('Aborting after 5 consecutive glitches'),
+    });
+  });
+
+  it('returns the error result and drains in-flight prompts under concurrency', async () => {
+    const agent = new TestAgent({
+      responses: [
+        { status: 'error', reason: 'bad prompt' },
+        { status: 'success', output: 'ok' },
+      ],
+    });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a', prompt: 'a' },
+      { id: 'b', prompt: 'b' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'conc-error',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      concurrency: 2,
+      interPromptPause: 0,
+    });
+
+    expect(result.status).toBe('failed');
+    expect(result.reason).toBe('errorResult');
+  });
+
+  it('staggers worker startup when interPromptPause and concurrency are both set', async () => {
+    const agent = new TestAgent({
+      responses: [{ status: 'success', output: 'ok' }],
+      repeat: 'cycle',
+    });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a', prompt: 'a' },
+      { id: 'b', prompt: 'b' },
+      { id: 'c', prompt: 'c' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'conc-stagger',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      concurrency: 2,
+      interPromptPause: 2,
+    });
+
+    expect(result).toEqual({ status: 'completed' });
   });
 });

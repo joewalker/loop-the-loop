@@ -64,6 +64,10 @@ export interface Prompt {
  *
  * See `PerFilePromptGenerator` and `BugzillaPromptGenerator` for reference
  * implementations.
+ *
+ * Under `concurrency > 1`, multiple yielded items may be in flight at once.
+ * Generators must yield each id exactly once per run and must not rely on
+ * `isOutstanding` reflecting items yielded earlier in the same run.
  */
 export interface PromptGenerator {
   /**

@@ -17,6 +17,8 @@ import {
 } from './reporters.js';
 import type { CostInfo, LoopCliConfig, LoopRunResult } from './types.js';
 import { Git } from './util/git.js';
+import { runPool } from './util/run-pool.js';
+import { serializeReporter } from './util/serialize-reporter.js';
 
 /**
  * We pause in between processing files
@@ -145,86 +147,118 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
 
   let completed = 0;
   let glitchCount = 0;
+  let stopResult: LoopRunResult | undefined;
+
+  // Serialize report appends and stagger worker startup only when running
+  // concurrently; at concurrency 1 both are no-ops and the serial path is
+  // unchanged.
+  const activeReporter =
+    concurrency > 1 ? serializeReporter(reporter) : reporter;
+  const staggerSeconds =
+    interPromptPause > 0 && concurrency > 1
+      ? interPromptPause / concurrency
+      : 0;
+
   try {
-    for await (const prompt of promptGenerator.generate(loopState)) {
-      if (!(await loopState.claim(runId, prompt.id))) {
-        logger.state(`Skip (claimed elsewhere): ${prompt.id}`);
-        continue;
-      }
-
-      console.log(`Processing: ${prompt.id}`);
-      logger.state(`Begin: ${prompt.id}`);
-      logger.system(`Prompt:\n${prompt.prompt}`);
-
-      const result = await agent.invoke(prompt.prompt, {
-        logger,
-        allowSourceUpdate,
-      });
-      await reporter.append(prompt, result);
-      await loopState.complete(runId, prompt.id, result);
-      logger.state(`End: ${prompt.id} (${result.status})`);
-
-      if (result.status === 'success') {
-        const message = `Loop: ${config.name} / ${prompt.id}\n\n${result.output}`;
-        // istanbul ignore if
-        if (git) {
-          logger.info(`Committing changes for ${prompt.id}`);
-          await git.maybeCommitAll(message);
+    await runPool(
+      promptGenerator.generate(loopState),
+      concurrency,
+      async (prompt): Promise<'continue' | 'stop'> => {
+        if (!(await loopState.claim(runId, prompt.id))) {
+          logger.state(`Skip (claimed elsewhere): ${prompt.id}`);
+          return 'continue';
         }
-        console.log(message);
-        logger.success(`${prompt.id}: ${result.output.slice(0, 120)}`);
-        glitchCount = 0;
-      } else if (result.status === 'glitch') {
-        glitchCount++;
-        if (glitchCount >= MAX_CONSECUTIVE_GLITCHES) {
-          const message = `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches. Last: ${result.reason}`;
-          logger.error(message);
-          return { status: 'failed', reason: 'tooManyGlitches', message };
-        }
-        console.log(
-          `Glitch ${glitchCount}/${MAX_CONSECUTIVE_GLITCHES} on ${prompt.id}: ${result.reason}`,
-        );
-        logger.error(`Glitch on ${prompt.id}: ${result.reason}`);
-      } else {
-        const message = `Error on ${prompt.id}: ${result.reason}`;
-        logger.error(message);
-        return { status: 'failed', reason: 'errorResult', message };
-      }
 
-      if (result.cost !== undefined) {
-        logger.state(`Cost: ${formatCost(result.cost)}`);
-      }
-      const runningTotal = (await loopState.getSnapshot()).totalUsd;
-      if (runningTotal >= maxBudgetUsd) {
-        const message = `Budget reached after ${prompt.id}: $${runningTotal.toFixed(4)} >= $${maxBudgetUsd}`;
-        logger.state(message);
-        return { status: 'stopped', reason: 'maxBudgetUsd', message };
-      }
+        console.log(`Processing: ${prompt.id}`);
+        logger.state(`Begin: ${prompt.id}`);
+        logger.system(`Prompt:\n${prompt.prompt}`);
 
-      completed++;
-      if (completed >= maxPrompts) {
-        logger.state(`Reached limit of ${maxPrompts} prompts`);
-        return {
-          status: 'stopped',
-          reason: 'maxPrompts',
-          message: `Reached limit of ${maxPrompts} prompts`,
-        };
-      }
-
-      // istanbul ignore else
-      if (interPromptPause !== 0) {
-        logger.info(`Pausing ${interPromptPause}s before next prompt`);
-        console.log(`Pause (${interPromptPause}s) before starting next prompt`);
-        await new Promise(resolve => {
-          setTimeout(resolve, interPromptPause * 1_000);
+        const result = await agent.invoke(prompt.prompt, {
+          logger,
+          allowSourceUpdate,
         });
-      }
-    }
+        await activeReporter.append(prompt, result);
+        await loopState.complete(runId, prompt.id, result);
+        logger.state(`End: ${prompt.id} (${result.status})`);
+
+        if (result.status === 'success') {
+          const message = `Loop: ${config.name} / ${prompt.id}\n\n${result.output}`;
+          // istanbul ignore if
+          if (git) {
+            logger.info(`Committing changes for ${prompt.id}`);
+            await git.maybeCommitAll(message);
+          }
+          console.log(message);
+          logger.success(`${prompt.id}: ${result.output.slice(0, 120)}`);
+          glitchCount = 0;
+        } else if (result.status === 'glitch') {
+          // "Consecutive" under concurrency means in completion order, not
+          // dispatch order: workers complete in whatever order their agents
+          // return, and the counter is shared across them.
+          glitchCount++;
+          if (glitchCount >= MAX_CONSECUTIVE_GLITCHES) {
+            const message = `Aborting after ${MAX_CONSECUTIVE_GLITCHES} consecutive glitches. Last: ${result.reason}`;
+            logger.error(message);
+            stopResult = {
+              status: 'failed',
+              reason: 'tooManyGlitches',
+              message,
+            };
+            return 'stop';
+          }
+          console.log(
+            `Glitch ${glitchCount}/${MAX_CONSECUTIVE_GLITCHES} on ${prompt.id}: ${result.reason}`,
+          );
+          logger.error(`Glitch on ${prompt.id}: ${result.reason}`);
+        } else {
+          const message = `Error on ${prompt.id}: ${result.reason}`;
+          logger.error(message);
+          stopResult = { status: 'failed', reason: 'errorResult', message };
+          return 'stop';
+        }
+
+        if (result.cost !== undefined) {
+          logger.state(`Cost: ${formatCost(result.cost)}`);
+        }
+        // Budget is checked before maxPrompts so a prompt crossing both caps
+        // stops with reason 'maxBudgetUsd'.
+        const runningTotal = (await loopState.getSnapshot()).totalUsd;
+        if (runningTotal >= maxBudgetUsd) {
+          const message = `Budget reached after ${prompt.id}: $${runningTotal.toFixed(4)} >= $${maxBudgetUsd}`;
+          logger.state(message);
+          stopResult = { status: 'stopped', reason: 'maxBudgetUsd', message };
+          return 'stop';
+        }
+
+        completed++;
+        if (completed >= maxPrompts) {
+          logger.state(`Reached limit of ${maxPrompts} prompts`);
+          stopResult = {
+            status: 'stopped',
+            reason: 'maxPrompts',
+            message: `Reached limit of ${maxPrompts} prompts`,
+          };
+          return 'stop';
+        }
+
+        if (interPromptPause !== 0) {
+          logger.info(`Pausing ${interPromptPause}s before next prompt`);
+          console.log(
+            `Pause (${interPromptPause}s) before starting next prompt`,
+          );
+          await new Promise(resolve => {
+            setTimeout(resolve, interPromptPause * 1_000);
+          });
+        }
+        return 'continue';
+      },
+      { staggerSeconds },
+    );
   } finally {
     await loopState.release(runId);
   }
 
-  return { status: 'completed' };
+  return stopResult ?? { status: 'completed' };
 }
 
 /**
