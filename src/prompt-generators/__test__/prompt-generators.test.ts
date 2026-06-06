@@ -24,6 +24,10 @@ describe('promptGeneratorTypes', () => {
     expect(promptGeneratorTypes).toContain('bugzilla');
   });
 
+  it('should include git', () => {
+    expect(promptGeneratorTypes).toContain('git');
+  });
+
   it('should include github', () => {
     expect(promptGeneratorTypes).toContain('github');
   });
@@ -48,6 +52,14 @@ describe('promptGeneratorTypes', () => {
 describe('createPromptGenerator', () => {
   it('should return a PromptGenerator with generate()', async () => {
     const generator = await createPromptGenerator(['per-file', task]);
+    expect(typeof generator.generate).toBe('function');
+  });
+
+  it('should resolve a git prompt generator', async () => {
+    const generator = await createPromptGenerator([
+      'git',
+      { range: 'main..HEAD', promptTemplate: 'Review {{hash}}' },
+    ]);
     expect(typeof generator.generate).toBe('function');
   });
 
@@ -92,5 +104,17 @@ describe('createPromptGenerator', () => {
         outputDir: '/x',
       }),
     ).toThrow('nested pipelines are not supported');
+  });
+
+  it('normalizePromptGeneratorSpec normalizes a git spec and appends configDir', () => {
+    const spec = normalizePromptGeneratorSpec(
+      ['git', { range: 'main..HEAD', promptTemplate: 'Review {{hash}}' }],
+      { configDir: '/cfg', outputDir: '/out' },
+    );
+    expect(spec).toEqual([
+      'git',
+      { range: 'main..HEAD', promptTemplate: 'Review {{hash}}' },
+      '/cfg',
+    ]);
   });
 });

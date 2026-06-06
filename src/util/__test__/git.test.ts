@@ -176,7 +176,9 @@ describe('Git', () => {
 
   /** Run a raw git command in the fixture repo and return trimmed stdout. */
   function rawGit(...args: Array<string>): string {
-    return execFileSync('git', ['-C', repoPath, ...args]).toString().trim();
+    return execFileSync('git', ['-C', repoPath, ...args])
+      .toString()
+      .trim();
   }
 
   /** Create and commit a file in the fixture repo. */
@@ -187,7 +189,9 @@ describe('Git', () => {
   ): Promise<string> {
     await writeFile(join(repoPath, file), content);
     await git.add(file);
-    await git.commit(message, { committer: { name: 'Test', email: 'test@test.com' } });
+    await git.commit(message, {
+      committer: { name: 'Test', email: 'test@test.com' },
+    });
     return rawGit('rev-parse', 'HEAD');
   }
 
@@ -212,7 +216,9 @@ describe('Git', () => {
 
       const base = 'master';
       // The default branch may be master or main; check out whichever exists.
-      const branches = rawGit('branch', '--format=%(refname:short)').split('\n');
+      const branches = rawGit('branch', '--format=%(refname:short)').split(
+        '\n',
+      );
       rawGit('checkout', branches.includes(base) ? base : 'main');
       rawGit('merge', '--no-ff', '-m', 'Merge feature', 'feature');
       const merge = rawGit('rev-parse', 'HEAD');
