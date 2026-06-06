@@ -605,6 +605,14 @@ To get estimated costs from openai-sdk or codex-cli, add a `prices` map to the a
 
 Run totals persist in the loop-state file across resumes. Set a top-level `maxBudgetUsd`, or pass `--max-budget-usd N`, to cap lifetime spend: the loop stops after the prompt whose completion takes the total at or above the cap, and stops immediately at startup if the persisted total is already there. Results whose cost is `unavailable` record tokens but never advance the total. Omitting the cap is track-only mode.
 
+## Concurrency
+
+By default a loop runs one prompt at a time. Set a top-level `concurrency`, or pass `--concurrency N`, to run up to N prompts at once in a single process. All workers share one run and claim prompt ids independently, so state, cost totals, and resume behaviour are unchanged; `concurrency: 1` is byte-for-byte the serial behaviour.
+
+Stop conditions are completion-order: when `maxPrompts`, `maxBudgetUsd`, an error result, or too many consecutive glitches is reached, the loop stops pulling new prompts and lets the in-flight ones finish before returning. `interPromptPause` stays a per-worker pause, and the initial burst is staggered across the pause window so the workers do not all start at the same instant. Reporter writes are serialized when `concurrency > 1`, so report output is never interleaved.
+
+Concurrency greater than 1 is rejected with `allowSourceUpdate` (git commits cannot safely interleave) and with the batch prompt generator (its summary prompts read the report file and would race with in-flight batch items). The per-worker pause is not a global rate limit: the effective request rate rises with concurrency, so configure a real rate limit on the agent if you need one.
+
 ## Building Custom Extensions
 
 The framework is designed around three extension points: agents, prompt generators, and reporters. Each follows the same pattern: implement an interface, add a static factory method, and register it.

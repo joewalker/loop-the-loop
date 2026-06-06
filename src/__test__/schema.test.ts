@@ -94,6 +94,18 @@ describe('CLI config schema', () => {
         },
       ],
       [
+        'top-level concurrency',
+        {
+          name: 'concurrent',
+          concurrency: 4,
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'per-file',
+            { filePattern: 'x', promptTemplate: 'y' },
+          ],
+        },
+      ],
+      [
         'bugzilla with change clause',
         {
           name: 'change',
@@ -281,6 +293,30 @@ describe('CLI config schema', () => {
       [
         'rejects missing name',
         {
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'per-file',
+            { filePattern: 'x', promptTemplate: 'y' },
+          ],
+        },
+      ],
+      [
+        'rejects a zero concurrency',
+        {
+          name: 'concurrent',
+          concurrency: 0,
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'per-file',
+            { filePattern: 'x', promptTemplate: 'y' },
+          ],
+        },
+      ],
+      [
+        'rejects a negative concurrency',
+        {
+          name: 'concurrent',
+          concurrency: -1,
           agent: 'claude-sdk',
           promptGenerator: [
             'per-file',

@@ -9,6 +9,7 @@ import {
   createPromptGenerator,
   type PromptGenerator,
 } from './prompt-generators.js';
+import { BatchPromptGenerator } from './prompt-generators/batch.js';
 import {
   createReporter,
   DEFAULT_REPORTER,
@@ -47,6 +48,7 @@ export async function loop(config: LoopCliConfig): Promise<LoopRunResult> {
         : reporter,
     maxPrompts: config.maxPrompts ?? Infinity,
     maxBudgetUsd: config.maxBudgetUsd ?? Infinity,
+    concurrency: config.concurrency ?? 1,
     interPromptPause: config.interPromptPause ?? PAUSE_SECS,
     allowSourceUpdate: config.allowSourceUpdate ?? false,
     logger: createLogger(config.logger),
@@ -65,6 +67,7 @@ interface LoopConfig {
   readonly reporter: Reporter;
   readonly maxPrompts: number;
   readonly maxBudgetUsd: number;
+  readonly concurrency: number;
   readonly interPromptPause: number;
   readonly allowSourceUpdate: boolean;
   readonly logger: Logger;
@@ -84,10 +87,25 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
     reporter,
     maxPrompts,
     maxBudgetUsd,
+    concurrency,
     interPromptPause,
     allowSourceUpdate,
     logger,
   } = config;
+
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new Error(`Invalid concurrency: ${concurrency}`);
+  }
+  if (concurrency > 1 && allowSourceUpdate) {
+    throw new Error(
+      'concurrency > 1 is not supported with allowSourceUpdate: git commits cannot safely interleave',
+    );
+  }
+  if (concurrency > 1 && promptGenerator instanceof BatchPromptGenerator) {
+    throw new Error(
+      'concurrency > 1 is not supported with the batch prompt generator: summary prompts would race with in-flight batch items',
+    );
+  }
 
   const git = allowSourceUpdate ? new Git(process.cwd()) : undefined;
 

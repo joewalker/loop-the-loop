@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "concurrency",
+  "concurrency": 4,
+  "interPromptPause": 2,
+  "agent": "claude-sdk",
+  "promptGenerator": [
+    "per-file",
+    {
+      "filePattern": "src/**/*.ts",
+      "excludePatterns": ["**/__test__/**", "**/*.test.ts"],
+      "promptTemplate": "Summarise the responsibilities of {{file}} in two sentences."
+    }
+  ]
+}

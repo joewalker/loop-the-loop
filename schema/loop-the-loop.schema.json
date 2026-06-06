@@ -39,6 +39,12 @@
       "exclusiveMinimum": 0,
       "description": "Lifetime USD budget across resumes. The loop stops after the prompt whose completion takes the persisted total at or above this cap, and stops immediately at startup if it is already at or above it. Track-only when omitted."
     },
+    "concurrency": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Number of prompts to run concurrently in one process. Defaults to 1 (serial). Not supported with allowSourceUpdate or the batch prompt generator."
+    },
     "interPromptPause": {
       "type": "number",
       "minimum": 0,

@@ -130,6 +130,15 @@ export interface LoopCliConfig {
   readonly maxBudgetUsd?: number;
 
   /**
+   * Number of prompts to run concurrently in one process. Defaults to 1
+   * (serial, byte-for-byte the previous behaviour). Values greater than 1 are
+   * rejected together with `allowSourceUpdate` (git commits cannot safely
+   * interleave) or the batch prompt generator (summary prompts would race
+   * with in-flight batch items).
+   */
+  readonly concurrency?: number;
+
+  /**
    * Pause between each prompt. Can help with rate limiting.
    */
   readonly interPromptPause?: number;

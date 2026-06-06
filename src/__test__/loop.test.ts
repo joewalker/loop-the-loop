@@ -15,6 +15,7 @@ import type {
   PromptGenerator,
 } from 'loop-the-loop';
 import { TestAgent } from 'loop-the-loop/agents/test';
+import { BatchPromptGenerator } from 'loop-the-loop/prompt-generators/batch';
 import { YamlReporter } from 'loop-the-loop/reporters/yaml';
 import type { InvokeResult, LoopCliConfig } from 'loop-the-loop/types';
 import { Git } from 'loop-the-loop/util/git';
@@ -122,6 +123,48 @@ describe('main', () => {
     process.chdir(originalCwd);
     vi.restoreAllMocks();
     await rm(repoPath, { recursive: true, force: true });
+  });
+
+  it('rejects a non-integer concurrency', async () => {
+    const agent = new TestAgent();
+    const promptGenerator = new FixedPromptGenerator([]);
+    await expect(
+      loop({ name: 'bad-conc', agent, promptGenerator, concurrency: 1.5 }),
+    ).rejects.toThrow('Invalid concurrency: 1.5');
+  });
+
+  it('rejects a concurrency below 1', async () => {
+    const agent = new TestAgent();
+    const promptGenerator = new FixedPromptGenerator([]);
+    await expect(
+      loop({ name: 'zero-conc', agent, promptGenerator, concurrency: 0 }),
+    ).rejects.toThrow('Invalid concurrency: 0');
+  });
+
+  it('rejects concurrency > 1 with allowSourceUpdate', async () => {
+    const agent = new TestAgent();
+    const promptGenerator = new FixedPromptGenerator([]);
+    await expect(
+      loop({
+        name: 'conc-source',
+        agent,
+        promptGenerator,
+        concurrency: 2,
+        allowSourceUpdate: true,
+      }),
+    ).rejects.toThrow(/allowSourceUpdate/u);
+  });
+
+  it('rejects concurrency > 1 with the batch prompt generator', async () => {
+    const agent = new TestAgent();
+    const inner = new FixedPromptGenerator([{ id: 'a', prompt: 'a' }]);
+    const promptGenerator = new BatchPromptGenerator(
+      { source: inner, summaryPromptTemplate: 'Summary', reportFile: 'r.yaml' },
+      inner,
+    );
+    await expect(
+      loop({ name: 'conc-batch', agent, promptGenerator, concurrency: 2 }),
+    ).rejects.toThrow(/batch/u);
   });
 
   it('should return a completed result when all prompts succeed', async () => {

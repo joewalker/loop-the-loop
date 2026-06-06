@@ -293,6 +293,26 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--concurrency', () => {
+    it('parses an integer value', () => {
+      expect(parseArgs(['--concurrency', '4', 'c.json']).concurrency).toBe(4);
+    });
+
+    it('parses the inline form', () => {
+      expect(parseArgs(['--concurrency=3', 'c.json']).concurrency).toBe(3);
+    });
+
+    it.each(['0', '-1', '1.5', 'abc', 'NaN', ''])('rejects %s', value => {
+      expect(() => parseArgs([`--concurrency=${value}`, 'c.json'])).toThrow(
+        /Invalid --concurrency value/u,
+      );
+    });
+
+    it('is undefined when not passed', () => {
+      expect(parseArgs(['c.json']).concurrency).toBeUndefined();
+    });
+  });
+
   // #endregion
 
   // #region --help and --version
@@ -1765,6 +1785,26 @@ describe('loadCliConfig', () => {
 
     const config = await loadCliConfig({ configPath, maxBudgetUsd: 3 });
     expect(config.maxBudgetUsd).toBe(3);
+  });
+
+  it('merges concurrency from the CLI flag into the config', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'concurrent',
+        agent: 'claude-sdk',
+        promptGenerator: [
+          'per-file',
+          { filePattern: 'src/**/*.ts', promptTemplate: 'Review {{file}}' },
+        ],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({ configPath, concurrency: 4 });
+    expect(config.concurrency).toBe(4);
   });
 
   it('should reject batch task config with a non-positive batchSize', async () => {

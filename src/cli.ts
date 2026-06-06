@@ -13,9 +13,9 @@ import { loadCliConfig, parseArgs, USAGE } from './util/load-cli-config.js';
  * CLI entry point for loop-the-loop.
  *
  * Usage:
- *   npx loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] [--max-budget-usd N] <config.json>
- *   loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] [--max-budget-usd N] <config.json>   (after global install)
- *   node dist/cli.js [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] [--max-budget-usd N] <config.json> (from a local checkout)
+ *   npx loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] [--max-budget-usd N] [--concurrency N] <config.json>
+ *   loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] [--max-budget-usd N] [--concurrency N] <config.json>   (after global install)
+ *   node dist/cli.js [--help] [--version] [--verbose] [--dry-run] [--max-prompts N] [--max-budget-usd N] [--concurrency N] <config.json> (from a local checkout)
  *
  * The config file should be a JSON object matching LoopCliConfig
  * with string values for agent/reporter and a tuple for promptGenerator.
