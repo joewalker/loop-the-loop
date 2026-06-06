@@ -385,6 +385,13 @@
           "minItems": 2,
           "maxItems": 2,
           "additionalItems": false,
+          "items": [{ "const": "jsonl" }, { "$ref": "#/definitions/jsonlTask" }]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
           "items": [
             { "const": "loop-state" },
             { "$ref": "#/definitions/loopStateTask" }
@@ -857,6 +864,51 @@
         { "required": ["data"], "not": { "required": ["dataFile"] } },
         { "required": ["dataFile"], "not": { "required": ["data"] } }
       ]
+    },
+    "jsonlTask": {
+      "type": "object",
+      "required": ["dataFile", "promptTemplate"],
+      "additionalProperties": false,
+      "properties": {
+        "dataFile": {
+          "type": "string",
+          "description": "Path to a JSONL report file (one JSON object per line). Config-relative, or a {{steps.<name>.report}} handoff substitution. A missing file is treated as empty input."
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "Prompt template. Each line field becomes {{field}} (objects JSON-stringified), plus {{id}} and {{index}}. Supports {{include:path}} macros."
+        },
+        "idField": {
+          "type": "string",
+          "description": "Line field used as the prompt id. Defaults to id; falls back to the line index when absent."
+        },
+        "filter": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "boolean" }
+            ]
+          },
+          "description": "Field-path equality filter, e.g. { \"structuredOutput.verdict\": \"rework\" }. Dotted paths navigate nested objects. Equality only."
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Emit a line only while its parsed #N attempt is below this value."
+        },
+        "minAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Emit a line only once its parsed #N attempt is at or above this value."
+        },
+        "incrementAttempt": {
+          "type": "boolean",
+          "default": false,
+          "description": "Re-emit the line at the next attempt id (#(N+1))."
+        }
+      }
     },
     "loopStateTask": {
       "type": "object",

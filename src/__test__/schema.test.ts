@@ -83,6 +83,23 @@ describe('CLI config schema', () => {
   describe('positive cases', () => {
     const cases: ReadonlyArray<[string, unknown]> = [
       [
+        'jsonl reader with filter and attempt knobs',
+        {
+          name: 'rework',
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'jsonl',
+            {
+              dataFile: 'verify-report.jsonl',
+              filter: { 'structuredOutput.verdict': 'rework' },
+              maxAttempts: 3,
+              incrementAttempt: true,
+              promptTemplate: 'Rework {{id}}',
+            },
+          ],
+        },
+      ],
+      [
         'loop-state reader',
         {
           name: 'retry',

@@ -719,6 +719,30 @@ describe('loadCliConfig', () => {
     expect(getSpecBasePath(config)).toBe(configDir);
   });
 
+  it('should accept a valid jsonl task config', async () => {
+    const configDir = join(tempDir, 'config');
+
+    const config = await normalizeCliConfig(
+      {
+        name: 'test',
+        agent: 'claude-sdk',
+        promptGenerator: [
+          'jsonl',
+          {
+            dataFile: 'verify-report.jsonl',
+            filter: { 'structuredOutput.verdict': 'rework' },
+            maxAttempts: 3,
+            incrementAttempt: true,
+            promptTemplate: 'Rework {{id}}',
+          },
+        ],
+      },
+      join(configDir, 'config.json'),
+    );
+
+    expect(getSpecBasePath(config)).toBe(configDir);
+  });
+
   it('should reject GitHub search config without a string repository', async () => {
     const configDir = join(tempDir, 'config');
 

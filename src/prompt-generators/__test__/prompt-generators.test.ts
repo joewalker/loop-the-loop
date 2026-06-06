@@ -38,6 +38,10 @@ describe('promptGeneratorTypes', () => {
   it('includes loop-state', () => {
     expect(promptGeneratorTypes).toContain('loop-state');
   });
+
+  it('includes jsonl', () => {
+    expect(promptGeneratorTypes).toContain('jsonl');
+  });
 });
 
 describe('createPromptGenerator', () => {
