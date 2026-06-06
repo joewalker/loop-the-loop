@@ -135,6 +135,39 @@ describe('normalizePipelineTaskConfig', () => {
     ).toThrow('pipeline.maxPasses must be a positive integer');
   });
 
+  it('accepts a step-level maxBudgetUsd', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: {
+          a: { promptGenerator: ['test', {}], maxBudgetUsd: 2.5 },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a non-positive step maxBudgetUsd', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: {
+          a: { promptGenerator: ['test', {}], maxBudgetUsd: 0 },
+        },
+      }),
+    ).toThrow('pipeline.steps.a.maxBudgetUsd must be a positive number');
+  });
+
+  it('rejects a non-number step maxBudgetUsd', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: {
+          a: { promptGenerator: ['test', {}], maxBudgetUsd: 'lots' },
+        },
+      }),
+    ).toThrow('pipeline.steps.a.maxBudgetUsd must be a positive number');
+  });
+
   it('allows a cyclic dependsOn (rework is a feature)', () => {
     const cyclic = {
       output: 'fix',

@@ -1015,6 +1015,11 @@
         "outputDir": { "type": "string" },
         "allowSourceUpdate": { "type": "boolean" },
         "maxPrompts": { "type": "integer", "minimum": 0 },
+        "maxBudgetUsd": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Stricter local USD budget for this step alone. Independent of the pipeline-wide shared cap set by a top-level maxBudgetUsd."
+        },
         "interPromptPause": { "type": "number", "minimum": 0 },
         "logger": { "type": "string", "enum": ["verbose"] },
         "dependsOn": { "type": "array", "items": { "type": "string" } }

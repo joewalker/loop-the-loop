@@ -173,6 +173,13 @@ export interface PipelineStep {
   readonly outputDir?: string;
   readonly allowSourceUpdate?: boolean;
   readonly maxPrompts?: number;
+
+  /**
+   * Stricter local USD budget for this step alone, passed into the step's
+   * `loop()`. Independent of the pipeline-wide shared cap (a top-level
+   * `maxBudgetUsd`), which is enforced across all steps by the orchestrator.
+   */
+  readonly maxBudgetUsd?: number;
   readonly interPromptPause?: number;
   readonly logger?: LoggerSpec;
   readonly dependsOn?: ReadonlyArray<string>;

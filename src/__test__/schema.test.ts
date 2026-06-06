@@ -371,6 +371,40 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'pipeline with shared and step-level budgets',
+        {
+          name: 'budgeted',
+          agent: 'claude-sdk',
+          reporter: 'jsonl-report',
+          maxBudgetUsd: 10,
+          promptGenerator: [
+            'pipeline',
+            {
+              output: 'verify',
+              steps: {
+                fix: {
+                  maxBudgetUsd: 4,
+                  promptGenerator: [
+                    'jsonl',
+                    { dataFile: 'seed.jsonl', promptTemplate: 'fix {{id}}' },
+                  ],
+                },
+                verify: {
+                  dependsOn: ['fix'],
+                  promptGenerator: [
+                    'jsonl',
+                    {
+                      dataFile: '{{steps.fix.report}}',
+                      promptTemplate: 'verify {{id}}',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {

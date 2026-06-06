@@ -88,6 +88,7 @@ function assertStep(
       'outputDir',
       'allowSourceUpdate',
       'maxPrompts',
+      'maxBudgetUsd',
       'interPromptPause',
       'logger',
       'dependsOn',
@@ -113,6 +114,14 @@ function assertStep(
           `pipeline.steps.${key}.dependsOn references unknown step "${dep}"`,
         );
       }
+    }
+  }
+  if ('maxBudgetUsd' in step) {
+    const maxBudgetUsd = step['maxBudgetUsd'];
+    if (typeof maxBudgetUsd !== 'number' || !(maxBudgetUsd > 0)) {
+      throw new Error(
+        `pipeline.steps.${key}.maxBudgetUsd must be a positive number`,
+      );
     }
   }
 }
