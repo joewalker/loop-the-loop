@@ -1,5 +1,6 @@
 import type { CheckResult } from './doctor.js';
 import type { LoopState } from './loop-states.js';
+import { PIPELINE_GENERATOR_NAME } from './pipeline-spec.js';
 import {
   BatchPromptGenerator,
   type BatchTask,
@@ -167,6 +168,10 @@ export function normalizePromptGeneratorSpec(
   const [type, config] = promptGeneratorSpec;
   const { configDir, outputDir } = context;
 
+  if ((type as string) === PIPELINE_GENERATOR_NAME) {
+    throw new Error('nested pipelines are not supported');
+  }
+
   if (type === BatchPromptGenerator.promptGeneratorName) {
     return [
       type,
@@ -231,6 +236,11 @@ export async function createPromptGenerator(
 ): Promise<PromptGenerator> {
   if (Array.isArray(promptGeneratorSpec)) {
     const [type, ...args] = promptGeneratorSpec;
+    if ((type as string) === PIPELINE_GENERATOR_NAME) {
+      throw new Error(
+        'pipeline specs are not prompt generators; runPipeline handles them (nested pipelines are unsupported)',
+      );
+    }
     if (type === BatchPromptGenerator.promptGeneratorName) {
       const [task, basePath] = args as [BatchTask, string?];
       return BatchPromptGenerator.create(

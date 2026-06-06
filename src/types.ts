@@ -82,7 +82,8 @@ export interface LoopRunResult {
     | 'maxPrompts'
     | 'maxBudgetUsd'
     | 'errorResult'
-    | 'tooManyGlitches';
+    | 'tooManyGlitches'
+    | 'maxPasses';
   readonly message?: string;
 }
 
@@ -157,4 +158,46 @@ export interface LoopCliConfig {
    * enabled logger), or `undefined` (quiet, the default).
    */
   readonly logger?: LoggerSpec;
+}
+
+/**
+ * One step of a pipeline. A step is one `loop()` over one prompt generator.
+ * `promptGenerator` is required; every other field overrides the pipeline-level
+ * default for this step only. `dependsOn` is an optional, cycle-tolerant
+ * ordering hint within a pass and never a correctness constraint.
+ */
+export interface PipelineStep {
+  readonly promptGenerator: PromptGeneratorSpec;
+  readonly agent?: AgentSpec;
+  readonly reporter?: ReporterSpec;
+  readonly outputDir?: string;
+  readonly allowSourceUpdate?: boolean;
+  readonly maxPrompts?: number;
+  readonly interPromptPause?: number;
+  readonly logger?: LoggerSpec;
+  readonly dependsOn?: ReadonlyArray<string>;
+}
+
+/**
+ * A pipeline: a set of named steps plus a designated terminal `output` step.
+ * Not a DAG; cycles between steps are a supported feature (rework loops). Runs
+ * to a fixed point, bounded by `maxPasses`.
+ */
+export interface PipelineTask {
+  /**
+   * Key of the terminal step. Identifies the final artifact for reporting; it
+   * does not impose execution order. Must name an existing step.
+   */
+  readonly output: string;
+
+  /**
+   * The steps, keyed by step key. Non-empty. The loop name of each step is the
+   * derived `${pipelineName}-${stepKey}`.
+   */
+  readonly steps: Readonly<Record<string, PipelineStep>>;
+
+  /**
+   * Safety ceiling on the number of fixed-point passes. Defaults to 100.
+   */
+  readonly maxPasses?: number;
 }

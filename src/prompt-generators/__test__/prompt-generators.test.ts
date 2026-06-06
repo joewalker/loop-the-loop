@@ -2,6 +2,7 @@
 
 import {
   createPromptGenerator,
+  normalizePromptGeneratorSpec,
   promptGeneratorTypes,
 } from 'loop-the-loop/prompt-generators';
 import { BatchPromptGenerator } from 'loop-the-loop/prompt-generators/batch';
@@ -76,5 +77,20 @@ describe('createPromptGenerator', () => {
       },
     ]);
     expect(generator).toBeInstanceOf(BatchPromptGenerator);
+  });
+
+  it('createPromptGenerator throws on a pipeline spec', async () => {
+    await expect(
+      createPromptGenerator(['pipeline', { output: 'a', steps: {} }] as never),
+    ).rejects.toThrow('pipeline specs are not prompt generators');
+  });
+
+  it('normalizePromptGeneratorSpec throws on a nested pipeline', () => {
+    expect(() =>
+      normalizePromptGeneratorSpec(['pipeline', {}] as never, {
+        configDir: '/x',
+        outputDir: '/x',
+      }),
+    ).toThrow('nested pipelines are not supported');
   });
 });

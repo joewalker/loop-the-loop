@@ -328,6 +328,49 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'pipeline',
+        {
+          name: 'bugfix',
+          agent: 'claude-sdk',
+          reporter: 'jsonl-report',
+          promptGenerator: [
+            'pipeline',
+            {
+              output: 'summary',
+              maxPasses: 20,
+              steps: {
+                fix: {
+                  promptGenerator: [
+                    'jsonl',
+                    { dataFile: 'seed.jsonl', promptTemplate: 'fix {{id}}' },
+                  ],
+                },
+                verify: {
+                  agent: ['claude-sdk', { model: 'claude-opus-4-8' }],
+                  promptGenerator: [
+                    'jsonl',
+                    {
+                      dataFile: '{{steps.fix.report}}',
+                      promptTemplate: 'verify {{id}}',
+                    },
+                  ],
+                  dependsOn: ['fix'],
+                },
+                summary: {
+                  promptGenerator: [
+                    'jsonl',
+                    {
+                      dataFile: ['{{steps.verify.report}}'],
+                      promptTemplate: 'summary {{id}}',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {
@@ -510,6 +553,25 @@ describe('CLI config schema', () => {
           promptGenerator: [
             'per-file',
             { filePattern: 'x', promptTemplate: 'y' },
+          ],
+        },
+      ],
+      [
+        'pipeline step missing promptGenerator',
+        {
+          name: 'p',
+          agent: 'claude-sdk',
+          promptGenerator: ['pipeline', { output: 'a', steps: { a: {} } }],
+        },
+      ],
+      [
+        'pipeline missing output',
+        {
+          name: 'p',
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'pipeline',
+            { steps: { a: { promptGenerator: ['test', { prompts: [] }] } } },
           ],
         },
       ],

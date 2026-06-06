@@ -410,6 +410,16 @@
           "maxItems": 2,
           "additionalItems": false,
           "items": [{ "const": "batch" }, { "$ref": "#/definitions/batchTask" }]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
+          "items": [
+            { "const": "pipeline" },
+            { "$ref": "#/definitions/pipelineTask" }
+          ]
         }
       ]
     },
@@ -969,6 +979,45 @@
           "type": "string",
           "description": "Path to the report file the loop is writing to. Injected as {{reportFile}} in the summary template."
         }
+      }
+    },
+    "pipelineTask": {
+      "type": "object",
+      "required": ["output", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "type": "string",
+          "description": "Key of the terminal step. Identifies the final artifact for reporting; does not impose execution order."
+        },
+        "maxPasses": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 100,
+          "description": "Safety ceiling on fixed-point passes."
+        },
+        "steps": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/definitions/pipelineStep" },
+          "description": "Steps keyed by step key. Each step's loop name is ${pipelineName}-${stepKey}."
+        }
+      }
+    },
+    "pipelineStep": {
+      "type": "object",
+      "required": ["promptGenerator"],
+      "additionalProperties": false,
+      "properties": {
+        "promptGenerator": { "$ref": "#/definitions/promptGeneratorSpec" },
+        "agent": { "$ref": "#/definitions/agentSpec" },
+        "reporter": { "$ref": "#/definitions/reporterSpec" },
+        "outputDir": { "type": "string" },
+        "allowSourceUpdate": { "type": "boolean" },
+        "maxPrompts": { "type": "integer", "minimum": 0 },
+        "interPromptPause": { "type": "number", "minimum": 0 },
+        "logger": { "type": "string", "enum": ["verbose"] },
+        "dependsOn": { "type": "array", "items": { "type": "string" } }
       }
     }
   }
