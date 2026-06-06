@@ -180,6 +180,15 @@ export interface PipelineStep {
    * `maxBudgetUsd`), which is enforced across all steps by the orchestrator.
    */
   readonly maxBudgetUsd?: number;
+
+  /**
+   * Within-step prompt concurrency for this step's own `loop()` (the Step 04
+   * lever). Independent of the pipeline-level `maxStepConcurrency`, which limits
+   * how many steps overlap. No top-level fallback. `loop()` rejects values > 1
+   * together with `allowSourceUpdate` or a batch generator; the pipeline rejects
+   * those combinations at load time.
+   */
+  readonly concurrency?: number;
   readonly interPromptPause?: number;
   readonly logger?: LoggerSpec;
   readonly dependsOn?: ReadonlyArray<string>;
@@ -207,4 +216,12 @@ export interface PipelineTask {
    * Safety ceiling on the number of fixed-point passes. Defaults to 100.
    */
   readonly maxPasses?: number;
+
+  /**
+   * Maximum number of independent steps to run concurrently within a pass.
+   * Defaults to 1 (steps run sequentially in dependency-hint order, exactly as
+   * before). A step with `allowSourceUpdate` always runs as an exclusive
+   * barrier regardless of this limit.
+   */
+  readonly maxStepConcurrency?: number;
 }

@@ -405,6 +405,40 @@ describe('CLI config schema', () => {
           ],
         },
       ],
+      [
+        'pipeline with step and cross-step concurrency',
+        {
+          name: 'parallel',
+          agent: 'claude-sdk',
+          reporter: 'jsonl-report',
+          promptGenerator: [
+            'pipeline',
+            {
+              output: 'verify',
+              maxStepConcurrency: 3,
+              steps: {
+                fix: {
+                  concurrency: 4,
+                  promptGenerator: [
+                    'jsonl',
+                    { dataFile: 'seed.jsonl', promptTemplate: 'fix {{id}}' },
+                  ],
+                },
+                verify: {
+                  dependsOn: ['fix'],
+                  promptGenerator: [
+                    'jsonl',
+                    {
+                      dataFile: '{{steps.fix.report}}',
+                      promptTemplate: 'verify {{id}}',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {

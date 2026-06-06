@@ -178,6 +178,105 @@ describe('normalizePipelineTaskConfig', () => {
     };
     expect(() => normalizePipelineTaskConfig(cyclic)).not.toThrow();
   });
+
+  it('accepts a pipeline-level maxStepConcurrency', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        maxStepConcurrency: 3,
+        steps: { a: { promptGenerator: ['test', {}] } },
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a non-integer maxStepConcurrency', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        maxStepConcurrency: 1.5,
+        steps: { a: { promptGenerator: ['test', {}] } },
+      }),
+    ).toThrow('pipeline.maxStepConcurrency must be a positive integer');
+  });
+
+  it('rejects a maxStepConcurrency below 1', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        maxStepConcurrency: 0,
+        steps: { a: { promptGenerator: ['test', {}] } },
+      }),
+    ).toThrow('pipeline.maxStepConcurrency must be a positive integer');
+  });
+
+  it('accepts a step-level concurrency', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: { a: { promptGenerator: ['test', {}], concurrency: 4 } },
+      }),
+    ).not.toThrow();
+  });
+
+  it('accepts a step-level concurrency of 1', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: { a: { promptGenerator: ['test', {}], concurrency: 1 } },
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a non-integer step concurrency', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: { a: { promptGenerator: ['test', {}], concurrency: 2.5 } },
+      }),
+    ).toThrow('pipeline.steps.a.concurrency must be a positive integer');
+  });
+
+  it('rejects a step concurrency below 1', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: { a: { promptGenerator: ['test', {}], concurrency: 0 } },
+      }),
+    ).toThrow('pipeline.steps.a.concurrency must be a positive integer');
+  });
+
+  it('rejects step concurrency > 1 with allowSourceUpdate', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: {
+          a: {
+            promptGenerator: ['test', {}],
+            concurrency: 2,
+            allowSourceUpdate: true,
+          },
+        },
+      }),
+    ).toThrow(
+      'pipeline.steps.a.concurrency > 1 is not supported with allowSourceUpdate',
+    );
+  });
+
+  it('rejects step concurrency > 1 with a batch prompt generator', () => {
+    expect(() =>
+      normalizePipelineTaskConfig({
+        output: 'a',
+        steps: {
+          a: {
+            promptGenerator: ['batch', { source: ['test', {}] }],
+            concurrency: 2,
+          },
+        },
+      }),
+    ).toThrow(
+      'pipeline.steps.a.concurrency > 1 is not supported with the batch prompt generator',
+    );
+  });
 });
 
 describe('collectReportConsumers', () => {

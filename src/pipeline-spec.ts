@@ -35,7 +35,11 @@ export function normalizePipelineTaskConfig(config: unknown): PipelineTask {
   if (!isRecord(config)) {
     throw new Error('pipeline task config must be an object');
   }
-  assertKnownProperties(config, ['output', 'steps', 'maxPasses'], 'pipeline');
+  assertKnownProperties(
+    config,
+    ['output', 'steps', 'maxPasses', 'maxStepConcurrency'],
+    'pipeline',
+  );
 
   if (typeof config['output'] !== 'string') {
     throw new Error('pipeline.output must be a string');
@@ -65,6 +69,16 @@ export function normalizePipelineTaskConfig(config: unknown): PipelineTask {
       throw new Error('pipeline.maxPasses must be a positive integer');
     }
   }
+  if ('maxStepConcurrency' in config) {
+    const maxStepConcurrency = config['maxStepConcurrency'];
+    if (
+      typeof maxStepConcurrency !== 'number' ||
+      !Number.isInteger(maxStepConcurrency) ||
+      maxStepConcurrency < 1
+    ) {
+      throw new Error('pipeline.maxStepConcurrency must be a positive integer');
+    }
+  }
   return config as unknown as PipelineTask;
 }
 
@@ -89,6 +103,7 @@ function assertStep(
       'allowSourceUpdate',
       'maxPrompts',
       'maxBudgetUsd',
+      'concurrency',
       'interPromptPause',
       'logger',
       'dependsOn',
@@ -122,6 +137,31 @@ function assertStep(
       throw new Error(
         `pipeline.steps.${key}.maxBudgetUsd must be a positive number`,
       );
+    }
+  }
+  if ('concurrency' in step) {
+    const concurrency = step['concurrency'];
+    if (
+      typeof concurrency !== 'number' ||
+      !Number.isInteger(concurrency) ||
+      concurrency < 1
+    ) {
+      throw new Error(
+        `pipeline.steps.${key}.concurrency must be a positive integer`,
+      );
+    }
+    if (concurrency > 1) {
+      if (step['allowSourceUpdate'] === true) {
+        throw new Error(
+          `pipeline.steps.${key}.concurrency > 1 is not supported with allowSourceUpdate`,
+        );
+      }
+      const generator = step['promptGenerator'];
+      if (Array.isArray(generator) && generator[0] === 'batch') {
+        throw new Error(
+          `pipeline.steps.${key}.concurrency > 1 is not supported with the batch prompt generator`,
+        );
+      }
     }
   }
 }

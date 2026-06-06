@@ -996,6 +996,12 @@
           "default": 100,
           "description": "Safety ceiling on fixed-point passes."
         },
+        "maxStepConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Maximum number of independent steps to run concurrently within a pass. Defaults to 1 (sequential). An allowSourceUpdate step always runs as an exclusive barrier."
+        },
         "steps": {
           "type": "object",
           "minProperties": 1,
@@ -1019,6 +1025,11 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "Stricter local USD budget for this step alone. Independent of the pipeline-wide shared cap set by a top-level maxBudgetUsd."
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Within-step prompt concurrency for this step's own loop (the Step 04 lever). Independent of the pipeline-level maxStepConcurrency. Values > 1 are rejected with allowSourceUpdate or a batch generator."
         },
         "interPromptPause": { "type": "number", "minimum": 0 },
         "logger": { "type": "string", "enum": ["verbose"] },
