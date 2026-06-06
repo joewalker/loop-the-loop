@@ -402,6 +402,38 @@ describe('loadCliConfig', () => {
     expect(spec[1].dataFile).toBe(join(configDir, 'review-report.jsonl'));
   });
 
+  it('resolves {{steps.*}} handoff substitutions across an array dataFile', async () => {
+    const configDir = join(tempDir, 'handoff-array');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'fan-in',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        promptGenerator: [
+          'jsonl',
+          {
+            dataFile: ['{{steps.commit.report}}', '{{steps.giveup.report}}'],
+            promptTemplate: 'Summarize {{id}}',
+          },
+        ],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({ configPath });
+    const spec = config.promptGenerator as unknown as [
+      string,
+      { dataFile: ReadonlyArray<string> },
+    ];
+    expect(spec[0]).toBe('jsonl');
+    expect(spec[1].dataFile).toEqual([
+      join(configDir, 'commit-report.jsonl'),
+      join(configDir, 'giveup-report.jsonl'),
+    ]);
+  });
+
   it('should resolve prompt template includes relative to the config file', async () => {
     const configDir = join(tempDir, 'config');
     const cwdDir = join(tempDir, 'cwd');

@@ -226,6 +226,43 @@ describe('JsonlPromptGenerator', () => {
     ).rejects.toThrow();
   });
 
+  it('reads multiple data files in sequence', async () => {
+    const a = await writeLines('a.jsonl', [{ id: 'a', status: 'success' }]);
+    const b = await writeLines('b.jsonl', [{ id: 'b', status: 'success' }]);
+    const prompts = await collect({
+      dataFile: [a, b],
+      promptTemplate: '{{id}}',
+    });
+    expect(prompts.map(p => p.id)).toEqual(['a', 'b']);
+  });
+
+  it('treats a missing file in the array as empty input', async () => {
+    const a = await writeLines('a.jsonl', [{ id: 'a', status: 'success' }]);
+    const prompts = await collect({
+      dataFile: [a, 'absent.jsonl'],
+      promptTemplate: '{{id}}',
+    });
+    expect(prompts.map(p => p.id)).toEqual(['a']);
+  });
+
+  it('detects a duplicate id across files', async () => {
+    const a = await writeLines('a.jsonl', [{ id: 'dup' }]);
+    const b = await writeLines('b.jsonl', [{ id: 'dup' }]);
+    await expect(
+      collect({ dataFile: [a, b], promptTemplate: '{{id}}' }),
+    ).rejects.toThrow(/duplicate id "dup"/u);
+  });
+
+  it('continues index numbering across files', async () => {
+    const a = await writeLines('a.jsonl', [{ status: 'success' }]);
+    const b = await writeLines('b.jsonl', [{ status: 'success' }]);
+    const prompts = await collect({
+      dataFile: [a, b],
+      promptTemplate: '{{index}}',
+    });
+    expect(prompts.map(p => p.prompt)).toEqual(['0', '1']);
+  });
+
   it('skips ids that are no longer outstanding in the consuming loop', async () => {
     const dataFile = await writeLines('r.jsonl', [
       { id: 'a', status: 'success' },
@@ -314,6 +351,29 @@ describe('normalizeJsonlTaskConfig', () => {
         promptTemplate: '{{id}}',
       }),
     ).toEqual({ dataFile: 'r.jsonl', promptTemplate: '{{id}}' });
+  });
+
+  it('accepts an array dataFile', () => {
+    const task = normalizeJsonlTaskConfig({
+      dataFile: ['a.jsonl', 'b.jsonl'],
+      promptTemplate: '{{id}}',
+    });
+    expect(task.dataFile).toEqual(['a.jsonl', 'b.jsonl']);
+  });
+
+  it('rejects a dataFile array containing a non-string', () => {
+    expect(() =>
+      normalizeJsonlTaskConfig({
+        dataFile: ['a.jsonl', 7],
+        promptTemplate: '{{id}}',
+      }),
+    ).toThrow('jsonl.dataFile must be a string or an array of strings');
+  });
+
+  it('rejects a non-string non-array dataFile', () => {
+    expect(() =>
+      normalizeJsonlTaskConfig({ dataFile: 7, promptTemplate: '{{id}}' }),
+    ).toThrow('jsonl.dataFile must be a string or an array of strings');
   });
 
   it('rejects a non-boolean incrementAttempt', () => {

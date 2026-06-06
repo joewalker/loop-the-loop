@@ -871,8 +871,11 @@
       "additionalProperties": false,
       "properties": {
         "dataFile": {
-          "type": "string",
-          "description": "Path to a JSONL report file (one JSON object per line). Config-relative, or a {{steps.<name>.report}} handoff substitution. A missing file is treated as empty input."
+          "anyOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          ],
+          "description": "Path or paths to JSONL files. Config-relative, or {{steps.<name>.report}} handoff substitutions. An array is read in sequence for homogeneous fan-in. A missing file is treated as empty input."
         },
         "promptTemplate": {
           "type": "string",

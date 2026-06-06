@@ -100,6 +100,21 @@ describe('CLI config schema', () => {
         },
       ],
       [
+        'jsonl reader with array dataFile',
+        {
+          name: 'fan-in',
+          agent: 'claude-sdk',
+          reporter: 'jsonl-report',
+          promptGenerator: [
+            'jsonl',
+            {
+              dataFile: ['a-report.jsonl', 'b-report.jsonl'],
+              promptTemplate: 'Summarize {{id}}',
+            },
+          ],
+        },
+      ],
+      [
         'loop-state reader',
         {
           name: 'retry',

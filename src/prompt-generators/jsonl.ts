@@ -26,10 +26,11 @@ export type FilterScalar = string | number | boolean;
  */
 export interface JsonlTask {
   /**
-   * Path to the JSONL file, config-relative or a `{{steps.<name>.report}}`
-   * handoff substitution. A missing file is treated as empty input.
+   * Path or paths to JSONL files, config-relative or `{{steps.<name>.report}}`
+   * handoff substitutions. An array is read in sequence (homogeneous fan-in),
+   * sharing the same filter and template. A missing file is empty input.
    */
-  dataFile: string;
+  dataFile: string | ReadonlyArray<string>;
 
   /**
    * Prompt template. Each line's top-level fields become `{{field}}`
@@ -102,8 +103,14 @@ export class JsonlPromptGenerator implements PromptGenerator {
   }
 
   async *generate(loopState: LoopState): AsyncIterable<Prompt> {
-    const filePath = resolve(this.#basePath, this.#task.dataFile);
-    const entries = await loadLines(filePath);
+    const files = Array.isArray(this.#task.dataFile)
+      ? this.#task.dataFile
+      : [this.#task.dataFile];
+    const entries: Array<JsonlLine> = [];
+    for (const file of files) {
+      const filePath = resolve(this.#basePath, file);
+      entries.push(...(await loadLines(filePath)));
+    }
     const seenIds = new Map<string, number>();
 
     for (let index = 0; index < entries.length; index++) {
@@ -307,13 +314,27 @@ function assertJsonlTaskConfig(value: unknown): asserts value is JsonlTask {
     ],
     'jsonl',
   );
-  assertRequiredString(value, 'dataFile', 'jsonl.dataFile');
+  assertDataFile(value);
   assertRequiredString(value, 'promptTemplate', 'jsonl.promptTemplate');
   assertOptionalString(value, 'idField', 'jsonl.idField');
   assertOptionalBoolean(value, 'incrementAttempt', 'jsonl.incrementAttempt');
   assertFilter(value);
   assertPositiveInteger(value, 'maxAttempts', 'jsonl.maxAttempts');
   assertPositiveInteger(value, 'minAttempts', 'jsonl.minAttempts');
+}
+
+/**
+ * Assert `dataFile` is a string or an array of strings. An array enables
+ * homogeneous fan-in across several reports.
+ */
+function assertDataFile(value: Record<string, unknown>): void {
+  const dataFile = value['dataFile'];
+  const ok =
+    typeof dataFile === 'string' ||
+    (Array.isArray(dataFile) && dataFile.every(v => typeof v === 'string'));
+  if (!ok) {
+    throw new Error('jsonl.dataFile must be a string or an array of strings');
+  }
 }
 
 /**
