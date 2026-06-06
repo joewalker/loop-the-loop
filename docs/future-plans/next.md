@@ -1,30 +1,52 @@
-# Carry-over context for Step 05 (reader generators plus local handoff)
+# Carry-over context for Step 06 (pipelines with routing and rework)
 
-Steps 01 through 04 are complete on `main`. This records what Step 05 needs to know from Step 04's in-process concurrency work. The Step 04 design lives in `step-04-in-process-concurrency.md` and the as-built task breakdown in `step-04-in-process-concurrency-plans.md`; only the parts that touch Step 05 are repeated here.
+Steps 01 through 05 are complete on `main`. This records what Step 06 needs to know from Step 05's reader-generator and local-handoff work. The Step 05 design lives in `step-05-reader-generators-local-handoff.md` and the as-built task breakdown in `step-05-reader-generators-local-handoff-plans.md`; only the parts that touch Step 06 are repeated here.
 
-## The loop body is now a worker-pool callback, not a `for await`
+## Two reader generators now exist and are consumed like any other generator
 
-`loopImpl` in `src/loop.ts` no longer iterates the generator with a sequential `for await`. It drives `promptGenerator.generate(loopState)` through `runPool` (`src/util/run-pool.ts`), an in-process worker pool: N workers share one async iterator, and the per-prompt body is an `async (prompt) => 'continue' | 'stop'` callback. Stop conditions (`maxPrompts`, `maxBudgetUsd`, an error result, too many glitches) set a closed-over `stopResult` and return `'stop'`; the pool stops pulling, in-flight prompts drain, and `loopImpl` returns `stopResult ?? { status: 'completed' }`. At `concurrency === 1` this is byte-for-byte the old serial behaviour. Step 05 does not need to change the runner; it only adds new generators that the runner consumes the same way.
+`jsonl` (`src/prompt-generators/jsonl.ts`) reads a `jsonl-report` one JSON object per line. `loop-state` (`src/prompt-generators/loop-state.ts`) reads the strict v2 state snapshot. Both are registered in `src/prompt-generators.ts` (in `promptGeneratorCreators`, with a normalize branch in `normalizePromptGeneratorSpec`) and validate against `schema/loop-the-loop.schema.json` via the `jsonlTask` and `loopStateTask` definitions. Step 06 does not change the readers; it composes them. Fan-in is the existing `batch` generator wrapping several readers, exactly as the routing design sketch shows.
 
-## PromptGenerator contract changed for concurrency, and Step 05's readers must honor it
+Each reader gates every emitted id through the consuming loop's own `loopState.isOutstanding(id)`, so a step that reads an upstream artifact as data is itself resumable: its state file (`${name}-loop-state.json`) is a different file from the upstream report or state it reads. This is what makes "resume is rerunning the pipeline" work without new state.
 
-The `PromptGenerator` interface doc in `src/prompt-generators.ts` now states: under `concurrency > 1`, multiple yielded items may be in flight at once; a generator must yield each id exactly once per run and must not rely on `isOutstanding` reflecting items yielded earlier in the same run (those items may not have completed yet). The Step 05 `jsonl` and `loop-state` readers already plan to gate emitted ids through the consuming step's own `loopState.isOutstanding(id)` once, at yield time, which satisfies this. Do not add any "wait until previously yielded items finish" logic; the pool owns in-flight tracking, and the loop state's `claim`/`complete` own arbitration.
+## The routing and rework primitives are in place on `jsonl`
 
-## Reporter appends are serialized under concurrency, so JSONL stays well-formed
+- Filtering: `filter` is field-path equality, including dotted paths into `structuredOutput`, for example `{ "structuredOutput.verdict": "rework" }`. Matching is string-coerced equality only (no operators). A path that misses (absent field or non-object intermediate) does not match, so a line with no `structuredOutput` is simply not pulled by a verdict filter. This is the pull-based routing channel Step 06 relies on.
+- Attempt-scoped ids: `maxAttempts` emits only while the parsed `#N` attempt is below the cap; `minAttempts` emits only once it is at or above the cap; `incrementAttempt` re-emits at `#(N+1)`. Attempt 1 is the bare id. The logic lives in `src/prompt-generators/util/attempt.ts` (`parseAttempt`, `formatAttempt`, `resolveAttemptId`). A numeric suffix counts as an attempt only when it is 2 or greater, so ids that legitimately contain `#` (or `#1`) round-trip unchanged. The rework arm uses `maxAttempts` + `incrementAttempt`; the giveup arm uses `minAttempts` set to the same cap. These two readers partition rework items, which is what bounds termination.
 
-When `concurrency > 1` the runner wraps the reporter with `serializeReporter` (`src/util/serialize-reporter.ts`), which chains `append` calls so they never overlap. The `Reporter` interface doc now records that implementations may assume non-overlapping calls. This matters to Step 05's `jsonl` reader: a `jsonl-report` produced by a concurrent run is still one complete JSON object per line (no interleaved partial writes), so the line-by-line reader can trust the format. At `concurrency === 1` the reporter is used directly, unchanged.
+Important: the attempt knobs live on `jsonl` only. `loop-state` carries `status` and `reason` but never `structuredOutput`, so it cannot route on a verdict and has no attempt knobs. A pipeline that uses verdict-based rework must use `jsonl-report` as its reporter. Step 06's "require `jsonl-report` for verdict routing" and "reject a `jsonl` handoff that leaves the reporter at the default `yaml-report`" startup checks are still Step 06's to add.
 
-## State shape and cost fields are unchanged
+## Handoff substitution exists, but its name-to-filename mapping is the single biggest Step 06 gotcha
 
-Step 04 did not touch `src/loop-states/` or the `CostInfo` / `LoopRunResult` / `LoopStateSnapshot` types. The strict v2 snapshot (`{ version: 2, results, claims, totalUsd }`) that Step 05's `loop-state` reader consumes, and the cost fields the readers pass through, are exactly as Steps 01 and 03 left them. Step 05's dependencies on Step 01 (state shape) and Step 03 (cost pass-through) hold as written.
+`{{steps.<name>.report}}` and `{{steps.<name>.state}}` are resolved by `resolveStepHandoff(value, outputDir)` in `src/prompt-generators/util/handoff.ts`. As built, it maps the marker name DIRECTLY to a filename under `outputDir`:
 
-## CLI config touch-points Step 05 extends
+- `{{steps.<name>.report}}` resolves to `<outputDir>/<name>-report.jsonl`
+- `{{steps.<name>.state}}` resolves to `<outputDir>/<name>-loop-state.json`
 
-- `src/util/load-cli-config.ts`: `VALUE_FLAGS` is now a three-entry `ReadonlyMap<string, 'maxPrompts' | 'maxBudgetUsd' | 'concurrency'>` with a three-branch `if/else if/else` dispatch, each branch covered by tests. `--concurrency` parses like `--max-prompts` (integer, rejects `< 1` and non-integers). Step 05's `{{steps.<name>.report}}` / `{{steps.<name>.state}}` handoff substitution belongs in the config-normalization path (`normalizeCliConfig` / `normalizePromptGeneratorSpec`), not the flag parser, so it does not collide with this dispatch.
-- `src/types.ts`: `LoopCliConfig` has optional `concurrency?: number`; `loop()` maps it to `LoopConfig.concurrency` with a default of `1`, and `loopImpl` destructures it and validates it as the first statements (`Invalid concurrency` for `< 1` or non-integer; rejects `concurrency > 1` with `allowSourceUpdate` or with a `BatchPromptGenerator` instance).
-- `schema/loop-the-loop.schema.json`: top-level `concurrency` (`integer`, `minimum: 1`, `default: 1`) sits next to `maxBudgetUsd`. Step 05 adds `jsonlTask` and `loopStateTask` definitions modeled on `jsonTask`; leave the top-level `concurrency` intact.
-- `src/examples/concurrency/` is the Step 04 example. The schema test validates every example under `src/examples/` automatically, so any Step 05 example must validate against the schema as it then stands.
+This is correct for a standalone (non-pipeline) loop, where the loop `name` equals the report basename. But Step 06 derives each step's `name` as `${pipelineName}-${stepKey}` (step-06 doc, Per-step config), so the actual report file for step `review` in pipeline `bugfix` is `bugfix-review-report.jsonl`, NOT `review-report.jsonl`. The routing-design configuration sketch writes `{{steps.review.report}}` using the bare step key. So Step 06 MUST reconcile the marker's step key with the derived, pipeline-prefixed artifact name. Two clean options:
 
-## Testing note: observing real overlap needs real timers
+1. Before handing each step's generator spec to `normalizePromptGeneratorSpec`, rewrite the inner name of every `{{steps.<stepKey>.report|state}}` marker to the derived `${pipelineName}-${stepKey}`, so the existing `resolveStepHandoff` then produces the right path.
+2. Or extend `resolveStepHandoff` to take a `stepKey -> derivedName` resolver and have the pipeline pass one.
 
-The loop tests run under `vi.useFakeTimers()` by default. The one test that asserts agents actually overlap (`runs multiple prompts concurrently when concurrency > 1`) must use `vi.useRealTimers()` and call `loop(...)` directly. The reason: `FileLoopState.claim` performs real filesystem I/O, which does not interleave with a faked agent delay under fake timers, so invocations pipeline serially and never overlap. Stop-condition and serialization tests work fine under fake timers; only tests that need genuine wall-clock overlap need real timers. Keep this in mind for any Step 05 test that wants to observe concurrent reader/runner behaviour.
+Either way, do not assume the marker name already equals the filename inside a pipeline. There is no test for the pipeline case yet because Step 05 is non-pipeline only; add one in Step 06.
+
+The substitution is applied inside `normalizePromptGeneratorSpec`, which now reads `outputDir` from the `PromptGeneratorConfigContext` (a required field as of Step 05). The only place that constructs that context is `normalizeCliConfig` in `src/util/load-cli-config.ts`, which passes `{ configDir, outputDir }`. Step 06's per-step normalization must pass the pipeline's resolved `outputDir` (the directory the steps actually share) into each step's context, or handoff markers resolve against the wrong directory.
+
+## Missing files are empty input, which interacts with the reporter contract
+
+Both readers treat a missing `dataFile`/`stateFile` as empty input (the upstream step completed with no prompts, or has not run yet), while a present-but-malformed file is an error. The `jsonl` reader additionally fails with a clear format-mismatch message when pointed at a `.yaml`/`.yml` path.
+
+The consequence Step 06 must guard: because handoff always resolves to a `.jsonl` filename, a step left on the default `yaml-report` writes `${name}-report.yaml` while its consumer reads `${name}-report.jsonl`. The reader does not see a `.yaml` extension (the resolved path ends in `.jsonl`), so the format-mismatch guard does NOT fire; instead the consumer reads a missing file as empty and silently makes no progress. This is exactly why step-06 line 60 requires a startup reporter/handoff contract check: validate up front that any step whose report is consumed by a `jsonl` reader resolves to the `jsonl-report` reporter, rather than discovering the silent-empty handoff at run time.
+
+## Template variables the readers expose
+
+- `jsonl`: every top-level line field becomes a `{{field}}` variable (object-valued fields such as `structuredOutput` and `cost` are JSON-stringified), plus `{{id}}` (the emitted, possibly attempt-incremented id, which wins over a same-named line field) and `{{index}}`. Cost passes through as the stringified `{{cost}}` field; nothing special is needed for the Step 03 cost dependency.
+- `loop-state`: `{{id}}`, `{{status}}`, and `{{reason}}` (only for `error` outcomes). It derives entries from `results` and ignores `claims`. `select` is `success` (default), `error`, or `all`.
+
+## Unchanged surfaces and small as-built notes
+
+- `createPromptGenerator` has no `pipeline` branch yet; Step 06 adds the guard there and a `pipeline` branch in `normalizePromptGeneratorSpec`.
+- The new readers do not implement the optional `check()` doctor probe (deliberate scope choice). Doctor handles its absence.
+- `jsonl`'s `filter` schema uses `additionalProperties: { anyOf: [ {string}, {number}, {boolean} ] }` rather than a union `type` array, because the schema test runs ajv in strict mode. Follow that pattern if Step 06 adds scalar-valued maps to the schema.
+- `resolveAttemptId` is called as `resolveAttemptId(rawId, this.#task)` in `jsonl.ts` because `JsonlTask` structurally satisfies `AttemptKnobs`; building a literal of the optional fields trips `exactOptionalPropertyTypes`. Keep that in mind when constructing option objects for these helpers.
+- Coverage is enforced at 100%. The normalize-branch coverage for each generator lives in `src/util/__test__/load-cli-config.test.ts` (there is now a `jsonl` and a `loop-state` case there); add a pipeline-step normalize case in the same style.
+- Example reader configs live under `src/examples/reader-generators/` and are validated automatically by `src/__test__/schema.test.ts`.
