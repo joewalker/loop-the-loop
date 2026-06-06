@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import type { CheckResult } from '../doctor.js';
 import type { Prompt } from '../prompt-generators.js';
 import type { Reporter, ReporterConfig } from '../reporters.js';
-import type { InvokeResult } from '../types.js';
+import type { CostInfo, InvokeResult } from '../types.js';
 
 /**
  * Manages an append-only YAML document stream report file.
@@ -50,6 +50,9 @@ export class YamlReporter implements Reporter {
     // document (quotes, backslashes, newlines, ...).
     lines.push(`id: ${JSON.stringify(prompt.id)}`);
     lines.push(`status: ${result.status}`);
+    if (result.cost !== undefined) {
+      lines.push(...formatCostBlock(result.cost));
+    }
     // lines.push('prompt: |');
     // for (const line of formatBlockScalar(prompt.prompt).split('\n')) {
     //   lines.push(line === '' ? '' : `  ${line}`);
@@ -133,4 +136,37 @@ function formatBlockScalar(value: string): string {
     .split('\n')
     .map(line => line.trimEnd())
     .join('\n');
+}
+
+/**
+ * Render a `CostInfo` as YAML lines. `costSource` and `model` go through
+ * `JSON.stringify` (quoted); numeric token counts and `usd` are emitted as
+ * unquoted scalars. Undefined fields are omitted.
+ */
+function formatCostBlock(cost: CostInfo): Array<string> {
+  const lines = ['cost:'];
+  lines.push(`  costSource: ${JSON.stringify(cost.costSource)}`);
+  lines.push(`  usd: ${cost.usd}`);
+  if (cost.model !== undefined) {
+    lines.push(`  model: ${JSON.stringify(cost.model)}`);
+  }
+  pushNumber(lines, 'inputTokens', cost.inputTokens);
+  pushNumber(lines, 'outputTokens', cost.outputTokens);
+  pushNumber(lines, 'cacheReadTokens', cost.cacheReadTokens);
+  pushNumber(lines, 'cacheCreationTokens', cost.cacheCreationTokens);
+  pushNumber(lines, 'reasoningTokens', cost.reasoningTokens);
+  return lines;
+}
+
+/**
+ * Append `  key: value` when value is defined, as an unquoted numeric scalar.
+ */
+function pushNumber(
+  lines: Array<string>,
+  key: string,
+  value: number | undefined,
+): void {
+  if (value !== undefined) {
+    lines.push(`  ${key}: ${value}`);
+  }
 }

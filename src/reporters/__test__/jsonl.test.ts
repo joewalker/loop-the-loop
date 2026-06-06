@@ -250,4 +250,29 @@ describe('JsonlReporter', () => {
     expect(results[0].status).toBe('fail');
     expect(results[0].cause).toBeDefined();
   });
+
+  it('serializes cost when present and omits it when absent', async () => {
+    const report = await JsonlReporter.create({
+      outputDir: tempDir,
+      jobName: 'cost',
+    });
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      {
+        status: 'success',
+        output: 'x',
+        cost: { usd: 0.5, costSource: 'provider' },
+      },
+    );
+    await report.append(
+      { id: 'b', prompt: 'p' },
+      { status: 'success', output: 'y' },
+    );
+    const lines = (await readFile(join(tempDir, 'cost-report.jsonl'), 'utf-8'))
+      .trim()
+      .split('\n')
+      .map(l => JSON.parse(l) as { cost?: unknown });
+    expect(lines[0].cost).toEqual({ usd: 0.5, costSource: 'provider' });
+    expect(lines[1].cost).toBeUndefined();
+  });
 });

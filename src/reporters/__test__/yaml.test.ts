@@ -493,4 +493,73 @@ describe('Report', () => {
     expect(results[0].status).toBe('fail');
     expect(results[0].cause).toBeDefined();
   });
+
+  it('emits a cost block for an estimated cost', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'cost-estimated',
+    });
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      {
+        status: 'success',
+        output: 'done',
+        cost: {
+          usd: 0.01234,
+          costSource: 'estimated',
+          model: 'gpt-5-mini',
+          inputTokens: 1200,
+          outputTokens: 380,
+        },
+      },
+    );
+    const text = await readFile(
+      join(tempDir, 'cost-estimated-report.yaml'),
+      'utf-8',
+    );
+    expect(text).toContain('cost:\n');
+    expect(text).toContain('  costSource: "estimated"\n');
+    expect(text).toContain('  usd: 0.01234\n');
+    expect(text).toContain('  model: "gpt-5-mini"\n');
+    expect(text).toContain('  inputTokens: 1200\n');
+    expect(text).toContain('  outputTokens: 380\n');
+  });
+
+  it('omits the cost block when cost is absent', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'cost-absent',
+    });
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      { status: 'success', output: 'x' },
+    );
+    const text = await readFile(
+      join(tempDir, 'cost-absent-report.yaml'),
+      'utf-8',
+    );
+    expect(text).not.toContain('cost:');
+  });
+
+  it('emits costSource unavailable with tokens and zero usd', async () => {
+    const report = await YamlReporter.create({
+      outputDir: tempDir,
+      jobName: 'cost-unavailable',
+    });
+    await report.append(
+      { id: 'a', prompt: 'p' },
+      {
+        status: 'error',
+        reason: 'boom',
+        cost: { usd: 0, costSource: 'unavailable', inputTokens: 5 },
+      },
+    );
+    const text = await readFile(
+      join(tempDir, 'cost-unavailable-report.yaml'),
+      'utf-8',
+    );
+    expect(text).toContain('  costSource: "unavailable"\n');
+    expect(text).toContain('  usd: 0\n');
+    expect(text).toContain('  inputTokens: 5\n');
+  });
 });
