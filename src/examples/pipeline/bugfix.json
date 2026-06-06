@@ -9,6 +9,7 @@
     {
       "output": "summary",
       "maxPasses": 25,
+      "maxStepConcurrency": 2,
       "steps": {
         "review": {
           "promptGenerator": [
@@ -43,6 +44,7 @@
         },
         "verify": {
           "dependsOn": ["fix-new", "fix-rework"],
+          "concurrency": 3,
           "promptGenerator": [
             "jsonl",
             {
