@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "retry-errors",
+  "agent": "claude-sdk",
+  "promptGenerator": [
+    "loop-state",
+    {
+      "stateFile": "{{steps.fix.state}}",
+      "select": "error",
+      "promptTemplate": "A previous run recorded an error for {{id}}: {{reason}}. Try again."
+    }
+  ]
+}

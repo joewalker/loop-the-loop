@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "fix",
+  "agent": "claude-sdk",
+  "reporter": "jsonl-report",
+  "promptGenerator": [
+    "jsonl",
+    {
+      "dataFile": "{{steps.verify.report}}",
+      "filter": { "structuredOutput.verdict": "rework" },
+      "maxAttempts": 3,
+      "incrementAttempt": true,
+      "promptTemplate": "The verifier rejected the fix for {{id}}. Feedback: {{output}}. Produce an improved fix."
+    }
+  ]
+}

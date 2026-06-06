@@ -613,6 +613,14 @@ Stop conditions are completion-order: when `maxPrompts`, `maxBudgetUsd`, an erro
 
 Concurrency greater than 1 is rejected with `allowSourceUpdate` (git commits cannot safely interleave) and with the batch prompt generator (its summary prompts read the report file and would race with in-flight batch items). The per-worker pause is not a global rate limit: the effective request rate rises with concurrency, so configure a real rate limit on the agent if you need one.
 
+## Reader generators and local handoff
+
+Two prompt generators let one loop consume another loop's local output. The `jsonl` generator reads a `jsonl-report` one JSON object per line; each line's fields become `{{field}}` placeholders (object-valued fields are JSON-stringified) alongside `{{id}}` and `{{index}}`. The `loop-state` generator reads the strict v2 state file and yields `{{id}}`, `{{status}}`, and `{{reason}}` per recorded outcome, with a `select` of `success` (the default), `error`, or `all`. A missing upstream file is treated as empty input, so a consumer can run before its producer; a present-but-malformed file is an error, and a `jsonl` reader pointed at a `.yaml` report fails with a clear format-mismatch message.
+
+The `jsonl` reader can filter lines by field-path equality, including dotted paths into `structuredOutput`, for example `{ "structuredOutput.verdict": "rework" }`. It also understands attempt-scoped ids: `maxAttempts` emits a line only while its `#N` attempt is below the cap, `minAttempts` emits only once it has reached the cap, and `incrementAttempt` re-emits the line at the next attempt (`bug-1` becomes `bug-1#2`). Together these are the primitive that bounded rework loops are built from.
+
+Config fields like `dataFile` and `stateFile` accept `{{steps.<name>.report}}` and `{{steps.<name>.state}}`, which resolve to the named step's `<name>-report.jsonl` and `<name>-loop-state.json` under `outputDir`. This keeps handoff wiring correct when `outputDir`, a pipeline, or a step name changes, instead of relying on hard-coded filenames. Each reader gates every emitted id through the consuming loop's own state, so the consuming loop is itself resumable; its state file is a different file from the upstream artifact it reads as data.
+
 ## Building Custom Extensions
 
 The framework is designed around three extension points: agents, prompt generators, and reporters. Each follows the same pattern: implement an interface, add a static factory method, and register it.
