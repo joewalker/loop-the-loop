@@ -9,6 +9,7 @@ import {
 import type { Agent, InvokeOptions } from '../agents.js';
 import type { CheckResult } from '../doctor.js';
 import type {
+  CostInfo,
   InvokeResult,
   OutputSchema,
   SuccessfulInvocationResult,
@@ -206,7 +207,11 @@ export class ClaudeSDKAgent implements Agent {
               typeof resultMsg['result'] === 'string'
                 ? resultMsg['result']
                 : textParts.join('\n');
-            return ClaudeSDKAgent.#successResult(finalText, structuredOutput);
+            return ClaudeSDKAgent.#successResult(
+              finalText,
+              structuredOutput,
+              extractClaudeCost(resultMsg),
+            );
           }
 
           const resultMsg = message as Record<string, unknown>;
@@ -217,7 +222,11 @@ export class ClaudeSDKAgent implements Agent {
                 : (this.#config.maxTurns ?? DEFAULT_MAX_TURNS);
             const reason = `Prompt failed: agent exhausted all ${numTurns} turns without completing. Increase maxTurns in the claude-sdk agent config to allow more work per prompt.`;
             logger.error(reason);
-            return { status: 'error', reason };
+            return {
+              status: 'error',
+              reason,
+              cost: extractClaudeCost(resultMsg),
+            };
           }
 
           const reason = this.#buildErrorReason(
@@ -230,7 +239,7 @@ export class ClaudeSDKAgent implements Agent {
             resultMsg,
             reason,
           );
-          return { status, reason };
+          return { status, reason, cost: extractClaudeCost(resultMsg) };
         }
       }
 
@@ -324,11 +333,13 @@ export class ClaudeSDKAgent implements Agent {
   static #successResult(
     output: string,
     structuredOutput: unknown,
+    cost?: CostInfo,
   ): SuccessfulInvocationResult {
     return {
       status: 'success',
       output,
       ...(structuredOutput !== undefined ? { structuredOutput } : {}),
+      ...(cost !== undefined ? { cost } : {}),
     };
   }
 
@@ -361,6 +372,53 @@ function hasEnv(name: string): boolean {
  */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Build a `CostInfo` from a claude-sdk result message. The SDK reports a
+ * real USD figure (`total_cost_usd`) so `costSource` is always `'provider'`.
+ * The model is taken from `modelUsage` only when it has exactly one key.
+ */
+export function extractClaudeCost(
+  resultMsg: Record<string, unknown>,
+): CostInfo {
+  const usage = asRecord(resultMsg['usage']);
+  const modelUsage = asRecord(resultMsg['modelUsage']);
+  const models = Object.keys(modelUsage);
+  const model = models.length === 1 ? models[0] : undefined;
+
+  return {
+    usd:
+      typeof resultMsg['total_cost_usd'] === 'number'
+        ? resultMsg['total_cost_usd']
+        : 0,
+    costSource: 'provider',
+    ...numericField('inputTokens', usage['input_tokens']),
+    ...numericField('outputTokens', usage['output_tokens']),
+    ...numericField('cacheReadTokens', usage['cache_read_input_tokens']),
+    ...numericField(
+      'cacheCreationTokens',
+      usage['cache_creation_input_tokens'],
+    ),
+    ...(model !== undefined ? { model } : {}),
+  };
+}
+
+/**
+ * Narrow an unknown value to a record, defaulting to an empty object.
+ */
+function asRecord(value: unknown): Record<string, unknown> {
+  return isPlainObject(value) ? value : {};
+}
+
+/**
+ * Return `{ [key]: value }` when `value` is a finite number, otherwise an
+ * empty object so the field is omitted from the spread.
+ */
+function numericField(key: string, value: unknown): Record<string, number> {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? { [key]: value }
+    : {};
 }
 
 /**

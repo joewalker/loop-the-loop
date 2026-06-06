@@ -5,6 +5,7 @@ import {
   classifyResultStatus,
   configureQueryOptions,
   describeResultError,
+  extractClaudeCost,
   formatSystemMessage,
   formatToolUseSummary,
   isTokenLimitError,
@@ -756,5 +757,53 @@ describe('ClaudeSDKAgent.check()', () => {
     const probe = results.find(r => r.name === 'query probe');
     expect(probe?.status).toBe('fail');
     expect(probe?.cause).toBe(boom);
+  });
+});
+
+describe('extractClaudeCost', () => {
+  it('reads the provider cost and usage from a result message', () => {
+    const cost = extractClaudeCost({
+      total_cost_usd: 0.0421,
+      usage: {
+        input_tokens: 1200,
+        output_tokens: 380,
+        cache_read_input_tokens: 50,
+        cache_creation_input_tokens: 10,
+      },
+      modelUsage: { 'claude-opus-4-7': { inputTokens: 1200 } },
+    });
+    expect(cost).toEqual({
+      usd: 0.0421,
+      costSource: 'provider',
+      inputTokens: 1200,
+      outputTokens: 380,
+      cacheReadTokens: 50,
+      cacheCreationTokens: 10,
+      model: 'claude-opus-4-7',
+    });
+  });
+
+  it('omits the model when modelUsage has zero or multiple keys', () => {
+    expect(
+      extractClaudeCost({ total_cost_usd: 1, modelUsage: {} }).model,
+    ).toBeUndefined();
+    expect(
+      extractClaudeCost({
+        total_cost_usd: 1,
+        modelUsage: { a: {}, b: {} },
+      }).model,
+    ).toBeUndefined();
+  });
+
+  it('defaults usd to 0 and omits absent token fields', () => {
+    expect(extractClaudeCost({})).toEqual({ usd: 0, costSource: 'provider' });
+  });
+
+  it('ignores non-numeric usage and cost fields', () => {
+    const cost = extractClaudeCost({
+      total_cost_usd: 'free',
+      usage: { input_tokens: 'lots' },
+    });
+    expect(cost).toEqual({ usd: 0, costSource: 'provider' });
   });
 });
