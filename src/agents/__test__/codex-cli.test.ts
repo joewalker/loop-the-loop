@@ -2,7 +2,10 @@
 
 import { EventEmitter } from 'node:events';
 
-import { CodexCLIAgent } from 'loop-the-loop/agents/codex-cli';
+import {
+  CodexCLIAgent,
+  TokenAccumulator,
+} from 'loop-the-loop/agents/codex-cli';
 import type { CheckResult } from 'loop-the-loop/doctor';
 import type { Logger } from 'loop-the-loop/loggers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -608,3 +611,62 @@ function getSpawnSandboxMode(): string | undefined {
   expect(sandboxFlagIndex).toBeGreaterThanOrEqual(0);
   return args[sandboxFlagIndex + 1];
 }
+
+describe('TokenAccumulator', () => {
+  it('reads cumulative totals from the top-level token_count shape', () => {
+    const acc = new TokenAccumulator();
+    acc.observe({
+      type: 'token_count',
+      info: {
+        total_token_usage: {
+          input_tokens: 100,
+          output_tokens: 30,
+          cached_input_tokens: 10,
+          reasoning_output_tokens: 5,
+        },
+      },
+    });
+    expect(acc.snapshot()).toEqual({
+      inputTokens: 100,
+      outputTokens: 30,
+      cacheReadTokens: 10,
+      reasoningTokens: 5,
+    });
+  });
+
+  it('reads the msg-wrapped token_count shape', () => {
+    const acc = new TokenAccumulator();
+    acc.observe({
+      msg: {
+        type: 'token_count',
+        info: { total_token_usage: { input_tokens: 7, output_tokens: 2 } },
+      },
+    });
+    expect(acc.snapshot()).toEqual({
+      inputTokens: 7,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      reasoningTokens: 0,
+    });
+  });
+
+  it('keeps the latest cumulative snapshot, not a sum of deltas', () => {
+    const acc = new TokenAccumulator();
+    acc.observe({
+      type: 'token_count',
+      info: { total_token_usage: { input_tokens: 100 } },
+    });
+    acc.observe({
+      type: 'token_count',
+      info: { total_token_usage: { input_tokens: 250 } },
+    });
+    expect(acc.snapshot()?.inputTokens).toBe(250);
+  });
+
+  it('ignores non token_count events and returns undefined when none seen', () => {
+    const acc = new TokenAccumulator();
+    acc.observe({ type: 'agent_message', message: 'hi' });
+    acc.observe({ msg: { type: 'task_started' } });
+    expect(acc.snapshot()).toBeUndefined();
+  });
+});

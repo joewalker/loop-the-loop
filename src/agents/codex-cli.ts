@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import type { Agent, InvokeOptions } from '../agents.js';
 import type { CheckResult } from '../doctor.js';
 import type { Logger } from '../loggers.js';
-import type { InvokeResult } from '../types.js';
+import type { CostInfo, InvokeResult } from '../types.js';
+import {
+  estimateCost,
+  type ModelPrice,
+  type TokenUsage,
+} from '../util/pricing.js';
 
 // istanbul ignore file
 
@@ -32,6 +37,18 @@ export interface CodexCLIAgentConfig {
    * period). When omitted no timeout is applied.
    */
   readonly timeoutMs?: number;
+
+  /**
+   * Codex model to run. Forwarded to `codex exec --model` and used for cost
+   * estimation. Falls back to the `CODEX_MODEL` env var when omitted.
+   */
+  readonly model?: string;
+
+  /**
+   * Per-model prices keyed by model id. When the resolved model is priced
+   * the agent estimates USD cost; otherwise it records tokens only.
+   */
+  readonly prices?: Readonly<Record<string, ModelPrice>>;
 }
 
 /**
@@ -56,7 +73,8 @@ export class CodexCLIAgent implements Agent {
    */
   async invoke(prompt: string, options?: InvokeOptions): Promise<InvokeResult> {
     const outputPath = createOutputPath();
-    const args = buildCommandArgs(outputPath, prompt, options);
+    const resolvedModel = this.#config.model ?? CODEX_MODEL;
+    const args = buildCommandArgs(outputPath, prompt, resolvedModel, options);
 
     try {
       const timeoutMs = this.#config.timeoutMs;
@@ -68,6 +86,11 @@ export class CodexCLIAgent implements Agent {
         return {
           status: 'glitch',
           reason: `Codex timed out after ${String(timeoutMs)}ms`,
+          ...withCodexCost(
+            codexResult.tokenUsage,
+            this.#config,
+            options?.logger,
+          ),
         };
       }
 
@@ -77,10 +100,23 @@ export class CodexCLIAgent implements Agent {
           return {
             status: 'error',
             reason: 'No output received from Codex',
+            ...withCodexCost(
+              codexResult.tokenUsage,
+              this.#config,
+              options?.logger,
+            ),
           };
         }
 
-        return { status: 'success', output };
+        return {
+          status: 'success',
+          output,
+          ...withCodexCost(
+            codexResult.tokenUsage,
+            this.#config,
+            options?.logger,
+          ),
+        };
       }
 
       const output = await safeReadOutput(outputPath);
@@ -94,7 +130,11 @@ export class CodexCLIAgent implements Agent {
       // would be misclassified as transient glitches and retried up to
       // MAX_CONSECUTIVE_GLITCHES times. See issue #14.
       const status = isTokenLimitError(baseError) ? 'glitch' : 'error';
-      return { status, reason };
+      return {
+        status,
+        reason,
+        ...withCodexCost(codexResult.tokenUsage, this.#config, options?.logger),
+      };
     } finally {
       try {
         await rm(outputPath, { force: true });
@@ -223,6 +263,7 @@ interface CodexProcessResult {
   readonly maxCapturedOutputBytes: number;
   readonly error?: Error | undefined;
   readonly timedOut?: boolean;
+  readonly tokenUsage?: TokenUsage;
 }
 
 interface RunCodexOptions {
@@ -256,6 +297,7 @@ function isTokenLimitError(text: string): boolean {
 function buildCommandArgs(
   outputPath: string,
   prompt: string,
+  model: string | undefined,
   options?: InvokeOptions,
 ): Array<string> {
   const sandboxMode =
@@ -272,8 +314,8 @@ function buildCommandArgs(
     sandboxMode,
   ];
 
-  if (CODEX_MODEL) {
-    args.push('--model', CODEX_MODEL);
+  if (model !== undefined && model.length > 0) {
+    args.push('--model', model);
   }
 
   args.push(prompt);
@@ -296,6 +338,24 @@ function runCodex(
   return new Promise(resolve => {
     const child = spawn('codex', [...args], {
       stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const tokens = new TokenAccumulator();
+    // Always parse stdout for token_count events, even when the logger is
+    // disabled, so cost is tracked in quiet mode too.
+    const tokenBuffer = new LineBuffer(line => {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) {
+        return;
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(trimmed) as unknown;
+      } catch {
+        return;
+      }
+      if (isJsonObject(parsed)) {
+        tokens.observe(parsed);
+      }
     });
     const stdoutLogger = logger?.enabled
       ? new LineBuffer(line => {
@@ -350,11 +410,14 @@ function runCodex(
       }
       settled = true;
       cleanupTimers();
+      tokenBuffer.flush();
       stdoutLogger?.flush();
       stderrLogger?.flush();
+      const usage = tokens.snapshot();
       const annotated: CodexProcessResult = {
         ...result,
         ...(timedOut ? { timedOut: true } : {}),
+        ...(usage !== undefined ? { tokenUsage: usage } : {}),
       };
       resolve(annotated);
     };
@@ -362,6 +425,7 @@ function runCodex(
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => {
       output.appendStdout(chunk);
+      tokenBuffer.add(chunk);
       stdoutLogger?.add(chunk);
     });
 
@@ -494,6 +558,116 @@ class LineBuffer {
       this.#buffer = '';
     }
   }
+}
+
+/**
+ * Accumulates token usage from Codex `token_count` JSONL events. Codex
+ * reports cumulative totals (not per-turn deltas) so the accumulator keeps
+ * the latest snapshot seen. Both the top-level (`event.type`) and the
+ * msg-wrapped (`event.msg.type`) shapes Codex has shipped are recognised.
+ */
+export class TokenAccumulator {
+  #latest: TokenUsage | undefined;
+
+  /**
+   * Observe a parsed JSONL event, updating the latest snapshot when it is a
+   * recognised `token_count` event.
+   */
+  observe(event: JsonObject): void {
+    const usage = tokenCountUsage(event);
+    if (usage !== undefined) {
+      this.#latest = usage;
+    }
+  }
+
+  /**
+   * Return the latest cumulative token usage seen, or undefined when no
+   * `token_count` event has been observed.
+   */
+  snapshot(): TokenUsage | undefined {
+    return this.#latest;
+  }
+}
+
+/**
+ * Return normalised token usage if `event` is a `token_count` event in
+ * either shape, otherwise undefined. Totals are read from
+ * `info.total_token_usage`, falling back to `info`, then the carrier itself.
+ */
+function tokenCountUsage(event: JsonObject): TokenUsage | undefined {
+  const carrier =
+    event['type'] === 'token_count'
+      ? event
+      : getObject(event['msg'])?.['type'] === 'token_count'
+        ? getObject(event['msg'])
+        : undefined;
+  if (carrier === undefined) {
+    return undefined;
+  }
+
+  const info = getObject(carrier['info']);
+  const totals = getObject(info?.['total_token_usage']) ?? info ?? carrier;
+
+  return {
+    inputTokens: numberAt(totals, 'input_tokens'),
+    outputTokens: numberAt(totals, 'output_tokens'),
+    cacheReadTokens: numberAt(totals, 'cached_input_tokens'),
+    reasoningTokens: numberAt(totals, 'reasoning_output_tokens'),
+  };
+}
+
+/**
+ * Read a finite numeric property from a record, defaulting to 0.
+ */
+function numberAt(obj: JsonObject, key: string): number {
+  const value = obj[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Build a `CostInfo` from accumulated Codex usage: estimated when the
+ * resolved model is priced, otherwise `'unavailable'` with tokens only.
+ */
+export function buildCodexCost(
+  usage: TokenUsage | undefined,
+  config: CodexCLIAgentConfig,
+  logger: Logger | undefined,
+): CostInfo | undefined {
+  if (usage === undefined) {
+    return undefined;
+  }
+  const model = config.model ?? CODEX_MODEL ?? 'unknown';
+  const tokenFields = {
+    inputTokens: usage.inputTokens ?? 0,
+    outputTokens: usage.outputTokens ?? 0,
+    cacheReadTokens: usage.cacheReadTokens ?? 0,
+    reasoningTokens: usage.reasoningTokens ?? 0,
+    model,
+  };
+  const estimate =
+    config.prices !== undefined
+      ? estimateCost(model, usage, config.prices)
+      : undefined;
+  if (estimate === undefined) {
+    logger?.system(
+      `No pricing configured for codex-cli model '${model}'; recording tokens only`,
+    );
+    return { usd: 0, costSource: 'unavailable', ...tokenFields };
+  }
+  return { usd: estimate.usd, costSource: 'estimated', ...tokenFields };
+}
+
+/**
+ * Return `{ cost }` when usage produces a `CostInfo`, otherwise an empty
+ * object so the field is omitted from the spread.
+ */
+function withCodexCost(
+  usage: TokenUsage | undefined,
+  config: CodexCLIAgentConfig,
+  logger: Logger | undefined,
+): { cost?: CostInfo } {
+  const cost = buildCodexCost(usage, config, logger);
+  return cost !== undefined ? { cost } : {};
 }
 
 /**
