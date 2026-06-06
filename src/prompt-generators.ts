@@ -30,6 +30,7 @@ import {
   TestPromptGenerator,
 } from './prompt-generators/test.js';
 import type { PromptGeneratorConfigContext } from './prompt-generators/util/config.js';
+import { resolveStepHandoff } from './prompt-generators/util/handoff.js';
 
 /**
  * A prompt is basically just a string that we pass to an agent to kick off
@@ -164,7 +165,7 @@ export function normalizePromptGeneratorSpec(
   }
 
   const [type, config] = promptGeneratorSpec;
-  const { configDir } = context;
+  const { configDir, outputDir } = context;
 
   if (type === BatchPromptGenerator.promptGeneratorName) {
     return [
@@ -193,11 +194,21 @@ export function normalizePromptGeneratorSpec(
   }
 
   if (type === JsonlPromptGenerator.promptGeneratorName) {
-    return [type, normalizeJsonlTaskConfig(config), configDir];
+    const task = normalizeJsonlTaskConfig(config);
+    return [
+      type,
+      { ...task, dataFile: resolveStepHandoff(task.dataFile, outputDir) },
+      configDir,
+    ];
   }
 
   if (type === LoopStatePromptGenerator.promptGeneratorName) {
-    return [type, normalizeLoopStateTaskConfig(config), configDir];
+    const task = normalizeLoopStateTaskConfig(config);
+    return [
+      type,
+      { ...task, stateFile: resolveStepHandoff(task.stateFile, outputDir) },
+      configDir,
+    ];
   }
 
   if (type === PerFilePromptGenerator.promptGeneratorName) {

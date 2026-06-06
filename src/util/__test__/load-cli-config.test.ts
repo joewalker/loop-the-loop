@@ -374,6 +374,34 @@ describe('loadCliConfig', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
+  it('resolves {{steps.*}} handoff substitutions to outputDir artifacts', async () => {
+    const configDir = join(tempDir, 'handoff');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'consumer',
+        agent: 'claude-sdk',
+        promptGenerator: [
+          'jsonl',
+          {
+            dataFile: '{{steps.review.report}}',
+            promptTemplate: 'Fix {{id}}',
+          },
+        ],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({ configPath });
+    const spec = config.promptGenerator as unknown as [
+      string,
+      { dataFile: string },
+    ];
+    expect(spec[0]).toBe('jsonl');
+    expect(spec[1].dataFile).toBe(join(configDir, 'review-report.jsonl'));
+  });
+
   it('should resolve prompt template includes relative to the config file', async () => {
     const configDir = join(tempDir, 'config');
     const cwdDir = join(tempDir, 'cwd');

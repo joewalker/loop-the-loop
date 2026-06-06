@@ -7,6 +7,12 @@ export interface PromptGeneratorConfigContext {
    * Directory containing the config file.
    */
   readonly configDir: string;
+
+  /**
+   * Directory the loop writes its report and state into. Used to resolve
+   * `{{steps.<name>.report|state}}` handoff substitutions in reader configs.
+   */
+  readonly outputDir: string;
 }
 
 /**

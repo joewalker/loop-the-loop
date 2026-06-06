@@ -279,6 +279,7 @@ export async function normalizeCliConfig(
     agent: await normalizeAgentSpec(config.agent, configDir),
     promptGenerator: normalizePromptGeneratorSpec(config.promptGenerator, {
       configDir,
+      outputDir,
     }),
   };
 }
