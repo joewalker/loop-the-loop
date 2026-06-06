@@ -13,7 +13,8 @@ Record cost and token metadata for every prompt result when available, persist r
 - Persist per-result cost in full reporter output. The loop-state side (per-result `cost` on outcomes plus `totalUsd` accumulation with clamping) already shipped in Step 01; this step only feeds it real agent costs.
 - Add YAML reporter cost serialization.
 - Add `maxBudgetUsd` to runtime config, CLI parsing, and schema.
-- Use `LoopRunResult` for budget stops instead of return-string text.
+- Produce the reserved `LoopRunResult` reason `maxBudgetUsd` on budget stops. The structured result type already shipped in Step 01; this step adds the branch that emits the `maxBudgetUsd` reason.
+- Add or update an `src/examples/` config that sets `prices` and `maxBudgetUsd`, so the new config shapes are exercised by the schema test (`src/__test__/schema.test.ts`), per the roadmap's definition of done.
 
 ## Cost model
 
@@ -111,6 +112,7 @@ Numeric scalars are unquoted; `model` and `costSource` go through `JSON.stringif
 - A `budgetAction: warn | stop` selector. Omitting `maxBudgetUsd` is the warn-only (track-only) mode.
 - Built-in price tables. Users supply per-model pricing explicitly or accept `costSource: 'unavailable'`.
 - Per-batch / per-summary cost roll-ups in the batch generator, and real-time cost streaming (SDKs report final usage only).
+- A `--doctor` probe for configured pricing or budget sanity. Step 02 added the optional `check()` capability and the doctor orchestrator, so a "pricing configured for the resolved model" probe would slot in naturally, but it is deferred; this step only populates `CostInfo` and enforces the budget.
 
 ## Tests
 
@@ -122,4 +124,6 @@ Numeric scalars are unquoted; `model` and `costSource` go through `JSON.stringif
 
 ## Files
 
-- `src/types.ts` (`maxBudgetUsd` on `LoopCliConfig` / `LoopConfig`), `src/util/pricing.ts` (new), the three agents, `src/loop.ts` (budget check and verbose cost log), `src/reporters/yaml.ts` (cost block), `src/reporters/jsonl.ts` (coverage), the reporter interface doc note, `src/util/load-cli-config.ts` (`--max-budget-usd`), `src/cli.ts` (usage), `schema/loop-the-loop.schema.json`, and a short README section on provider-reported vs configured-estimate cost.
+- `src/types.ts` (`maxBudgetUsd` on `LoopCliConfig` / `LoopConfig`), `src/util/pricing.ts` (new), the three agents, `src/loop.ts` (budget check and verbose cost log), `src/reporters/yaml.ts` (cost block), `src/reporters/jsonl.ts` (coverage), the reporter interface doc note, `src/util/load-cli-config.ts` (`--max-budget-usd`), `src/cli.ts` (usage), `schema/loop-the-loop.schema.json`, an `src/examples/` config exercising `prices` and `maxBudgetUsd`, and a short README section on provider-reported vs configured-estimate cost.
+
+When adding `--max-budget-usd`, note that `load-cli-config.ts` now also carries Step 02's `--doctor` flag and the `effectiveDryRun = dryRun && !doctor` logic; add `--max-budget-usd` as a `VALUE_FLAGS` entry alongside `maxPrompts` without disturbing those.
