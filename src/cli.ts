@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-/* eslint-disable no-console */
 import process from 'node:process';
+/* eslint-disable no-console */
+import { pathToFileURL } from 'node:url';
 
 import pkg from '../package.json' with { type: 'json' };
 import { doctor } from './doctor.js';
 import { createLogger } from './loggers.js';
 import { loop } from './loop.js';
+import { isPipelineSpec } from './pipeline-spec.js';
+import { runPipeline } from './pipeline.js';
 import type { LoopRunResult } from './types.js';
 import { loadCliConfig, parseArgs, USAGE } from './util/load-cli-config.js';
 
@@ -20,7 +23,7 @@ import { loadCliConfig, parseArgs, USAGE } from './util/load-cli-config.js';
  * The config file should be a JSON object matching LoopCliConfig
  * with string values for agent/reporter and a tuple for promptGenerator.
  */
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const parsedArgs = parseArgs(process.argv.slice(2));
   if (parsedArgs.help === true) {
     console.log(USAGE);
@@ -31,12 +34,18 @@ async function main(): Promise<void> {
     return;
   }
   const config = await loadCliConfig(parsedArgs);
+  const pipeline = isPipelineSpec(config.promptGenerator);
   if (parsedArgs.doctor === true) {
+    if (pipeline) {
+      console.error('--doctor does not yet support pipelines');
+      process.exitCode = 1;
+      return;
+    }
     const ok = await doctor(config, createLogger(config.logger));
     process.exitCode = ok ? 0 : 1;
     return;
   }
-  const result = await loop(config);
+  const result = pipeline ? await runPipeline(config) : await loop(config);
   console.log(renderRunResult(result));
 }
 
@@ -50,12 +59,23 @@ function renderRunResult(result: LoopRunResult): string {
     return 'Done';
   }
   if (result.status === 'stopped') {
+    /* istanbul ignore next -- loop()/runPipeline always set `message` on a
+       stopped result, so the reason fallback is defensive. */
     return `Done (${result.message ?? result.reason})`;
   }
+  /* istanbul ignore next -- a failed result always carries a `message`, so the
+     'Failed' fallback is defensive. */
   return result.message ?? 'Failed';
 }
 
-main().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exitCode = 1;
-});
+/* istanbul ignore next -- the entry-point guard only fires when cli.js is run
+   directly as a script, never when imported by a test. */
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main().catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  });
+}
