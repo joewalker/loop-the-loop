@@ -4,8 +4,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { Agent } from 'loop-the-loop/agents';
 import { runPipeline } from 'loop-the-loop/pipeline';
-import type { LoopCliConfig } from 'loop-the-loop/types';
+import type { InvokeResult, LoopCliConfig } from 'loop-the-loop/types';
 import { normalizeCliConfig } from 'loop-the-loop/util/load-cli-config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -74,6 +75,25 @@ describe('runPipeline', () => {
       repeat: 'cycle',
     },
   ];
+
+  /**
+   * An agent that records the peak number of overlapping invocations, using a
+   * real-but-faked timer delay so several invocations stay in flight. Used to
+   * prove a per-step `concurrency` override reaches the step's loop pool.
+   */
+  class OverlapAgent implements Agent {
+    active = 0;
+    maxActive = 0;
+    async invoke(): Promise<InvokeResult> {
+      this.active += 1;
+      this.maxActive = Math.max(this.maxActive, this.active);
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, 10);
+      });
+      this.active -= 1;
+      return { status: 'success', output: 'ok' };
+    }
+  }
 
   it('runs a linear pipeline; downstream reads upstream report', async () => {
     await writeFile(
@@ -698,5 +718,191 @@ describe('runPipeline', () => {
     expect(result).toEqual({ status: 'completed' });
     expect(await readReportIds('free-review')).toEqual(['x']);
     expect(await readReportIds('free-fix')).toEqual(['x']);
+  });
+
+  it('overlaps independent steps within a pass under maxStepConcurrency', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'x', status: 'success' })}\n`,
+    );
+    const config = await normalize({
+      name: 'par',
+      agent: 'claude-sdk',
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'right',
+          maxStepConcurrency: 2,
+          steps: {
+            left: {
+              agent: successAgent,
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'left {{id}}' },
+              ],
+            },
+            right: {
+              agent: successAgent,
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'right {{id}}' },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig);
+
+    const result = await runPipeline(config);
+    // Two independent steps both run in the pass and the pipeline converges,
+    // exercising the maxStepConcurrency > 1 dispatch path.
+    expect(result).toEqual({ status: 'completed' });
+    expect(await readReportIds('par-left')).toEqual(['x']);
+    expect(await readReportIds('par-right')).toEqual(['x']);
+  });
+
+  it('respects a dependsOn cycle when orienting earlier dependencies', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'x', status: 'success' })}\n`,
+    );
+    const config = await normalize({
+      name: 'cyc',
+      agent: 'claude-sdk',
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'a',
+          maxStepConcurrency: 2,
+          steps: {
+            // a <-> b is a dependsOn cycle. orderStepKeys breaks it, so one
+            // back-edge is excluded from earlierDeps and the pass never stalls.
+            a: {
+              agent: successAgent,
+              dependsOn: ['b'],
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'a {{id}}' },
+              ],
+            },
+            b: {
+              agent: successAgent,
+              dependsOn: ['a'],
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'b {{id}}' },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig);
+
+    const result = await runPipeline(config);
+    expect(result).toEqual({ status: 'completed' });
+    expect(await readReportIds('cyc-a')).toEqual(['x']);
+    expect(await readReportIds('cyc-b')).toEqual(['x']);
+  });
+
+  it('treats an allowSourceUpdate step as a source step even when gated', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'bug-1', status: 'success' })}\n`,
+    );
+    const config = await normalize({
+      name: 'src',
+      agent: 'claude-sdk',
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      maxBudgetUsd: 1,
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'commit',
+          steps: {
+            review: {
+              agent: costAgent,
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'review {{id}}' },
+              ],
+            },
+            // Marked source: its isSource is computed when building the pass
+            // schedule, covering the true branch. The shared cap trips after
+            // review spends $1, so commit is gated before it ever runs (so no
+            // gitPreflight fires in the plain temp dir).
+            commit: {
+              agent: costAgent,
+              allowSourceUpdate: true,
+              dependsOn: ['review'],
+              promptGenerator: [
+                'jsonl',
+                {
+                  dataFile: '{{steps.review.report}}',
+                  promptTemplate: 'commit {{id}}',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig);
+
+    const result = await runPipeline(config);
+    expect(result.status).toBe('stopped');
+    expect(result.reason).toBe('maxBudgetUsd');
+    expect(result.message).toMatch(/before step "src-commit"/u);
+    expect(await readReportIds('src-review')).toEqual(['bug-1']);
+    expect(await readReportIds('src-commit')).toEqual([]);
+  });
+
+  it('threads a per-step concurrency override into the step loop', async () => {
+    // Real timers: the agent's short delay keeps several invocations in flight
+    // so the peak overlap is observable, mirroring the working OverlapAgent
+    // proof in loop.test.ts. Fake timers fire the first invocation's delay
+    // before the other workers reach the agent, hiding the overlap.
+    const overlap = new OverlapAgent();
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'a' })}\n${JSON.stringify({
+        id: 'b',
+      })}\n${JSON.stringify({ id: 'c' })}\n`,
+    );
+    const config: LoopCliConfig = {
+      name: 'wc',
+      outputDir: dir,
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      agent: ['test', { responses: [{ status: 'success', output: 'ok' }] }],
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'only',
+          steps: {
+            only: {
+              agent: overlap,
+              concurrency: 3,
+              promptGenerator: [
+                'jsonl',
+                {
+                  dataFile: join(dir, 'seed.jsonl'),
+                  promptTemplate: 'do {{id}}',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig;
+
+    const result = await runPipeline(config);
+    // Without buildStepConfig threading `concurrency`, the step would run at
+    // the default of 1 and maxActive would be 1.
+    expect(result).toEqual({ status: 'completed' });
+    expect(overlap.maxActive).toBe(3);
   });
 });

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { loop } from './loop.js';
+import { schedulePass, type PassStep } from './pipeline-schedule.js';
 import {
   assertReporterHandoffContract,
   isPipelineSpec,
@@ -40,32 +41,28 @@ export async function runPipeline(
   const stepKeys = orderStepKeys(task);
   const maxPasses = task.maxPasses ?? DEFAULT_MAX_PASSES;
   const aggregateCap = config.maxBudgetUsd ?? Infinity;
+  const maxStepConcurrency = task.maxStepConcurrency ?? 1;
+  const passSteps: ReadonlyArray<PassStep> = stepKeys.map((key, i) => {
+    const step = task.steps[key];
+    const earlierDeps = (step.dependsOn ?? []).filter(
+      dep => stepKeys.indexOf(dep) < i,
+    );
+    const isSource =
+      (step.allowSourceUpdate ?? config.allowSourceUpdate) === true;
+    return { key, name: `${config.name}-${key}`, earlierDeps, isSource };
+  });
 
   let previousTotal = await countAllOutcomes(config, task, stepKeys);
   for (let pass = 1; pass <= maxPasses; pass += 1) {
-    for (const key of stepKeys) {
-      if (aggregateCap !== Infinity) {
-        const spend = await countAllSpend(config, task, stepKeys);
-        if (spend >= aggregateCap) {
-          const name = `${config.name}-${key}`;
-          const message = `Pipeline budget reached before step "${name}": $${spend.toFixed(
-            4,
-          )} >= $${aggregateCap}`;
-          return { status: 'stopped', reason: 'maxBudgetUsd', message };
-        }
-      }
-      const stepConfig = buildStepConfig(config, task, key);
-      const result = await loop(stepConfig);
-      if (result.status !== 'completed') {
-        /* istanbul ignore next -- loop() always sets `message` on a
-           non-completed result, so the reason/status fallbacks are defensive
-           and unreachable from a real loop. */
-        const detail = result.message ?? result.reason ?? result.status;
-        return {
-          ...result,
-          message: `Pipeline stopped at step "${stepConfig.name}": ${detail}`,
-        };
-      }
+    const stop = await schedulePass({
+      steps: passSteps,
+      maxStepConcurrency,
+      aggregateCap,
+      runStep: step => loop(buildStepConfig(config, task, step.key)),
+      readSpend: () => countAllSpend(config, task, stepKeys),
+    });
+    if (stop !== undefined) {
+      return stop;
     }
     const total = await countAllOutcomes(config, task, stepKeys);
     if (total === previousTotal) {
@@ -122,6 +119,7 @@ function buildStepConfig(
   const allowSourceUpdate = step.allowSourceUpdate ?? config.allowSourceUpdate;
   const maxPrompts = step.maxPrompts ?? config.maxPrompts;
   const maxBudgetUsd = step.maxBudgetUsd;
+  const concurrency = step.concurrency;
   const interPromptPause = step.interPromptPause ?? config.interPromptPause;
   const logger = step.logger ?? config.logger;
 
@@ -134,6 +132,7 @@ function buildStepConfig(
     ...(allowSourceUpdate !== undefined ? { allowSourceUpdate } : {}),
     ...(maxPrompts !== undefined ? { maxPrompts } : {}),
     ...(maxBudgetUsd !== undefined ? { maxBudgetUsd } : {}),
+    ...(concurrency !== undefined ? { concurrency } : {}),
     ...(interPromptPause !== undefined ? { interPromptPause } : {}),
     ...(logger !== undefined ? { logger } : {}),
   };
