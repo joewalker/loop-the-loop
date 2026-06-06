@@ -431,6 +431,143 @@ describe('main', () => {
     expect(agent.invokeOptions).toHaveLength(0);
   });
 
+  it('stops after the prompt that crosses maxBudgetUsd', async () => {
+    const agent = new TestAgent({
+      responses: [
+        {
+          status: 'success',
+          output: 'a',
+          cost: { usd: 0.6, costSource: 'estimated' },
+        },
+        {
+          status: 'success',
+          output: 'b',
+          cost: { usd: 0.6, costSource: 'estimated' },
+        },
+      ],
+    });
+
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'Review a' },
+      { id: 'b.ts', prompt: 'Review b' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'budget-cross',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      maxBudgetUsd: 1,
+    });
+
+    expect(result).toEqual({
+      status: 'stopped',
+      reason: 'maxBudgetUsd',
+      message: expect.stringContaining('Budget'),
+    });
+  });
+
+  it('stops immediately at startup when the persisted total is already over budget', async () => {
+    const agent = new RecordingAgent({ status: 'success', output: 'unused' });
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'Review a' },
+    ]);
+
+    await writeFile(
+      join(repoPath, 'budget-startup-loop-state.json'),
+      `${JSON.stringify(
+        { version: 2, results: {}, claims: {}, totalUsd: 5 },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const result = await runMainWithFakeTimers({
+      name: 'budget-startup',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      maxBudgetUsd: 1,
+    });
+
+    expect(result.status).toBe('stopped');
+    expect(result.reason).toBe('maxBudgetUsd');
+    expect(agent.invokeOptions).toHaveLength(0);
+  });
+
+  it('does not advance the budget for unavailable cost', async () => {
+    const agent = new TestAgent({
+      responses: [
+        {
+          status: 'success',
+          output: 'a',
+          cost: { usd: 0, costSource: 'unavailable' },
+        },
+        {
+          status: 'success',
+          output: 'b',
+          cost: { usd: 0, costSource: 'unavailable' },
+        },
+      ],
+    });
+
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'Review a' },
+      { id: 'b.ts', prompt: 'Review b' },
+    ]);
+
+    const result = await runMainWithFakeTimers({
+      name: 'budget-unavailable',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      maxBudgetUsd: 1,
+    });
+
+    expect(result.status).toBe('completed');
+  });
+
+  it('logs cost verbosely when a logger is enabled', async () => {
+    const agent = new TestAgent({
+      responses: [
+        {
+          status: 'success',
+          output: 'a',
+          cost: { usd: 0.25, costSource: 'estimated', model: 'gpt-5-mini' },
+        },
+      ],
+    });
+
+    const promptGenerator = new FixedPromptGenerator([
+      { id: 'a.ts', prompt: 'Review a' },
+    ]);
+
+    const stateMessages: Array<string> = [];
+    const recordingLogger = {
+      enabled: true,
+      agent: () => {},
+      tool: () => {},
+      success: () => {},
+      error: () => {},
+      system: () => {},
+      state: (m: string) => stateMessages.push(m),
+      info: () => {},
+    };
+
+    await runMainWithFakeTimers({
+      name: 'budget-verbose-cost',
+      agent,
+      outputDir: repoPath,
+      promptGenerator,
+      logger: recordingLogger,
+      maxPrompts: 1,
+    });
+
+    expect(
+      stateMessages.some(m => m.includes('Cost:') && m.includes('0.2500')),
+    ).toBe(true);
+  });
+
   it('should emit each prompt on the verbose logger so --dry-run can inspect it', async () => {
     const agent = new TestAgent();
     agent.setNextInvokeResult({ status: 'success', output: 'ok' });

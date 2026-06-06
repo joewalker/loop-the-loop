@@ -122,6 +122,14 @@ export interface LoopCliConfig {
   readonly maxPrompts?: number;
 
   /**
+   * Lifetime USD budget across resumes. When set, the loop stops after the
+   * prompt whose completion takes the persisted total at or above this cap,
+   * and stops immediately at startup if the persisted total is already at or
+   * above it. Track-only when omitted.
+   */
+  readonly maxBudgetUsd?: number;
+
+  /**
    * Pause between each prompt. Can help with rate limiting.
    */
   readonly interPromptPause?: number;

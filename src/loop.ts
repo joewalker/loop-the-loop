@@ -14,7 +14,7 @@ import {
   DEFAULT_REPORTER,
   type Reporter,
 } from './reporters.js';
-import type { LoopCliConfig, LoopRunResult } from './types.js';
+import type { CostInfo, LoopCliConfig, LoopRunResult } from './types.js';
 import { Git } from './util/git.js';
 
 /**
@@ -46,6 +46,7 @@ export async function loop(config: LoopCliConfig): Promise<LoopRunResult> {
         ? await createReporter(reporter, { outputDir, jobName: config.name })
         : reporter,
     maxPrompts: config.maxPrompts ?? Infinity,
+    maxBudgetUsd: config.maxBudgetUsd ?? Infinity,
     interPromptPause: config.interPromptPause ?? PAUSE_SECS,
     allowSourceUpdate: config.allowSourceUpdate ?? false,
     logger: createLogger(config.logger),
@@ -63,6 +64,7 @@ interface LoopConfig {
   readonly promptGenerator: PromptGenerator;
   readonly reporter: Reporter;
   readonly maxPrompts: number;
+  readonly maxBudgetUsd: number;
   readonly interPromptPause: number;
   readonly allowSourceUpdate: boolean;
   readonly logger: Logger;
@@ -81,6 +83,7 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
     promptGenerator,
     reporter,
     maxPrompts,
+    maxBudgetUsd,
     interPromptPause,
     allowSourceUpdate,
     logger,
@@ -105,6 +108,13 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
   });
   const runId = randomUUID();
   logger.state(`Loaded loop state for ${name}`);
+
+  const startingTotal = (await loopState.getSnapshot()).totalUsd;
+  if (startingTotal >= maxBudgetUsd) {
+    const message = `Budget already reached: $${startingTotal.toFixed(4)} >= $${maxBudgetUsd}`;
+    logger.state(message);
+    return { status: 'stopped', reason: 'maxBudgetUsd', message };
+  }
 
   if (maxPrompts <= 0) {
     logger.state(`Reached limit of ${maxPrompts} prompts`);
@@ -163,6 +173,16 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
         return { status: 'failed', reason: 'errorResult', message };
       }
 
+      if (result.cost !== undefined) {
+        logger.state(`Cost: ${formatCost(result.cost)}`);
+      }
+      const runningTotal = (await loopState.getSnapshot()).totalUsd;
+      if (runningTotal >= maxBudgetUsd) {
+        const message = `Budget reached after ${prompt.id}: $${runningTotal.toFixed(4)} >= $${maxBudgetUsd}`;
+        logger.state(message);
+        return { status: 'stopped', reason: 'maxBudgetUsd', message };
+      }
+
       completed++;
       if (completed >= maxPrompts) {
         logger.state(`Reached limit of ${maxPrompts} prompts`);
@@ -187,4 +207,15 @@ async function loopImpl(config: LoopConfig): Promise<LoopRunResult> {
   }
 
   return { status: 'completed' };
+}
+
+/**
+ * One-line human summary of a cost record for the verbose log.
+ */
+function formatCost(cost: CostInfo): string {
+  if (cost.costSource === 'unavailable') {
+    return `tokens only (in=${cost.inputTokens ?? 0}, out=${cost.outputTokens ?? 0})`;
+  }
+  const model = cost.model !== undefined ? `, ${cost.model}` : '';
+  return `$${cost.usd.toFixed(4)} (${cost.costSource}${model})`;
 }
