@@ -145,10 +145,12 @@ export class Git {
   }
 
   /**
-   * 'git rev-list --reverse --no-merges <range>'
+   * 'git rev-list --reverse --no-merges --end-of-options <range>'
    *
    * Returns the non-merge commit hashes reachable in `range`, oldest-first.
-   * An empty range resolves to an empty array.
+   * An empty range resolves to an empty array. `--end-of-options` forces
+   * `range` to be treated as a revision argument, so a value that looks like a
+   * flag (for example `--output=...`) cannot be interpreted as a git option.
    */
   async revList(range: string): Promise<Array<string>> {
     const out = await exec('git', [
@@ -157,6 +159,7 @@ export class Git {
       'rev-list',
       '--reverse',
       '--no-merges',
+      '--end-of-options',
       range,
     ]);
     return out

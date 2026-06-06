@@ -89,6 +89,21 @@ describe('GitPromptGenerator', () => {
     expect(prompts[0].prompt).toBe('[1/1] Commit B by Test <test@test.com>');
   });
 
+  it('preserves a commit body that contains the unit separator byte', async () => {
+    await commitFile('b.txt', 'B', 'Subject line\n\nbefore\x1fafter');
+
+    const generator = new GitPromptGenerator(
+      {
+        range: `${firstHash}..HEAD`,
+        promptTemplate: '{{subject}}|{{body}}',
+      },
+      repoPath,
+    );
+    const prompts = await collect(generator);
+
+    expect(prompts[0].prompt).toContain('Subject line|before\x1fafter');
+  });
+
   it('includes diff, stat and files when the template references them', async () => {
     await commitFile('b.txt', 'hello', 'Commit B');
 

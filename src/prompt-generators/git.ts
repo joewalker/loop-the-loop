@@ -49,7 +49,13 @@ export interface GitTask {
   promptTemplate: string;
 }
 
-const FIELD_SEP = '\x1f';
+// NUL is used to separate the metadata fields because git commit content can
+// never contain a NUL byte, so it cannot collide with field values the way a
+// printable or even a control character such as the unit separator could. The
+// format string asks git to emit the byte via the `%x00` escape (a literal NUL
+// cannot be passed in an argv argument); the output is split on the real byte.
+const FIELD_SEP = '\x00';
+const FIELD_SEP_FORMAT = '%x00';
 
 /**
  * Ordered metadata fields and their git pretty-format specifiers. `body` and
@@ -76,7 +82,9 @@ const METADATA_FIELDS = [
   ['rawBody', '%B'],
 ] as const;
 
-const METADATA_FORMAT = METADATA_FIELDS.map(([, fmt]) => fmt).join(FIELD_SEP);
+const METADATA_FORMAT = METADATA_FIELDS.map(([, fmt]) => fmt).join(
+  FIELD_SEP_FORMAT,
+);
 
 /**
  * A PromptGenerator that walks a commit range and yields one prompt per
