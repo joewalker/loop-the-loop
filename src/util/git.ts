@@ -143,6 +143,86 @@ export class Git {
 
     return exec('git', args, { env });
   }
+
+  /**
+   * 'git rev-list --reverse --no-merges <range>'
+   *
+   * Returns the non-merge commit hashes reachable in `range`, oldest-first.
+   * An empty range resolves to an empty array.
+   */
+  async revList(range: string): Promise<Array<string>> {
+    const out = await exec('git', [
+      '-C',
+      this.#repoPath,
+      'rev-list',
+      '--reverse',
+      '--no-merges',
+      range,
+    ]);
+    return out
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+  }
+
+  /**
+   * 'git show --no-patch --format=<format> <hash>'
+   *
+   * Returns commit metadata rendered with a pretty-format string and no diff.
+   * The caller is responsible for parsing the result.
+   */
+  async showMetadata(hash: string, format: string): Promise<string> {
+    return exec('git', [
+      '-C',
+      this.#repoPath,
+      'show',
+      '--no-patch',
+      `--format=${format}`,
+      hash,
+    ]);
+  }
+
+  /**
+   * 'git show --format= <hash>'
+   *
+   * Returns the single-parent patch for a commit with no metadata header. The
+   * output begins with a blank line that the caller may wish to strip.
+   */
+  async showPatch(hash: string): Promise<string> {
+    return exec('git', ['-C', this.#repoPath, 'show', '--format=', hash]);
+  }
+
+  /**
+   * 'git show --stat --format= <hash>'
+   *
+   * Returns the diffstat for a commit with no metadata header.
+   */
+  async showStat(hash: string): Promise<string> {
+    return exec('git', [
+      '-C',
+      this.#repoPath,
+      'show',
+      '--stat',
+      '--format=',
+      hash,
+    ]);
+  }
+
+  /**
+   * 'git show --name-status --format= <hash>'
+   *
+   * Returns the changed files with their status letters and no metadata header.
+   */
+  async showNameStatus(hash: string): Promise<string> {
+    return exec('git', [
+      '-C',
+      this.#repoPath,
+      'show',
+      '--name-status',
+      '--format=',
+      hash,
+    ]);
+  }
 }
 
 /**

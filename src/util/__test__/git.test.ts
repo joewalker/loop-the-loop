@@ -173,4 +173,81 @@ describe('Git', () => {
       expect(await git.configValue('loop.empty')).toBeUndefined();
     });
   });
+
+  /** Run a raw git command in the fixture repo and return trimmed stdout. */
+  function rawGit(...args: Array<string>): string {
+    return execFileSync('git', ['-C', repoPath, ...args]).toString().trim();
+  }
+
+  /** Create and commit a file in the fixture repo. */
+  async function commitFile(
+    file: string,
+    content: string,
+    message: string,
+  ): Promise<string> {
+    await writeFile(join(repoPath, file), content);
+    await git.add(file);
+    await git.commit(message, { committer: { name: 'Test', email: 'test@test.com' } });
+    return rawGit('rev-parse', 'HEAD');
+  }
+
+  describe('revList', () => {
+    it('returns non-merge commits oldest-first for a linear range', async () => {
+      // beforeEach already created the "Initial commit" (commit A).
+      const a = rawGit('rev-parse', 'HEAD');
+      const b = await commitFile('b.txt', 'B', 'Commit B');
+      const c = await commitFile('c.txt', 'C', 'Commit C');
+
+      expect(await git.revList(`${a}..HEAD`)).toEqual([b, c]);
+    });
+
+    it('excludes merge commits', async () => {
+      rawGit('config', 'user.name', 'Test');
+      rawGit('config', 'user.email', 'test@test.com');
+      const a = rawGit('rev-parse', 'HEAD');
+      const b = await commitFile('b.txt', 'B', 'Commit B');
+
+      rawGit('checkout', '-b', 'feature', a);
+      const c = await commitFile('c.txt', 'C', 'Commit C');
+
+      const base = 'master';
+      // The default branch may be master or main; check out whichever exists.
+      const branches = rawGit('branch', '--format=%(refname:short)').split('\n');
+      rawGit('checkout', branches.includes(base) ? base : 'main');
+      rawGit('merge', '--no-ff', '-m', 'Merge feature', 'feature');
+      const merge = rawGit('rev-parse', 'HEAD');
+
+      const hashes = await git.revList(`${a}..HEAD`);
+      expect(hashes).toContain(b);
+      expect(hashes).toContain(c);
+      expect(hashes).not.toContain(merge);
+    });
+
+    it('returns an empty array for an empty range', async () => {
+      expect(await git.revList('HEAD..HEAD')).toEqual([]);
+    });
+  });
+
+  describe('show helpers', () => {
+    it('showMetadata renders a pretty-format string', async () => {
+      const hash = await commitFile('b.txt', 'B', 'Commit B');
+      const out = await git.showMetadata(hash, '%s%x1f%an');
+      expect(out.replace(/\n$/, '')).toBe('Commit B\x1fTest');
+    });
+
+    it('showPatch returns the patch body', async () => {
+      const hash = await commitFile('b.txt', 'hello', 'Commit B');
+      expect(await git.showPatch(hash)).toContain('b.txt');
+    });
+
+    it('showStat returns a diffstat', async () => {
+      const hash = await commitFile('b.txt', 'hello', 'Commit B');
+      expect(await git.showStat(hash)).toContain('b.txt');
+    });
+
+    it('showNameStatus returns name-status lines', async () => {
+      const hash = await commitFile('b.txt', 'hello', 'Commit B');
+      expect(await git.showNameStatus(hash)).toMatch(/A\s+b\.txt/);
+    });
+  });
 });
