@@ -1,0 +1,96 @@
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "bugfix",
+  "agent": "claude-sdk",
+  "reporter": "jsonl-report",
+  "promptGenerator": [
+    "pipeline",
+    {
+      "output": "summary",
+      "maxPasses": 25,
+      "steps": {
+        "review": {
+          "promptGenerator": [
+            "per-file",
+            {
+              "filePattern": "src/**/*.ts",
+              "promptTemplate": "Review {{file}} and report any bug as structured output."
+            }
+          ]
+        },
+        "fix-new": {
+          "promptGenerator": [
+            "jsonl",
+            {
+              "dataFile": "{{steps.review.report}}",
+              "filter": { "status": "success" },
+              "promptTemplate": "Fix the bug in {{id}}."
+            }
+          ]
+        },
+        "fix-rework": {
+          "promptGenerator": [
+            "jsonl",
+            {
+              "dataFile": "{{steps.verify.report}}",
+              "filter": { "structuredOutput.verdict": "rework" },
+              "maxAttempts": 3,
+              "incrementAttempt": true,
+              "promptTemplate": "The previous fix for {{id}} was rejected. Try again."
+            }
+          ]
+        },
+        "verify": {
+          "dependsOn": ["fix-new", "fix-rework"],
+          "promptGenerator": [
+            "jsonl",
+            {
+              "dataFile": [
+                "{{steps.fix-new.report}}",
+                "{{steps.fix-rework.report}}"
+              ],
+              "promptTemplate": "Verify the fix for {{id}}. Emit { verdict: approve | rework }."
+            }
+          ]
+        },
+        "commit": {
+          "allowSourceUpdate": true,
+          "dependsOn": ["verify"],
+          "promptGenerator": [
+            "jsonl",
+            {
+              "dataFile": "{{steps.verify.report}}",
+              "filter": { "structuredOutput.verdict": "approve" },
+              "promptTemplate": "Commit the approved fix for {{id}}."
+            }
+          ]
+        },
+        "giveup": {
+          "dependsOn": ["verify"],
+          "promptGenerator": [
+            "jsonl",
+            {
+              "dataFile": "{{steps.verify.report}}",
+              "filter": { "structuredOutput.verdict": "rework" },
+              "minAttempts": 3,
+              "promptTemplate": "Record {{id}} as exhausted rework."
+            }
+          ]
+        },
+        "summary": {
+          "dependsOn": ["commit", "giveup"],
+          "promptGenerator": [
+            "jsonl",
+            {
+              "dataFile": [
+                "{{steps.commit.report}}",
+                "{{steps.giveup.report}}"
+              ],
+              "promptTemplate": "Summarize the outcome for {{id}}."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

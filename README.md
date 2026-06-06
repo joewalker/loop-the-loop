@@ -621,6 +621,20 @@ The `jsonl` reader can filter lines by field-path equality, including dotted pat
 
 Config fields like `dataFile` and `stateFile` accept `{{steps.<name>.report}}` and `{{steps.<name>.state}}`, which resolve to the named step's `<name>-report.jsonl` and `<name>-loop-state.json` under `outputDir`. This keeps handoff wiring correct when `outputDir`, a pipeline, or a step name changes, instead of relying on hard-coded filenames. Each reader gates every emitted id through the consuming loop's own state, so the consuming loop is itself resumable; its state file is a different file from the upstream artifact it reads as data.
 
+## Pipelines
+
+A pipeline runs a named set of loop steps that hand off to each other through reader generators. It lives in the `promptGenerator` slot as `["pipeline", { output, steps, maxPasses? }]`, where `steps` is a map keyed by step key and `output` names the terminal step. Each step is one `loop()` over one prompt generator. A step inherits the pipeline-level `agent`, `reporter`, `outputDir`, `allowSourceUpdate`, `maxPrompts`, `interPromptPause`, and `logger`, and may override any of them for itself; only `promptGenerator` is required per step. An optional `dependsOn` is a cycle-tolerant ordering hint within a pass, never a correctness constraint.
+
+Each step's loop name is the derived `${pipelineName}-${stepKey}`, so step `review` in pipeline `bugfix` writes `bugfix-review-report.jsonl`. Config authors still write the bare step key in markers: `{{steps.review.report}}` resolves to the pipeline-prefixed artifact automatically.
+
+Routing is pull-based and emergent rather than declared. A producing step emits a verdict in its `structuredOutput`, and each consuming step's `jsonl` reader filters on it, for example `{ "structuredOutput.verdict": "rework" }`. Bounded rework loops are built from the reader's attempt-scoped ids: `maxAttempts`, `minAttempts`, and `incrementAttempt` re-enter work at the next attempt (`bug-1` becomes `bug-1#2`) until a cap, where a complementary `minAttempts` reader pulls the exhausted item as a terminal "give up" outcome. Fan-in is homogeneous: a `jsonl` reader's `dataFile` accepts an array of report paths that are read in sequence and share one filter and template.
+
+Verdict routing requires the producing step to use the `jsonl-report` reporter, because the default `yaml-report` cannot be read back by the `jsonl` reader and the `loop-state` reader does not carry `structuredOutput`. The pipeline checks this reporter/handoff contract at startup and refuses to run a pipeline whose consumed producer falls back to a non-`jsonl-report` reporter, rather than silently reading empty input.
+
+The pipeline runs to a fixed point: every step runs once per pass, and passes repeat until a whole pass records no new terminal outcomes anywhere. `maxPasses` (default 100) is the safety ceiling. The failure policy is strict: any non-`completed` step result, including a controlled abort such as `maxPrompts`, stops the pipeline and downstream steps do not run. Resuming a pipeline is simply rerunning it; each step gates emitted ids through its own state, so a settled pipeline fast-forwards and adds nothing.
+
+See `src/examples/pipeline/bugfix.json` for a worked review -> fix -> verify -> commit/giveup -> summary pipeline with a bounded rework loop.
+
 ## Building Custom Extensions
 
 The framework is designed around three extension points: agents, prompt generators, and reporters. Each follows the same pattern: implement an interface, add a static factory method, and register it.
