@@ -201,8 +201,14 @@ export function normalizePromptGeneratorSpec(
   if (type === JsonlPromptGenerator.promptGeneratorName) {
     const task = normalizeJsonlTaskConfig(config);
     const dataFile = Array.isArray(task.dataFile)
-      ? task.dataFile.map(file => resolveStepHandoff(file, outputDir))
-      : resolveStepHandoff(task.dataFile as string, outputDir);
+      ? task.dataFile.map(file =>
+          resolveStepHandoff(file, outputDir, context.stepKeyToName),
+        )
+      : resolveStepHandoff(
+          task.dataFile as string,
+          outputDir,
+          context.stepKeyToName,
+        );
     return [type, { ...task, dataFile }, configDir];
   }
 
@@ -210,7 +216,14 @@ export function normalizePromptGeneratorSpec(
     const task = normalizeLoopStateTaskConfig(config);
     return [
       type,
-      { ...task, stateFile: resolveStepHandoff(task.stateFile, outputDir) },
+      {
+        ...task,
+        stateFile: resolveStepHandoff(
+          task.stateFile,
+          outputDir,
+          context.stepKeyToName,
+        ),
+      },
       configDir,
     ];
   }

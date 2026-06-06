@@ -4,8 +4,16 @@ import { dirname, resolve } from 'node:path';
 import type { AgentSpec } from '../agents.js';
 import { ClaudeSDKAgent } from '../agents/claude-sdk.js';
 import { OpenAISDKAgent } from '../agents/openai-sdk.js';
-import { normalizePromptGeneratorSpec } from '../prompt-generators.js';
-import type { LoopCliConfig } from '../types.js';
+import {
+  assertReporterHandoffContract,
+  isPipelineSpec,
+  normalizePipelineTaskConfig,
+} from '../pipeline-spec.js';
+import {
+  normalizePromptGeneratorSpec,
+  type PromptGeneratorSpec,
+} from '../prompt-generators.js';
+import type { LoopCliConfig, PipelineStep, PipelineTask } from '../types.js';
 import { expandIncludes } from './expand-prompt.js';
 
 /**
@@ -230,7 +238,9 @@ export async function loadCliConfig(
   const effectiveDryRun = dryRun === true && doctor !== true;
 
   return {
-    ...(await normalizeCliConfig(config as LoopCliConfig, resolvedPath)),
+    ...(await normalizeCliConfig(config as LoopCliConfig, resolvedPath, {
+      dryRun: effectiveDryRun,
+    })),
     ...(maxPrompts !== undefined
       ? /* istanbul ignore next */ { maxPrompts }
       : {}),
@@ -264,6 +274,7 @@ const DRY_RUN_AGENT_SPEC: AgentSpec = [
 export async function normalizeCliConfig(
   config: LoopCliConfig,
   configPath: string,
+  options: { dryRun?: boolean } = {},
 ): Promise<LoopCliConfig> {
   const resolvedPath = resolve(configPath);
   const configDir = dirname(resolvedPath);
@@ -273,15 +284,94 @@ export async function normalizeCliConfig(
       ? configDir
       : resolve(configDir, config.outputDir);
 
+  const promptGenerator = isPipelineSpec(config.promptGenerator)
+    ? await normalizePipelineSpec(
+        config.promptGenerator as unknown as readonly [string, unknown],
+        config.name,
+        config.reporter,
+        { configDir, outputDir },
+        options.dryRun === true,
+      )
+    : normalizePromptGeneratorSpec(config.promptGenerator, {
+        configDir,
+        outputDir,
+      });
+
   return {
     ...config,
     outputDir,
     agent: await normalizeAgentSpec(config.agent, configDir),
-    promptGenerator: normalizePromptGeneratorSpec(config.promptGenerator, {
-      configDir,
-      outputDir,
-    }),
+    promptGenerator,
   };
+}
+
+/**
+ * Normalize a `["pipeline", task]` spec. Validates the task, then for each
+ * step resolves its generator's handoff markers against the pipeline-prefixed
+ * step names, resolves its agent's `{{include:...}}` macros, and (under
+ * `--dry-run`) swaps its agent for the dry-run test agent. The reporter/handoff
+ * contract is checked on the raw task before substitution. Returns a
+ * `["pipeline", normalizedTask, configDir]` spec for `runPipeline`.
+ */
+async function normalizePipelineSpec(
+  spec: readonly [string, unknown],
+  pipelineName: string,
+  topReporter: unknown,
+  context: { configDir: string; outputDir: string },
+  dryRun: boolean,
+): Promise<PromptGeneratorSpec> {
+  const task = normalizePipelineTaskConfig(spec[1]);
+  assertReporterHandoffContract(task, topReporter);
+  const stepKeyToName = (key: string): string => `${pipelineName}-${key}`;
+
+  const steps: Record<string, PipelineStep> = {};
+  for (const [key, step] of Object.entries(task.steps)) {
+    const promptGenerator = normalizePromptGeneratorSpec(step.promptGenerator, {
+      ...context,
+      stepKeyToName,
+    });
+    const agent = await normalizeStepAgent(
+      step.agent,
+      context.configDir,
+      dryRun,
+    );
+    const outputDir =
+      step.outputDir === undefined
+        ? undefined
+        : resolve(context.configDir, step.outputDir);
+    steps[key] = {
+      ...step,
+      promptGenerator,
+      ...(agent !== undefined ? { agent } : {}),
+      ...(outputDir !== undefined ? { outputDir } : {}),
+    };
+  }
+
+  const normalizedTask: PipelineTask = { ...task, steps };
+  return [
+    spec[0],
+    normalizedTask,
+    context.configDir,
+  ] as unknown as PromptGeneratorSpec;
+}
+
+/**
+ * Normalize a step's agent: under `--dry-run` swap it for the dry-run agent;
+ * otherwise resolve includes when present, or leave undefined to inherit the
+ * pipeline-level agent.
+ */
+async function normalizeStepAgent(
+  agent: PipelineStep['agent'],
+  configDir: string,
+  dryRun: boolean,
+): Promise<PipelineStep['agent']> {
+  if (dryRun) {
+    return DRY_RUN_AGENT_SPEC;
+  }
+  if (agent === undefined) {
+    return undefined;
+  }
+  return normalizeAgentSpec(agent, configDir);
 }
 
 /**

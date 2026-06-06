@@ -31,4 +31,22 @@ describe('resolveStepHandoff', () => {
       resolve(outputDir, 'fix_bug-2-report.jsonl'),
     );
   });
+
+  it('applies a name mapper to the marker step key', () => {
+    const result = resolveStepHandoff(
+      '{{steps.review.report}}',
+      '/out',
+      key => `bugfix-${key}`,
+    );
+    expect(result).toBe(resolve('/out', 'bugfix-review-report.jsonl'));
+  });
+
+  it('applies the mapper to state markers too', () => {
+    const result = resolveStepHandoff(
+      '{{steps.fix.state}}',
+      '/out',
+      key => `bugfix-${key}`,
+    );
+    expect(result).toBe(resolve('/out', 'bugfix-fix-loop-state.json'));
+  });
 });

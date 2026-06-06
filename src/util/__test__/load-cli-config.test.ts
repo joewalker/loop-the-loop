@@ -2,7 +2,7 @@
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { AgentSpec } from 'loop-the-loop/agents';
 import type { BatchTask } from 'loop-the-loop/prompt-generators/batch';
@@ -11,7 +11,7 @@ import type { GitHubTask } from 'loop-the-loop/prompt-generators/github';
 import type { GitLabTask } from 'loop-the-loop/prompt-generators/gitlab';
 import type { JsonTask } from 'loop-the-loop/prompt-generators/json';
 import type { PerFileTask } from 'loop-the-loop/prompt-generators/per-file';
-import type { LoopCliConfig } from 'loop-the-loop/types';
+import type { LoopCliConfig, PipelineTask } from 'loop-the-loop/types';
 import {
   loadCliConfig,
   normalizeCliConfig,
@@ -432,6 +432,227 @@ describe('loadCliConfig', () => {
       join(configDir, 'commit-report.jsonl'),
       join(configDir, 'giveup-report.jsonl'),
     ]);
+  });
+
+  it('normalizes a pipeline: handoff markers get the pipeline name prefix', async () => {
+    const configPath = join(tempDir, 'config.json');
+    const normalized = await normalizeCliConfig(
+      {
+        name: 'bugfix',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        promptGenerator: [
+          'pipeline',
+          {
+            output: 'verify',
+            steps: {
+              fix: {
+                promptGenerator: [
+                  'jsonl',
+                  { dataFile: 'seed.jsonl', promptTemplate: 'fix {{id}}' },
+                ],
+              },
+              verify: {
+                promptGenerator: [
+                  'jsonl',
+                  {
+                    dataFile: '{{steps.fix.report}}',
+                    promptTemplate: 'verify {{id}}',
+                  },
+                ],
+              },
+            },
+          },
+        ] as unknown as LoopCliConfig['promptGenerator'],
+      },
+      configPath,
+    );
+
+    const spec = normalized.promptGenerator as unknown as [
+      string,
+      PipelineTask,
+      string,
+    ];
+    const verifyGen = spec[1].steps['verify'].promptGenerator as unknown as [
+      string,
+      { dataFile: string },
+      string,
+    ];
+    expect(verifyGen[1].dataFile).toBe(
+      resolve(tempDir, 'bugfix-fix-report.jsonl'),
+    );
+  });
+
+  it('normalizes a pipeline: per-step agent systemPrompt includes are resolved', async () => {
+    await writeFile(join(tempDir, 'sys.md'), 'You verify fixes.');
+    const configPath = join(tempDir, 'config.json');
+    const normalized = await normalizeCliConfig(
+      {
+        name: 'bugfix',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        promptGenerator: [
+          'pipeline',
+          {
+            output: 'verify',
+            steps: {
+              verify: {
+                agent: ['claude-sdk', { systemPrompt: '{{include:sys.md}}' }],
+                promptGenerator: [
+                  'jsonl',
+                  { dataFile: 'seed.jsonl', promptTemplate: 'v {{id}}' },
+                ],
+              },
+            },
+          },
+        ] as unknown as LoopCliConfig['promptGenerator'],
+      },
+      configPath,
+    );
+    const spec = normalized.promptGenerator as unknown as [
+      string,
+      PipelineTask,
+      string,
+    ];
+    const agent = spec[1].steps['verify'].agent as unknown as [
+      string,
+      { systemPrompt: string },
+    ];
+    expect(agent[1].systemPrompt).toBe('You verify fixes.');
+  });
+
+  it('descends the --dry-run swap into every step', async () => {
+    const configPath = join(tempDir, 'config.json');
+    const normalized = await normalizeCliConfig(
+      {
+        name: 'bugfix',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        promptGenerator: [
+          'pipeline',
+          {
+            output: 'fix',
+            steps: {
+              fix: {
+                agent: ['claude-sdk', {}],
+                promptGenerator: [
+                  'jsonl',
+                  { dataFile: 'seed.jsonl', promptTemplate: 'f {{id}}' },
+                ],
+              },
+            },
+          },
+        ] as unknown as LoopCliConfig['promptGenerator'],
+      },
+      configPath,
+      { dryRun: true },
+    );
+    const spec = normalized.promptGenerator as unknown as [
+      string,
+      PipelineTask,
+      string,
+    ];
+    const fixAgent = spec[1].steps['fix'].agent as unknown as [string];
+    expect(fixAgent[0]).toBe('test');
+  });
+
+  it('swaps a step without an explicit agent under --dry-run too', async () => {
+    const configPath = join(tempDir, 'config.json');
+    const normalized = await normalizeCliConfig(
+      {
+        name: 'bugfix',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        promptGenerator: [
+          'pipeline',
+          {
+            output: 'fix',
+            steps: {
+              fix: {
+                promptGenerator: [
+                  'jsonl',
+                  { dataFile: 'seed.jsonl', promptTemplate: 'f {{id}}' },
+                ],
+              },
+            },
+          },
+        ] as unknown as LoopCliConfig['promptGenerator'],
+      },
+      configPath,
+      { dryRun: true },
+    );
+    const spec = normalized.promptGenerator as unknown as [
+      string,
+      PipelineTask,
+      string,
+    ];
+    const fixAgent = spec[1].steps['fix'].agent as unknown as [string];
+    expect(fixAgent[0]).toBe('test');
+  });
+
+  it('leaves a step without an agent inheriting (undefined) when not dry-run', async () => {
+    const configPath = join(tempDir, 'config.json');
+    const normalized = await normalizeCliConfig(
+      {
+        name: 'bugfix',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        promptGenerator: [
+          'pipeline',
+          {
+            output: 'fix',
+            steps: {
+              fix: {
+                outputDir: 'reports',
+                promptGenerator: [
+                  'jsonl',
+                  { dataFile: 'seed.jsonl', promptTemplate: 'f {{id}}' },
+                ],
+              },
+            },
+          },
+        ] as unknown as LoopCliConfig['promptGenerator'],
+      },
+      configPath,
+    );
+    const spec = normalized.promptGenerator as unknown as [
+      string,
+      PipelineTask,
+      string,
+    ];
+    expect(spec[1].steps['fix'].agent).toBeUndefined();
+    expect(spec[1].steps['fix'].outputDir).toBe(resolve(tempDir, 'reports'));
+  });
+
+  it('rejects a nested pipeline at normalization', async () => {
+    const configPath = join(tempDir, 'config.json');
+    await expect(
+      normalizeCliConfig(
+        {
+          name: 'p',
+          agent: 'claude-sdk',
+          reporter: 'jsonl-report',
+          promptGenerator: [
+            'pipeline',
+            {
+              output: 'a',
+              steps: {
+                a: {
+                  promptGenerator: [
+                    'pipeline',
+                    {
+                      output: 'b',
+                      steps: { b: { promptGenerator: ['test', {}] } },
+                    },
+                  ],
+                },
+              },
+            },
+          ] as unknown as LoopCliConfig['promptGenerator'],
+        },
+        configPath,
+      ),
+    ).rejects.toThrow('nested pipelines are not supported');
   });
 
   it('should resolve prompt template includes relative to the config file', async () => {

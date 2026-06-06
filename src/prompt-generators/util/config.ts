@@ -13,6 +13,13 @@ export interface PromptGeneratorConfigContext {
    * `{{steps.<name>.report|state}}` handoff substitutions in reader configs.
    */
   readonly outputDir: string;
+
+  /**
+   * Maps a `{{steps.<key>...}}` marker's step key to the actual artifact
+   * basename. Used inside a pipeline to apply the `${pipelineName}-${stepKey}`
+   * prefix. Defaults to identity when omitted (standalone loop).
+   */
+  readonly stepKeyToName?: (key: string) => string;
 }
 
 /**
