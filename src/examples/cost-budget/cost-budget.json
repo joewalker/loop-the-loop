@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/joewalker/loop-the-loop/refs/heads/main/schema/loop-the-loop.schema.json",
+  "name": "cost-budget",
+  "maxBudgetUsd": 5,
+  "agent": [
+    "openai-sdk",
+    {
+      "model": "gpt-5-mini",
+      "prices": {
+        "gpt-5-mini": {
+          "inputPerMtok": 0.25,
+          "outputPerMtok": 2,
+          "cacheReadPerMtok": 0.025,
+          "reasoningPerMtok": 2
+        }
+      }
+    }
+  ],
+  "promptGenerator": [
+    "per-file",
+    {
+      "filePattern": "src/**/*.ts",
+      "excludePatterns": ["**/__test__/**", "**/*.test.ts"],
+      "promptTemplate": "Summarise the responsibilities of {{file}} in two sentences."
+    }
+  ]
+}

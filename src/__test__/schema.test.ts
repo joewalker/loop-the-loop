@@ -250,6 +250,25 @@ describe('CLI config schema', () => {
           promptGenerator: ['test', { prompts: ['only'] }],
         },
       ],
+      [
+        'openai-sdk with prices and a top-level maxBudgetUsd',
+        {
+          name: 'cost',
+          maxBudgetUsd: 5,
+          agent: [
+            'openai-sdk',
+            {
+              prices: {
+                'gpt-5-mini': { inputPerMtok: 0.25, outputPerMtok: 2 },
+              },
+            },
+          ],
+          promptGenerator: [
+            'per-file',
+            { filePattern: 'x', promptTemplate: 'y' },
+          ],
+        },
+      ],
     ];
 
     it.each(cases)('%s validates', (_label, data) => {
@@ -386,6 +405,29 @@ describe('CLI config schema', () => {
             },
           ],
           promptGenerator: ['test', { prompts: ['only'] }],
+        },
+      ],
+      [
+        'rejects a price entry missing inputPerMtok',
+        {
+          name: 'cost',
+          agent: ['openai-sdk', { prices: { m: { outputPerMtok: 2 } } }],
+          promptGenerator: [
+            'per-file',
+            { filePattern: 'x', promptTemplate: 'y' },
+          ],
+        },
+      ],
+      [
+        'rejects a non-positive maxBudgetUsd',
+        {
+          name: 'cost',
+          maxBudgetUsd: 0,
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'per-file',
+            { filePattern: 'x', promptTemplate: 'y' },
+          ],
         },
       ],
     ];

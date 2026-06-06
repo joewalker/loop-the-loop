@@ -597,6 +597,14 @@ Writes a JSON Lines file (`{name}-report.jsonl`). Each line is a self-contained 
 
 Source: `src/reporters/jsonl.ts`
 
+## Cost accounting and budgets
+
+Every agent result can carry a cost record. The `costSource` field says how it was derived: `provider` means the backend reported a real USD figure (claude-sdk), `estimated` means Loop computed USD from token counts and the per-model `prices` you configured, and `unavailable` means token counts may be known but no USD figure was produced.
+
+To get estimated costs from openai-sdk or codex-cli, add a `prices` map to the agent config keyed by model id, where each entry sets at least `inputPerMtok` and `outputPerMtok` (cache and reasoning rates default to multiples of those). claude-sdk reports cost directly and needs no `prices`.
+
+Run totals persist in the loop-state file across resumes. Set a top-level `maxBudgetUsd`, or pass `--max-budget-usd N`, to cap lifetime spend: the loop stops after the prompt whose completion takes the total at or above the cap, and stops immediately at startup if the persisted total is already there. Results whose cost is `unavailable` record tokens but never advance the total. Omitting the cap is track-only mode.
+
 ## Building Custom Extensions
 
 The framework is designed around three extension points: agents, prompt generators, and reporters. Each follows the same pattern: implement an interface, add a static factory method, and register it.

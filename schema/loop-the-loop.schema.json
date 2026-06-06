@@ -34,6 +34,11 @@
       "minimum": 0,
       "description": "Stop after processing this many prompts. Unlimited when omitted."
     },
+    "maxBudgetUsd": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Lifetime USD budget across resumes. The loop stops after the prompt whose completion takes the persisted total at or above this cap, and stops immediately at startup if it is already at or above it. Track-only when omitted."
+    },
     "interPromptPause": {
       "type": "number",
       "minimum": 0,
@@ -52,6 +57,19 @@
     }
   },
   "definitions": {
+    "modelPrice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputPerMtok", "outputPerMtok"],
+      "properties": {
+        "inputPerMtok": { "type": "number", "minimum": 0 },
+        "outputPerMtok": { "type": "number", "minimum": 0 },
+        "cacheReadPerMtok": { "type": "number", "minimum": 0 },
+        "cacheCreationPerMtok": { "type": "number", "minimum": 0 },
+        "reasoningPerMtok": { "type": "number", "minimum": 0 }
+      },
+      "description": "Per-million-token prices for one model. cacheRead/cacheCreation/reasoning rates default to multiples of input/output when omitted."
+    },
     "agentSpec": {
       "description": "Which agent to use. Either a bare agent name (for agents that take no init config) or a [agentName, config] tuple.",
       "oneOf": [
@@ -150,6 +168,16 @@
           "type": "integer",
           "minimum": 1,
           "description": "Maximum time in milliseconds to wait for a single Codex invocation before sending SIGTERM (then SIGKILL after a short grace period). When omitted, no timeout is applied."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Codex model to run (forwarded to `codex exec --model`) and used for cost estimation. Falls back to the CODEX_MODEL env var when omitted."
+        },
+        "prices": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/modelPrice" },
+          "description": "Per-model prices keyed by model id, used to estimate USD cost. When the resolved model is unpriced the agent records tokens only (costSource 'unavailable')."
         }
       }
     },
@@ -179,6 +207,11 @@
           "minimum": 1,
           "default": 100,
           "description": "Maximum number of agent turns per prompt invocation."
+        },
+        "prices": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/modelPrice" },
+          "description": "Per-model prices keyed by model id, used to estimate USD cost. When the resolved model is unpriced the agent records tokens only (costSource 'unavailable')."
         }
       }
     },
