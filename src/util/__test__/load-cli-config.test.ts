@@ -267,6 +267,34 @@ describe('parseArgs', () => {
 
   // #endregion
 
+  // #region --max-budget-usd
+
+  describe('--max-budget-usd', () => {
+    it('parses an integer value', () => {
+      expect(parseArgs(['--max-budget-usd', '5', 'c.json']).maxBudgetUsd).toBe(
+        5,
+      );
+    });
+
+    it('parses a decimal value', () => {
+      expect(parseArgs(['--max-budget-usd=2.5', 'c.json']).maxBudgetUsd).toBe(
+        2.5,
+      );
+    });
+
+    it.each(['0', '-1', 'abc', 'NaN', ''])('rejects %s', value => {
+      expect(() => parseArgs([`--max-budget-usd=${value}`, 'c.json'])).toThrow(
+        /Invalid --max-budget-usd value/u,
+      );
+    });
+
+    it('is undefined when not passed', () => {
+      expect(parseArgs(['c.json']).maxBudgetUsd).toBeUndefined();
+    });
+  });
+
+  // #endregion
+
   // #region --help and --version
 
   it('parses --help without requiring a config path', () => {
@@ -1718,6 +1746,26 @@ describe('loadCliConfig', () => {
   });
 
   // #endregion
+
+  it('merges maxBudgetUsd from the CLI flag into the config', async () => {
+    const configDir = join(tempDir, 'config');
+    await mkdir(configDir, { recursive: true });
+    const configPath = join(configDir, 'config.json');
+    await writeFile(
+      configPath,
+      `${JSON.stringify({
+        name: 'budget',
+        agent: 'claude-sdk',
+        promptGenerator: [
+          'per-file',
+          { filePattern: 'src/**/*.ts', promptTemplate: 'Review {{file}}' },
+        ],
+      })}\n`,
+    );
+
+    const config = await loadCliConfig({ configPath, maxBudgetUsd: 3 });
+    expect(config.maxBudgetUsd).toBe(3);
+  });
 
   it('should reject batch task config with a non-positive batchSize', async () => {
     const configDir = join(tempDir, 'config');

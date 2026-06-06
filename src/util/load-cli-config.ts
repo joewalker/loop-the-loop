@@ -20,6 +20,7 @@ export interface ParsedArgs {
   readonly dryRun?: boolean | undefined;
   readonly doctor?: boolean | undefined;
   readonly maxPrompts?: number | undefined;
+  readonly maxBudgetUsd?: number | undefined;
 }
 
 /**
@@ -27,7 +28,7 @@ export interface ParsedArgs {
  * and the `--help` output in cli.ts.
  */
 export const USAGE =
-  'Usage: loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--doctor] [--max-prompts N] <config.json>';
+  'Usage: loop-the-loop [--help] [--version] [--verbose] [--dry-run] [--doctor] [--max-prompts N] [--max-budget-usd N] <config.json>';
 
 type BooleanField = 'verbose' | 'dryRun' | 'doctor' | 'help' | 'version';
 
@@ -44,9 +45,12 @@ const BOOLEAN_FLAGS: ReadonlyMap<string, BooleanField> = new Map([
   ['version', 'version'],
 ]);
 
-const VALUE_FLAGS: ReadonlyMap<string, 'maxPrompts'> = new Map([
-  ['maxprompts', 'maxPrompts'],
-]);
+const VALUE_FLAGS: ReadonlyMap<string, 'maxPrompts' | 'maxBudgetUsd'> = new Map(
+  [
+    ['maxprompts', 'maxPrompts'],
+    ['maxbudgetusd', 'maxBudgetUsd'],
+  ],
+);
 
 /**
  * Strip case and any separators (`-`, `_`, etc.) so that `--max-prompts`,
@@ -76,6 +80,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
     version: false,
   };
   let maxPrompts: number | undefined;
+  let maxBudgetUsd: number | undefined;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -116,14 +121,18 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
       i += 1;
     }
 
-    /* istanbul ignore else -- forward-compat: VALUE_FLAGS currently has only
-       the `maxPrompts` entry, so the else branch is unreachable today. */
     if (valueField === 'maxPrompts') {
       const n = /^\d+$/u.test(value) ? Number(value) : NaN;
       if (!Number.isInteger(n) || n < 0) {
         throw new Error(`Invalid --${rawKey} value: ${value}`);
       }
       maxPrompts = n;
+    } else {
+      const n = /^\d+(?:\.\d+)?$/u.test(value) ? Number(value) : NaN;
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new Error(`Invalid --${rawKey} value: ${value}`);
+      }
+      maxBudgetUsd = n;
     }
   }
 
@@ -136,6 +145,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
       verbose: booleans.verbose,
       dryRun: booleans.dryRun,
       maxPrompts,
+      maxBudgetUsd,
     };
   }
 
@@ -158,6 +168,7 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
     dryRun: booleans.dryRun,
     doctor: booleans.doctor,
     maxPrompts,
+    maxBudgetUsd,
   };
 }
 
@@ -168,7 +179,8 @@ export function parseArgs(args: ReadonlyArray<string>): ParsedArgs {
 export async function loadCliConfig(
   parsedArgs: ParsedArgs,
 ): Promise<LoopCliConfig> {
-  const { configPath, maxPrompts, verbose, dryRun, doctor } = parsedArgs;
+  const { configPath, maxPrompts, maxBudgetUsd, verbose, dryRun, doctor } =
+    parsedArgs;
   /* istanbul ignore next -- cli.ts handles --help/--version before reaching
      here, so configPath is always defined for real callers. */
   if (configPath === undefined) {
@@ -203,6 +215,7 @@ export async function loadCliConfig(
     ...(maxPrompts !== undefined
       ? /* istanbul ignore next */ { maxPrompts }
       : {}),
+    ...(maxBudgetUsd !== undefined ? { maxBudgetUsd } : {}),
     // --dry-run forces verbose so the prompts being skipped are visible.
     ...(verbose === true || effectiveDryRun
       ? { logger: 'verbose' as const }
