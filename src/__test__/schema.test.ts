@@ -83,6 +83,21 @@ describe('CLI config schema', () => {
   describe('positive cases', () => {
     const cases: ReadonlyArray<[string, unknown]> = [
       [
+        'loop-state reader',
+        {
+          name: 'retry',
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'loop-state',
+            {
+              stateFile: 'prior-loop-state.json',
+              select: 'error',
+              promptTemplate: 'Retry {{id}}',
+            },
+          ],
+        },
+      ],
+      [
         'minimal per-file',
         {
           name: 'min',

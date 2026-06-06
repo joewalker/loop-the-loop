@@ -34,6 +34,10 @@ describe('promptGeneratorTypes', () => {
   it('should include test', () => {
     expect(promptGeneratorTypes).toContain('test');
   });
+
+  it('includes loop-state', () => {
+    expect(promptGeneratorTypes).toContain('loop-state');
+  });
 });
 
 describe('createPromptGenerator', () => {

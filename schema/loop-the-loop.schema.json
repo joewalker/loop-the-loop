@@ -385,6 +385,16 @@
           "minItems": 2,
           "maxItems": 2,
           "additionalItems": false,
+          "items": [
+            { "const": "loop-state" },
+            { "$ref": "#/definitions/loopStateTask" }
+          ]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
           "items": [{ "const": "test" }, { "$ref": "#/definitions/testTask" }]
         },
         {
@@ -847,6 +857,27 @@
         { "required": ["data"], "not": { "required": ["dataFile"] } },
         { "required": ["dataFile"], "not": { "required": ["data"] } }
       ]
+    },
+    "loopStateTask": {
+      "type": "object",
+      "required": ["stateFile", "promptTemplate"],
+      "additionalProperties": false,
+      "properties": {
+        "stateFile": {
+          "type": "string",
+          "description": "Path to a strict v2 loop-state file. Config-relative, or a {{steps.<name>.state}} handoff substitution. A missing file is treated as empty input."
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "Prompt template. Placeholders: {{id}}, {{status}}, and {{reason}} (error outcomes only). Supports {{include:path}} macros."
+        },
+        "select": {
+          "type": "string",
+          "enum": ["success", "error", "all"],
+          "default": "success",
+          "description": "Which terminal outcomes to yield. Defaults to success."
+        }
+      }
     },
     "testTask": {
       "type": "object",

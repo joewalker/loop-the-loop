@@ -14,6 +14,10 @@ import { normalizeGitLabTaskConfig } from './prompt-generators/gitlab/config.js'
 import { JsonPromptGenerator } from './prompt-generators/json.js';
 import { normalizeJsonTaskConfig } from './prompt-generators/json.js';
 import {
+  LoopStatePromptGenerator,
+  normalizeLoopStateTaskConfig,
+} from './prompt-generators/loop-state.js';
+import {
   normalizePerFileTaskConfig,
   PerFilePromptGenerator,
 } from './prompt-generators/per-file.js';
@@ -103,6 +107,8 @@ const promptGeneratorCreators = {
   [GitHubPromptGenerator.promptGeneratorName]: GitHubPromptGenerator.create,
   [GitLabPromptGenerator.promptGeneratorName]: GitLabPromptGenerator.create,
   [JsonPromptGenerator.promptGeneratorName]: JsonPromptGenerator.create,
+  [LoopStatePromptGenerator.promptGeneratorName]:
+    LoopStatePromptGenerator.create,
   [PerFilePromptGenerator.promptGeneratorName]: PerFilePromptGenerator.create,
   [TestPromptGenerator.promptGeneratorName]: TestPromptGenerator.create,
 } satisfies Record<string, PromptGeneratorCreator>;
@@ -179,6 +185,10 @@ export function normalizePromptGeneratorSpec(
 
   if (type === JsonPromptGenerator.promptGeneratorName) {
     return [type, normalizeJsonTaskConfig(config), configDir];
+  }
+
+  if (type === LoopStatePromptGenerator.promptGeneratorName) {
+    return [type, normalizeLoopStateTaskConfig(config), configDir];
   }
 
   if (type === PerFilePromptGenerator.promptGeneratorName) {
