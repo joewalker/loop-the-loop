@@ -358,6 +358,13 @@
           "minItems": 2,
           "maxItems": 2,
           "additionalItems": false,
+          "items": [{ "const": "git" }, { "$ref": "#/definitions/gitTask" }]
+        },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "additionalItems": false,
           "items": [
             { "const": "github" },
             { "$ref": "#/definitions/githubTask" }
@@ -457,6 +464,25 @@
         "promptTemplate": {
           "type": "string",
           "description": "Prompt template. Substituted placeholders: {{id}}, {{summary}}, {{url}}, {{component}}, {{product}}, {{severity}}, {{status}}, {{assignee}}, {{whiteboard}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
+        }
+      }
+    },
+    "gitTask": {
+      "type": "object",
+      "required": ["range", "promptTemplate"],
+      "additionalProperties": false,
+      "properties": {
+        "range": {
+          "type": "string",
+          "description": "Commit range passed to git rev-list, e.g. 'main..HEAD' or 'abc123..def456'."
+        },
+        "repoPath": {
+          "type": "string",
+          "description": "Path to the git repository. Relative paths resolve against the config file directory, which is also the default."
+        },
+        "promptTemplate": {
+          "type": "string",
+          "description": "Prompt template. Substituted placeholders: {{hash}}, {{shortHash}}, {{parents}}, {{shortParents}}, {{refs}}, {{subject}}, {{body}}, {{rawBody}}, {{authorName}}, {{authorEmail}}, {{committerName}}, {{committerEmail}}, {{authorDate}}, {{authorDateRelative}}, {{committerDate}}, {{signatureStatus}}, {{signer}}, {{diff}}, {{stat}}, {{files}}, {{index}}, {{commitCount}}. Supports {{include:path}} macros (resolved relative to the config file directory)."
         }
       }
     },

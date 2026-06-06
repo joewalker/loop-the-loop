@@ -225,6 +225,22 @@ describe('CLI config schema', () => {
         },
       ],
       [
+        'git commit range',
+        {
+          name: 'git',
+          agent: 'claude-sdk',
+          promptGenerator: [
+            'git',
+            {
+              range: 'main..HEAD',
+              repoPath: '.',
+              promptTemplate:
+                'Review commit {{index}}/{{commitCount}}: {{subject}}',
+            },
+          ],
+        },
+      ],
+      [
         'github issue search',
         {
           name: 'github',
@@ -526,6 +542,14 @@ describe('CLI config schema', () => {
               promptTemplate: 'y',
             },
           ],
+        },
+      ],
+      [
+        'rejects git task without range',
+        {
+          name: 'x',
+          agent: 'claude-sdk',
+          promptGenerator: ['git', { promptTemplate: 'y' }],
         },
       ],
       [
