@@ -61,6 +61,19 @@ describe('runPipeline', () => {
       repeat: 'cycle',
     },
   ];
+  const costAgent = [
+    'test',
+    {
+      responses: [
+        {
+          status: 'success',
+          output: 'ok',
+          cost: { usd: 1, costSource: 'provider' },
+        },
+      ],
+      repeat: 'cycle',
+    },
+  ];
 
   it('runs a linear pipeline; downstream reads upstream report', async () => {
     await writeFile(
@@ -493,5 +506,197 @@ describe('runPipeline', () => {
     } finally {
       process.chdir(cwd);
     }
+  });
+
+  it('stops before a downstream step when the shared cap is reached', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'bug-1', status: 'success' })}\n`,
+    );
+    const config = await normalize({
+      name: 'cap',
+      agent: 'claude-sdk',
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      maxBudgetUsd: 1,
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'fix',
+          steps: {
+            review: {
+              agent: costAgent,
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'review {{id}}' },
+              ],
+            },
+            fix: {
+              agent: costAgent,
+              dependsOn: ['review'],
+              promptGenerator: [
+                'jsonl',
+                {
+                  dataFile: '{{steps.review.report}}',
+                  promptTemplate: 'fix {{id}}',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig);
+
+    const result = await runPipeline(config);
+    expect(result.status).toBe('stopped');
+    expect(result.reason).toBe('maxBudgetUsd');
+    expect(result.message).toMatch(
+      /Pipeline budget reached before step "cap-fix"/u,
+    );
+    // review ran and spent $1; fix never ran.
+    expect(await readReportIds('cap-review')).toEqual(['bug-1']);
+    expect(await readReportIds('cap-fix')).toEqual([]);
+  });
+
+  it('honours a stricter step-level maxBudgetUsd via the step loop', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'a', status: 'success' })}\n${JSON.stringify({
+        id: 'b',
+        status: 'success',
+      })}\n`,
+    );
+    const config = await normalize({
+      name: 'local',
+      agent: 'claude-sdk',
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'only',
+          steps: {
+            only: {
+              agent: costAgent,
+              maxBudgetUsd: 1,
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'do {{id}}' },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig);
+
+    const result = await runPipeline(config);
+    // The step's own loop stopped after the first $1 prompt; the strict policy
+    // surfaces it annotated with the step name. Without buildStepConfig
+    // threading the override the step would run with Infinity and complete.
+    expect(result.status).toBe('stopped');
+    expect(result.reason).toBe('maxBudgetUsd');
+    expect(result.message).toMatch(/Pipeline stopped at step "local-only"/u);
+    expect(await readReportIds('local-only')).toEqual(['a']);
+  });
+
+  it('is deterministic on resume after a shared-cap stop', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'bug-1', status: 'success' })}\n`,
+    );
+    const make = async (): Promise<LoopCliConfig> =>
+      normalize({
+        name: 'res',
+        agent: 'claude-sdk',
+        reporter: 'jsonl-report',
+        interPromptPause: 0,
+        maxBudgetUsd: 1,
+        promptGenerator: [
+          'pipeline',
+          {
+            output: 'fix',
+            steps: {
+              review: {
+                agent: costAgent,
+                promptGenerator: [
+                  'jsonl',
+                  { dataFile: 'seed.jsonl', promptTemplate: 'review {{id}}' },
+                ],
+              },
+              fix: {
+                agent: costAgent,
+                dependsOn: ['review'],
+                promptGenerator: [
+                  'jsonl',
+                  {
+                    dataFile: '{{steps.review.report}}',
+                    promptTemplate: 'fix {{id}}',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      } as unknown as LoopCliConfig);
+
+    const first = await runPipeline(await make());
+    expect(first.reason).toBe('maxBudgetUsd');
+    const reviewIds = await readReportIds('res-review');
+
+    // Resume: the persisted aggregate ($1) already meets the cap, so the
+    // pipeline stops before review even re-runs, deterministically.
+    const second = await runPipeline(await make());
+    expect(second.status).toBe('stopped');
+    expect(second.reason).toBe('maxBudgetUsd');
+    expect(second.message).toMatch(/before step "res-review"/u);
+    expect(await readReportIds('res-review')).toEqual(reviewIds);
+    expect(await readReportIds('res-fix')).toEqual([]);
+  });
+
+  it('completes under a shared cap when results carry no cost', async () => {
+    await writeFile(
+      join(dir, 'seed.jsonl'),
+      `${JSON.stringify({ id: 'x', status: 'success' })}\n`,
+    );
+    const config = await normalize({
+      name: 'free',
+      agent: 'claude-sdk',
+      reporter: 'jsonl-report',
+      interPromptPause: 0,
+      maxBudgetUsd: 5,
+      promptGenerator: [
+        'pipeline',
+        {
+          output: 'fix',
+          steps: {
+            review: {
+              agent: successAgent,
+              promptGenerator: [
+                'jsonl',
+                { dataFile: 'seed.jsonl', promptTemplate: 'review {{id}}' },
+              ],
+            },
+            fix: {
+              agent: successAgent,
+              dependsOn: ['review'],
+              promptGenerator: [
+                'jsonl',
+                {
+                  dataFile: '{{steps.review.report}}',
+                  promptTemplate: 'fix {{id}}',
+                },
+              ],
+            },
+          },
+        },
+      ],
+    } as unknown as LoopCliConfig);
+
+    const result = await runPipeline(config);
+    // No cost recorded, so the aggregate stays $0 and the finite cap never
+    // trips; the pipeline runs to its normal fixed point.
+    expect(result).toEqual({ status: 'completed' });
+    expect(await readReportIds('free-review')).toEqual(['x']);
+    expect(await readReportIds('free-fix')).toEqual(['x']);
   });
 });

@@ -39,10 +39,21 @@ export async function runPipeline(
 
   const stepKeys = orderStepKeys(task);
   const maxPasses = task.maxPasses ?? DEFAULT_MAX_PASSES;
+  const aggregateCap = config.maxBudgetUsd ?? Infinity;
 
   let previousTotal = await countAllOutcomes(config, task, stepKeys);
   for (let pass = 1; pass <= maxPasses; pass += 1) {
     for (const key of stepKeys) {
+      if (aggregateCap !== Infinity) {
+        const spend = await countAllSpend(config, task, stepKeys);
+        if (spend >= aggregateCap) {
+          const name = `${config.name}-${key}`;
+          const message = `Pipeline budget reached before step "${name}": $${spend.toFixed(
+            4,
+          )} >= $${aggregateCap}`;
+          return { status: 'stopped', reason: 'maxBudgetUsd', message };
+        }
+      }
       const stepConfig = buildStepConfig(config, task, key);
       const result = await loop(stepConfig);
       if (result.status !== 'completed') {
@@ -110,6 +121,7 @@ function buildStepConfig(
   const outputDir = step.outputDir ?? config.outputDir;
   const allowSourceUpdate = step.allowSourceUpdate ?? config.allowSourceUpdate;
   const maxPrompts = step.maxPrompts ?? config.maxPrompts;
+  const maxBudgetUsd = step.maxBudgetUsd;
   const interPromptPause = step.interPromptPause ?? config.interPromptPause;
   const logger = step.logger ?? config.logger;
 
@@ -121,9 +133,24 @@ function buildStepConfig(
     ...(reporter !== undefined ? { reporter } : {}),
     ...(allowSourceUpdate !== undefined ? { allowSourceUpdate } : {}),
     ...(maxPrompts !== undefined ? { maxPrompts } : {}),
+    ...(maxBudgetUsd !== undefined ? { maxBudgetUsd } : {}),
     ...(interPromptPause !== undefined ? { interPromptPause } : {}),
     ...(logger !== undefined ? { logger } : {}),
   };
+}
+
+/**
+ * The on-disk state path for one step, derived the same way `loop()` derives
+ * it from the synthesised step config.
+ */
+function statePathForStep(
+  config: LoopCliConfig,
+  task: PipelineTask,
+  key: string,
+): string {
+  const stepConfig = buildStepConfig(config, task, key);
+  const dir = stepConfig.outputDir ?? process.cwd();
+  return resolve(dir, `${stepConfig.name}-loop-state.json`);
 }
 
 /**
@@ -137,19 +164,38 @@ async function countAllOutcomes(
 ): Promise<number> {
   let total = 0;
   for (const key of stepKeys) {
-    const stepConfig = buildStepConfig(config, task, key);
-    const dir = stepConfig.outputDir ?? process.cwd();
-    const statePath = resolve(dir, `${stepConfig.name}-loop-state.json`);
-    total += await countOutcomes(statePath);
+    total += (await readStateData(statePathForStep(config, task, key)))
+      .outcomes;
   }
   return total;
 }
 
 /**
- * Count `results` entries in one v2 state file. A missing file is zero
- * outcomes (the step has not run, or produced nothing).
+ * Total USD spend recorded across all steps' state files. Summing each step's
+ * lifetime `totalUsd` gives the pipeline-wide aggregate the shared budget cap
+ * is checked against. Read from disk so the result is deterministic on resume.
  */
-async function countOutcomes(statePath: string): Promise<number> {
+async function countAllSpend(
+  config: LoopCliConfig,
+  task: PipelineTask,
+  stepKeys: ReadonlyArray<string>,
+): Promise<number> {
+  let total = 0;
+  for (const key of stepKeys) {
+    total += (await readStateData(statePathForStep(config, task, key)))
+      .totalUsd;
+  }
+  return total;
+}
+
+/**
+ * Read one v2 state file once, returning both its outcome count and its
+ * lifetime `totalUsd`. A missing file is zero on both (the step has not run,
+ * or produced nothing).
+ */
+async function readStateData(
+  statePath: string,
+): Promise<{ outcomes: number; totalUsd: number }> {
   let raw: string;
   try {
     raw = await readFile(statePath, 'utf-8');
@@ -159,10 +205,16 @@ async function countOutcomes(statePath: string): Promise<number> {
     if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
       throw err;
     }
-    return 0;
+    return { outcomes: 0, totalUsd: 0 };
   }
-  const data = JSON.parse(raw) as { results?: Record<string, unknown> };
-  return data.results ? Object.keys(data.results).length : 0;
+  const data = JSON.parse(raw) as {
+    results?: Record<string, unknown>;
+    totalUsd?: number;
+  };
+  return {
+    outcomes: data.results ? Object.keys(data.results).length : 0,
+    totalUsd: typeof data.totalUsd === 'number' ? data.totalUsd : 0,
+  };
 }
 
 export { PIPELINE_GENERATOR_NAME };
