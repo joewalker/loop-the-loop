@@ -13,8 +13,10 @@ import {
   buildSandboxManifest,
   classifyOpenAIError,
   describeOpenAIError,
+  extractOpenAIUsage,
   isDestructiveShellCommand,
   normalizeFinalOutput,
+  resolveOpenAIModel,
   toOpenAIOutputType,
   wrapShellToolsForReadOnly,
 } from 'loop-the-loop/agents/openai-sdk';
@@ -471,5 +473,60 @@ describe('OpenAISDKAgent.check()', () => {
     const config = results.find(r => r.name === 'config shape valid');
     expect(config?.status).toBe('fail');
     expect(config?.message).toContain('outputSchema');
+  });
+});
+
+describe('resolveOpenAIModel', () => {
+  it('prefers the last agent model, then config, then unknown', () => {
+    expect(resolveOpenAIModel({ model: 'gpt-5' }, { model: 'gpt-4' })).toBe(
+      'gpt-5',
+    );
+    expect(resolveOpenAIModel(undefined, { model: 'gpt-4' })).toBe('gpt-4');
+    expect(resolveOpenAIModel(undefined, {})).toBe('unknown');
+    expect(resolveOpenAIModel({}, {})).toBe('unknown');
+  });
+});
+
+describe('extractOpenAIUsage', () => {
+  it('sums input/output across responses and reads detail keys', () => {
+    const usage = extractOpenAIUsage([
+      {
+        usage: {
+          inputTokens: 100,
+          outputTokens: 30,
+          inputTokensDetails: [{ cached_tokens: 10 }],
+          outputTokensDetails: [{ reasoning_tokens: 5 }],
+        },
+      },
+      {
+        usage: {
+          inputTokens: 200,
+          outputTokens: 40,
+          inputTokensDetails: { cached_tokens: 20 },
+          outputTokensDetails: { reasoning_tokens: 6 },
+        },
+      },
+    ]);
+    expect(usage).toEqual({
+      inputTokens: 300,
+      outputTokens: 70,
+      cacheReadTokens: 30,
+      reasoningTokens: 11,
+    });
+  });
+
+  it('returns zeroed usage for empty or malformed responses', () => {
+    expect(extractOpenAIUsage([])).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      reasoningTokens: 0,
+    });
+    expect(extractOpenAIUsage([{}, { usage: null }])).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      reasoningTokens: 0,
+    });
   });
 });

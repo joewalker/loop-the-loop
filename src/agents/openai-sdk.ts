@@ -30,10 +30,16 @@ import type { Agent, InvokeOptions } from '../agents.js';
 import type { CheckResult } from '../doctor.js';
 import type { Logger } from '../loggers.js';
 import type {
+  CostInfo,
   InvokeResult,
   OutputSchema,
   SuccessfulInvocationResult,
 } from '../types.js';
+import {
+  estimateCost,
+  type ModelPrice,
+  type TokenUsage,
+} from '../util/pricing.js';
 
 // istanbul ignore file
 
@@ -70,6 +76,12 @@ export interface OpenAISDKAgentConfig {
    * Maximum number of agent turns per prompt invocation. Defaults to 100.
    */
   readonly maxTurns?: number;
+
+  /**
+   * Per-model prices keyed by model id. When the resolved model is priced,
+   * the agent estimates USD cost; otherwise it records tokens only.
+   */
+  readonly prices?: Readonly<Record<string, ModelPrice>>;
 }
 
 /**
@@ -112,14 +124,21 @@ export class OpenAISDKAgent implements Agent {
 
       logRunItems(result.newItems, logger);
       const invokeResult = normalizeFinalOutput(result.finalOutput);
+      const cost = buildOpenAICost(
+        result.rawResponses,
+        result.lastAgent,
+        this.#config,
+        logger,
+      );
+      const withCost: InvokeResult = { ...invokeResult, cost };
 
-      if (invokeResult.status === 'success') {
+      if (withCost.status === 'success') {
         logger.success('OpenAI SDK agent completed successfully');
       } else {
-        logger.error(invokeResult.reason);
+        logger.error(withCost.reason);
       }
 
-      return invokeResult;
+      return withCost;
     } catch (error) {
       const reason = describeOpenAIError(error);
       const status = classifyOpenAIError(error, reason);
@@ -505,6 +524,110 @@ export function normalizeFinalOutput(finalOutput: unknown): InvokeResult {
     output: stringifyStructuredOutput(finalOutput),
     structuredOutput: finalOutput,
   } satisfies SuccessfulInvocationResult;
+}
+
+/**
+ * Resolve the model name used for cost estimation: the SDK's last agent
+ * model wins, then the configured model, then `'unknown'`.
+ */
+export function resolveOpenAIModel(
+  lastAgent: unknown,
+  config: OpenAISDKAgentConfig,
+): string {
+  const fromAgent =
+    isRecord(lastAgent) && typeof lastAgent['model'] === 'string'
+      ? lastAgent['model']
+      : undefined;
+  return fromAgent ?? config.model ?? 'unknown';
+}
+
+/**
+ * Sum token usage across a run's raw model responses. Cache-read tokens are
+ * read from `inputTokensDetails.cached_tokens` and reasoning tokens from
+ * `outputTokensDetails.reasoning_tokens`; both detail fields may be a single
+ * record or an array of records.
+ */
+export function extractOpenAIUsage(
+  rawResponses: ReadonlyArray<unknown>,
+): TokenUsage {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let reasoningTokens = 0;
+
+  for (const response of rawResponses) {
+    const usage = isRecord(response) ? response['usage'] : undefined;
+    if (!isRecord(usage)) {
+      continue;
+    }
+    inputTokens += asNumber(usage['inputTokens']);
+    outputTokens += asNumber(usage['outputTokens']);
+    cacheReadTokens += sumDetailKey(
+      usage['inputTokensDetails'],
+      'cached_tokens',
+    );
+    reasoningTokens += sumDetailKey(
+      usage['outputTokensDetails'],
+      'reasoning_tokens',
+    );
+  }
+
+  return { inputTokens, outputTokens, cacheReadTokens, reasoningTokens };
+}
+
+/**
+ * Sum a numeric key across a detail value that may be a single record or an
+ * array of records.
+ */
+function sumDetailKey(detail: unknown, key: string): number {
+  if (Array.isArray(detail)) {
+    return detail.reduce<number>(
+      (sum, entry) => sum + (isRecord(entry) ? asNumber(entry[key]) : 0),
+      0,
+    );
+  }
+  return isRecord(detail) ? asNumber(detail[key]) : 0;
+}
+
+/**
+ * Coerce an unknown value to a finite number, defaulting to 0.
+ */
+function asNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+/**
+ * Build a `CostInfo` for an OpenAI run: estimated when the resolved model is
+ * priced, otherwise `'unavailable'` with the raw token counts (and a single
+ * warning logged so the missing pricing is visible).
+ */
+export function buildOpenAICost(
+  rawResponses: ReadonlyArray<unknown>,
+  lastAgent: unknown,
+  config: OpenAISDKAgentConfig,
+  logger: Logger,
+): CostInfo {
+  const usage = extractOpenAIUsage(rawResponses);
+  const model = resolveOpenAIModel(lastAgent, config);
+  const tokenFields = {
+    inputTokens: usage.inputTokens ?? 0,
+    outputTokens: usage.outputTokens ?? 0,
+    cacheReadTokens: usage.cacheReadTokens ?? 0,
+    reasoningTokens: usage.reasoningTokens ?? 0,
+    model,
+  };
+
+  const estimate =
+    config.prices !== undefined
+      ? estimateCost(model, usage, config.prices)
+      : undefined;
+  if (estimate === undefined) {
+    logger.system(
+      `No pricing configured for openai-sdk model '${model}'; recording tokens only`,
+    );
+    return { usd: 0, costSource: 'unavailable', ...tokenFields };
+  }
+  return { usd: estimate.usd, costSource: 'estimated', ...tokenFields };
 }
 
 /**
