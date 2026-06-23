@@ -145,4 +145,44 @@ describe('expandTemplate', () => {
     const result = await expandPrompt('No placeholders here.', tempDir, {});
     expect(result).toBe('No placeholders here.');
   });
+
+  it('preserves $$ in a variable value verbatim', async () => {
+    const result = await expandPrompt('Price: {{cost}}', tempDir, {
+      cost: '$$100',
+    });
+    expect(result).toBe('Price: $$100');
+  });
+
+  it('preserves $& in a variable value verbatim', async () => {
+    const result = await expandPrompt('Body: {{body}}', tempDir, {
+      body: 'foo $& bar',
+    });
+    expect(result).toBe('Body: foo $& bar');
+  });
+
+  it('preserves $` in a variable value verbatim', async () => {
+    const result = await expandPrompt('Body: {{body}}', tempDir, {
+      body: 'before $` after',
+    });
+    expect(result).toBe('Body: before $` after');
+  });
+
+  it("preserves $' in a variable value verbatim", async () => {
+    const result = await expandPrompt('Body: {{body}}', tempDir, {
+      body: "before $' after",
+    });
+    expect(result).toBe("Body: before $' after");
+  });
+
+  it('preserves mixed dollar-sign sequences across multiple variables', async () => {
+    const result = await expandPrompt(
+      'Cost: {{cost}}, body: {{body}}',
+      tempDir,
+      {
+        cost: '$$100',
+        body: 'regex $& match',
+      },
+    );
+    expect(result).toBe('Cost: $$100, body: regex $& match');
+  });
 });
