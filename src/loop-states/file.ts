@@ -21,6 +21,13 @@ interface PersistedLoopState {
 }
 
 /**
+ * Default TTL for claims in milliseconds (1 hour).
+ * This must be safely longer than a prompt's maximum runtime to avoid
+ * double-processing the same prompt under concurrent processes.
+ */
+const CLAIM_TTL_MS = 60 * 60 * 1000;
+
+/**
  * Persisted state for a running or interrupted loop. Saved before and
  * after every prompt execution so that any interruption loses at most one
  * item's work. Writes go through a temp file and an atomic rename so an
@@ -65,7 +72,8 @@ export class FileLoopState implements LoopState {
   static fromPersisted(path: string, data: unknown): FileLoopState {
     if (!isV2(data)) {
       throw new Error(
-        `Unsupported loop-state file at ${path}: expected a { version: 2, … } document. ` +
+        `Unsupported loop-state file at $
+{path}: expected a { version: 2, \u2026 } document. ` +
           `Pre-v2 state files are not supported; delete it to start a fresh run.`,
       );
     }
@@ -87,17 +95,39 @@ export class FileLoopState implements LoopState {
     }
 
     const claim = this.#claims.get(id);
-    if (claim !== undefined && claim.runId !== runId) {
-      return false;
+    if (claim !== undefined) {
+      // Check if the claim has expired
+      if (claim.expiresAt !== undefined) {
+        const expiresAt = new Date(claim.expiresAt).getTime();
+        if (Date.now() > expiresAt) {
+          // Claim has expired, remove it and treat as unclaimed
+          this.#claims.delete(id);
+          await this.save();
+        } else if (claim.runId !== runId) {
+          // Claim is still valid but owned by a different run
+          return false;
+        } else {
+          // Claim is valid and owned by this run
+          return true;
+        }
+      } else if (claim.runId !== runId) {
+        // Legacy claim without expiresAt - treat as stale if owned by different run
+        // This handles claims created before the TTL feature was added
+        this.#claims.delete(id);
+        await this.save();
+      } else {
+        // Legacy claim owned by this run
+        return true;
+      }
     }
 
-    if (claim === undefined) {
-      this.#claims.set(id, {
-        runId,
-        claimedAt: new Date().toISOString(),
-      });
-      await this.save();
-    }
+    // Create new claim with expiration
+    this.#claims.set(id, {
+      runId,
+      claimedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + CLAIM_TTL_MS).toISOString(),
+    });
+    await this.save();
 
     return true;
   }
